@@ -1,0 +1,12 @@
+{
+  "company": "KampongFlow Pte Ltd",
+  "currency": "SGD",
+  "gst_enabled": false,
+  "gst_rate": 0.09,
+  "support_email": "support@kampongflow.sg",
+  "smtp": {
+    "from": "",
+    "api_key": "",
+    "provider": "resend"
+  }
+}

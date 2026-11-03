@@ -1,0 +1,4 @@
+# 控制台运行依赖（Python 3.8+）
+reportlab>=4.0       # 中文 PDF：账单、交接单
+Pillow>=10.0         # 图片转 WebP、生成 srcset
+dnspython>=2.4       # DNS 托管与解析检查

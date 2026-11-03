@@ -1,0 +1,23 @@
+# 运行数据
+sites/
+assets/
+dns/*.json
+console/*.json
+console/*.log
+console/admin.pass
+console/portal_secret
+console/tls/
+console/__pycache__/
+__pycache__/
+*.pyc
+*.tmp
+logs/
+start.sh
+
+# 本机与编辑器
+.venv/
+node_modules/
+.DS_Store
+*.swp
+.idea/
+.vscode/

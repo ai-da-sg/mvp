@@ -1,0 +1,23 @@
+[
+  {
+    "id": "starter",
+    "name": "Starter",
+    "price": 1800,
+    "period": "首年",
+    "specs": "1 个站点 · 5 个邮箱 · 20GB · 2C/4G"
+  },
+  {
+    "id": "growth",
+    "name": "Growth",
+    "price": 2800,
+    "period": "首年",
+    "specs": "1 个站点 · 10 个邮箱 · 40GB · 4C/8G"
+  },
+  {
+    "id": "business",
+    "name": "Business",
+    "price": 4200,
+    "period": "首年",
+    "specs": "1 个站点 · 25 个邮箱 · 80GB · 8C/16G"
+  }
+]
