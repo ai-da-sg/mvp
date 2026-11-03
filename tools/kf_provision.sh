@@ -59,7 +59,8 @@ chmod 600 "$SITE/docker-compose.yml"
 cd "$SITE"
 docker compose up -d --quiet-pull >/dev/null 2>&1
 for i in $(seq 1 40); do
-  docker exec "${PROJ}-db-1" mariadb -uroot -p"$ROOTPASS" -e 'SELECT 1' >/dev/null 2>&1 && break
+  # 密码走环境变量，不进 argv（同主机其他用户 ps 可见）
+  docker exec -e MYSQL_PWD="$ROOTPASS" "${PROJ}-db-1" mariadb -uroot -e 'SELECT 1' >/dev/null 2>&1 && break
   sleep 2
 done
 cat > "$SITE/wp.env" <<ENV
@@ -70,7 +71,15 @@ WORDPRESS_DB_NAME=wordpress
 ENV
 chmod 600 "$SITE/wp.env"
 W() { docker run --rm --env-file "$SITE/wp.env" --network "${PROJ}_default" -v "$SITE/html:/var/www/html" --user 33:33 "$REG/wordpress:cli-php8.3" wp "$@"; }
-W core install --url="http://127.0.0.1:$PORT" --title="$COMPANY" --admin_user="admin" --admin_password="$ADMINPW" --admin_email="admin@$DOMAIN" --skip-email >/dev/null
+# WP 管理员密码改从 stdin 传入，不出现在 argv 里
+# （argv 对同主机所有用户可见，ps 就能看到）
+printf '%s' "$ADMINPW" | W core install --url="http://127.0.0.1:$PORT" --title="$COMPANY" \
+  --admin_user="admin" --admin_email="admin@$DOMAIN" --skip-email \
+  --prompt=admin_password >/dev/null 2>&1 || {
+  # 老版本 wp-cli 不支持 --prompt，退回传参方式
+  W core install --url="http://127.0.0.1:$PORT" --title="$COMPANY" --admin_user="admin" \
+    --admin_password="$ADMINPW" --admin_email="admin@$DOMAIN" --skip-email >/dev/null
+}
 W option update timezone_string "Asia/Singapore" >/dev/null
 W option update blogdescription "Website, email and hosting package" >/dev/null
 W rewrite structure '/%postname%/' --hard >/dev/null

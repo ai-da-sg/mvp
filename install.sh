@@ -11,6 +11,7 @@ KF_BASE="${KF_BASE:-/opt/kampongflow}"
 KF_PORT="${KF_PORT:-18090}"
 KF_SITE_PORT="${KF_SITE_PORT:-18080}"
 KF_DOMAIN="${KF_DOMAIN:-kampongflow.sg}"
+KF_PROXY_PORT="${KF_PROXY_PORT:-18444}"
 KF_EMAIL="${KF_EMAIL:-}"
 ADMIN_PASS=""
 WITH_DOCKER=1
@@ -50,6 +51,7 @@ KampongFlow 多租户建站平台 · 安装脚本 v${VERSION}
 
 站点与域名
   --domain DOMAIN       主域名                (默认 $KF_DOMAIN)
+  --proxy-port PORT     HTTPS 反代端口        (默认 $KF_PROXY_PORT)
   --demo                装完后创建一个演示站点
   --no-docker           只装控制台，不拉镜像、不建站点
 
@@ -74,6 +76,7 @@ while [ $# -gt 0 ]; do
     -p|--port)       KF_PORT="${2:?}"; shift 2 ;;
     -s|--site-port)  KF_SITE_PORT="${2:?}"; shift 2 ;;
     --domain)        KF_DOMAIN="${2:?}"; shift 2 ;;
+    --proxy-port)    KF_PROXY_PORT="${2:?}"; shift 2 ;;
     --admin-pass)    ADMIN_PASS="${2:?}"; shift 2 ;;
     --email)         KF_EMAIL="${2:?}"; shift 2 ;;
     --python)        PYTHON="${2:?}"; shift 2 ;;
@@ -370,6 +373,30 @@ RestartSec=3
 Environment=KF_PORT=$KF_PORT
 Environment=KF_BASE=$KF_BASE
 Environment=KF_DNS_PORT=5354
+# 只监听回环，外部一律经反代进来
+Environment=KF_BIND=127.0.0.1
+# 反代是唯一入口，它转发的客户端 IP 可信
+Environment=KF_TRUSTED_PROXIES=127.0.0.1
+# 强制 HTTPS，Cookie 才带 Secure
+Environment=KF_FORCE_HTTPS=1
+
+[Install]
+WantedBy=default.target
+EOF
+
+  cat > "$UNIT_DIR/kf-proxy.service" <<EOF
+[Unit]
+Description=KampongFlow HTTPS 反代
+After=network.target kf-console.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=KF_BASE=$KF_BASE
+Environment=KF_PORT=$KF_PORT
+Environment=KF_PROXY_PORT=$KF_PROXY_PORT
+ExecStart=$KF_BASE/tools/kf_proxy.sh start
+ExecStop=$KF_BASE/tools/kf_proxy.sh stop
 
 [Install]
 WantedBy=default.target
@@ -414,6 +441,11 @@ EOF
 
   systemctl --user daemon-reload
   systemctl --user enable --now kf-console.service >/dev/null 2>&1 || warn "控制台服务启动失败，稍后查 journalctl --user -u kf-console"
+  # 反代需要证书，没有就先生成一份自签
+  if [ ! -f "$KF_BASE/console/tls/cert.pem" ]; then
+    KF_BASE="$KF_BASE" bash "$KF_BASE/tools/kf_tls.sh" >/dev/null 2>&1 || warn "证书生成失败"
+  fi
+  systemctl --user enable --now kf-proxy.service >/dev/null 2>&1 || warn "反代启动失败，查 tools/kf_proxy.sh status"
   systemctl --user enable --now kf-dns.service >/dev/null 2>&1 || warn "DNS 服务启动失败"
   systemctl --user enable --now kf-notify.timer >/dev/null 2>&1 || warn "定时任务注册失败"
   loginctl enable-linger "$USER" >/dev/null 2>&1 || warn "未能开启 linger，注销后服务可能停止"

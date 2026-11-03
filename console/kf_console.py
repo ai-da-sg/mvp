@@ -4,6 +4,7 @@
 单文件，依赖：reportlab（用于中文 PDF）。
 """
 import base64
+import hmac as _h
 import sys
 import time
 import importlib.util
@@ -37,6 +38,13 @@ PROV    = BASE / "kf-provision.sh"
 CONSOLE = BASE / "console"
 PORT    = int(os.environ.get("KF_PORT", "18090"))
 HTTPS_PORT = int(os.environ.get("KF_HTTPS_PORT", "18443"))
+# 监听地址：默认只绑回环，反代在前面时不会裸露在公网
+BIND    = os.environ.get("KF_BIND", "127.0.0.1")
+# 可信代理白名单：只有这些来源的 X-Forwarded-For 才被采信
+TRUSTED_PROXIES = tuple(
+    x.strip() for x in os.environ.get("KF_TRUSTED_PROXIES", "").split(",") if x.strip())
+# 强制 HTTPS（决定 Cookie 是否加 Secure）
+FORCE_HTTPS = os.environ.get("KF_FORCE_HTTPS", "0") == "1"
 USER    = os.environ.get("KF_USER", "admin")
 PASS    = (CONSOLE / "admin.pass").read_text().strip()
 
@@ -202,6 +210,43 @@ def save_fails():
 IP_FAILS = {}
 IP_LIMIT = 20          # 同一 IP 15 分钟内失败 20 次就拦
 IP_F = CONSOLE / "ipfail.json"
+
+
+def proxy_secret():
+    """反代与后台之间的共享密钥。
+
+    只有带上正确密钥的请求才被当作来自反代，
+    这样本机进程无法靠伪造 X-Forwarded-For 绕过限流。
+    """
+    env = os.environ.get("KF_PROXY_SECRET", "")
+    if env:
+        return env
+    try:
+        return (CONSOLE / "proxy.secret").read_text().strip()
+    except Exception:
+        return ""
+
+
+def client_ip(handler):
+    """取真实客户端 IP。
+
+    直连时用 socket 地址；经反代进来且密钥正确时采信 X-Forwarded-For。
+    密钥不对就退回到直连地址，伪造的头一律无效。
+    """
+    try:
+        peer = handler.client_address[0] if handler.client_address else ""
+    except Exception:
+        peer = ""
+    if TRUSTED_PROXIES and peer in TRUSTED_PROXIES:
+        sec = proxy_secret()
+        given = handler.headers.get("X-KF-Proxy-Secret", "")
+        if sec and given and _h.compare_digest(given, sec):
+            xff = handler.headers.get("X-Forwarded-For", "")
+            if xff:
+                first = xff.split(",")[0].strip()
+                if first:
+                    return first
+    return peer
 
 
 def ip_key(ip):
@@ -570,6 +615,36 @@ def _read(path, default):
 SENSITIVE_FILES = ("users.json", "sessions.json", "settings.json", "roles.json",
                    "loginfail.json", "ipfail.json")
 
+# 密钥单独放一个 600 文件，不与普通配置混在一起
+SECRETS_F = CONSOLE / "secrets.json"
+
+
+def load_secrets():
+    """读取密钥。优先环境变量，其次 600 权限的 secrets.json。"""
+    env = {}
+    for k in ("KF_SMTP_API_KEY", "KF_SMTP_PASS", "KF_SMTP_USER"):
+        v = os.environ.get(k)
+        if v:
+            env[k[3:].lower()] = v
+    stored = _read(SECRETS_F, {}) if SECRETS_F.exists() else {}
+    out = dict(stored)
+    out.update(env)          # 环境变量优先
+    return out
+
+
+def save_secrets(d):
+    tmp = SECRETS_F.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2))
+    try:
+        tmp.chmod(0o600)
+    except OSError:
+        pass
+    tmp.replace(SECRETS_F)
+    try:
+        SECRETS_F.chmod(0o600)
+    except OSError:
+        pass
+
 
 def _write(path, data):
     """原子写入。敏感文件一律 600，只有属主可读写。"""
@@ -591,10 +666,20 @@ def plans():
 
 
 def settings():
+    """普通设置 + 密钥合并。返回的对象含密钥，只能在服务端内部用。"""
     if not SETTINGS_F.exists():
         _write(SETTINGS_F, DEFAULT_SETTINGS)
     s = dict(DEFAULT_SETTINGS)
     s.update(_read(SETTINGS_F, {}))
+    smtp = dict(s.get("smtp") or {})
+    sec = load_secrets()
+    if sec.get("api_key"):
+        smtp["api_key"] = sec["api_key"]
+    if sec.get("pass"):
+        smtp["pass"] = sec["pass"]
+    if sec.get("user"):
+        smtp["user"] = sec["user"]
+    s["smtp"] = smtp
     return s
 
 
@@ -1250,7 +1335,7 @@ def log_access(slug, event, token="", note="", handler=None):
     ip, ua = "", ""
     if handler is not None:
         try:
-            ip = handler.client_address[0]
+            ip = client_ip(handler)
         except Exception:
             ip = ""
         ua = (handler.headers.get("User-Agent") or "")[:120]
@@ -3451,6 +3536,15 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):
         pass
 
+    def _is_secure(self):
+        """判断当前连接是否已加密。决定 Cookie 是否加 Secure。"""
+        if FORCE_HTTPS:
+            return True
+        proto = (self.headers.get("X-Forwarded-Proto") or "").lower()
+        if proto == "https":
+            return True
+        return bool(getattr(self, "is_https", False))
+
     def _auth_ok(self):
         u = session_user(self.headers.get("Cookie"))
         if u:
@@ -3583,6 +3677,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, PAGE, "text/html; charset=utf-8")
         if path == "/health":
             return self._send(200, {"ok": True})
+        if path == "/health/ip":
+            # 诊断用：显示后端认定的客户端 IP 与是否走了反代
+            return self._send(200, {"ip": client_ip(self),
+                                    "peer": self.client_address[0] if self.client_address else "",
+                                    "xff": self.headers.get("X-Forwarded-For", ""),
+                                    "proto": self.headers.get("X-Forwarded-Proto", "")})
         if path == "/api/state":
             # settings 里含 smtp.api_key 等敏感值，绝不能原样下发
             pub = dict(settings())
@@ -4487,9 +4587,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "只有管理员可以改邮件设置"})
         cur = settings()
         s = dict(cur.get("smtp") or {})
-        for k in ("host", "user", "from", "api_key", "provider"):
+        for k in ("host", "from", "provider"):
             if k in body:
                 s[k] = str(body[k]).strip()[:120]
+        # 密钥不进 settings.json，改写入 600 权限的 secrets.json
+        sec = load_secrets()
+        if "user" in body:
+            sec["user"] = str(body["user"]).strip()[:120]
+            s["user"] = sec["user"]
+        if "api_key" in body:
+            sec["api_key"] = str(body["api_key"]).strip()[:200]
+            s["api_key"] = sec["api_key"]
         for k in ("port",):
             if k in body:
                 try:
@@ -4502,9 +4610,14 @@ class Handler(BaseHTTPRequestHandler):
             s["provider"] = "smtp"
         pw = str(body.get("pass", ""))
         if pw and pw != "********":
+            sec["pass"] = pw
             s["pass"] = pw
         cur["smtp"] = s
+        # settings.json 里只留非密钥字段
+        cur["smtp"] = {k: v for k, v in s.items()
+                       if k not in ("api_key", "pass", "user")}
         _write(SETTINGS_F, cur)
+        save_secrets({k: v for k, v in sec.items() if v})
         audit(getattr(self, "user", "-"), "smtp_save", s.get("host", ""))
         return self._send(200, {"ok": True})
 
@@ -4603,7 +4716,7 @@ class Handler(BaseHTTPRequestHandler):
         nxt = str(form.get("next", "/")) or "/"
         if not nxt.startswith("/"):
             nxt = "/"
-        ip = self.client_address[0] if self.client_address else ""
+        ip = client_ip(self)
         ipwait = ip_blocked(ip)
         if ipwait > 0:
             audit(u or "-", "login_ip_blocked", "%s 还需 %d 秒" % (ip, ipwait))
@@ -4654,8 +4767,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(303)
         self.send_header("Location", nxt)
         self.send_header("Set-Cookie",
-                         "kf_sid=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax"
-                         % (cookie, SESSION_TTL))
+                         "kf_sid=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax%s"
+                         % (cookie, SESSION_TTL, "; Secure" if self._is_secure() else ""))
         self.send_header("Content-Length", "0")
         self.end_headers()
 
@@ -4975,9 +5088,9 @@ if __name__ == "__main__":
         try:
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ctx.load_cert_chain(str(cert), str(key))
-            s = ThreadingHTTPServer(("0.0.0.0", HTTPS_PORT), Handler)
+            s = ThreadingHTTPServer((BIND, HTTPS_PORT), Handler)
             s.socket = ctx.wrap_socket(s.socket, server_side=True)
-            print("HTTPS on 0.0.0.0:%d" % HTTPS_PORT, flush=True)
+            print("HTTPS on %s:%d" % (BIND, HTTPS_PORT), flush=True)
             s.serve_forever()
         except Exception as e:
             print("https failed:", e, flush=True)
@@ -4999,6 +5112,6 @@ if __name__ == "__main__":
         ensure_admin()
     except Exception as e:
         print("users init failed:", e, flush=True)
-    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"KampongFlow console v2 on 0.0.0.0:{PORT}", flush=True)
+    srv = ThreadingHTTPServer((BIND, PORT), Handler)
+    print(f"KampongFlow console v2 on {BIND}:{PORT}", flush=True)
     srv.serve_forever()

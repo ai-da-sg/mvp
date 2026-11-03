@@ -6,6 +6,8 @@ console/*.json
 console/*.log
 console/admin.pass
 console/portal_secret
+console/secrets.json
+console/proxy.secret
 console/tls/
 console/__pycache__/
 __pycache__/
