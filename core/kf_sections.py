@@ -7,12 +7,48 @@
 支持的 type:
   hero / cards / split / stats / cta / band / gallery / quotes / table / list / rich
 """
+import html
 import json
 import re
 import sys
 from pathlib import Path
 
 REG = "docker.m.daocloud.io/library/wordpress:cli-php8.3"
+
+# ---------------------------------------------------------------- 安全工具
+def esc(v):
+    """HTML 文本转义。所有来自结构化数据的字段都必须经过它。"""
+    return html.escape("" if v is None else str(v), quote=True)
+
+
+_SAFE_URL = re.compile(r"^(https?:|mailto:|tel:|/|\.|#)")
+
+def safe_url(v):
+    """只放行安全协议与相对路径，挡掉 javascript: / data: 等。"""
+    u = str(v or "").strip()
+    if not u:
+        return "#"
+    if _SAFE_URL.match(u):
+        return esc(u)
+    return "#"
+
+
+# rich 块：允许 HTML，但剔除脚本、事件处理器与危险协议
+_RICH_DROP = re.compile(r"<(script|style|iframe|object|embed|form|meta|link)\b.*?"
+                        r"(</\1>|$)", re.I | re.S)
+_RICH_ON = re.compile(r"\son[a-z]+\s*=\s*(\"[^\"]*\"|\'[^\']*\'|[^\s>]+)", re.I)
+_RICH_JS = re.compile(r"(href|src|action)\s*=\s*(\"\'?)\s*(javascript|data|vbscript):[^\"\'>]*",
+                      re.I)
+
+
+def sanitize_rich(v):
+    """rich 块允许 HTML，但必须净化掉脚本与事件处理器。"""
+    t = str(v or "")
+    t = _RICH_DROP.sub("", t)
+    t = _RICH_ON.sub("", t)
+    t = _RICH_JS.sub(r"\1=\"#\"", t)
+    t = re.sub(r"<!--.*?-->", "", t, flags=re.S)
+    return t
 
 # 渲染上下文：当前站点根目录（用于探测多尺寸变体）
 _CTX = {"site": None}
@@ -38,13 +74,31 @@ def _img_width(path):
     return _img_size(path)[0]
 
 
+SAFE_SLUG = re.compile(r"^[a-z][a-z0-9-]{1,19}$")
+
+
+def _safe_site_path(src):
+    """把 src 解析成站点 html 目录内的真实路径，越界返回 None。"""
+    site = _CTX.get("site")
+    if not site:
+        return None
+    try:
+        root = (Path(site) / "html").resolve()
+        p = (root / str(src).lstrip("/")).resolve()
+        if p != root and root not in p.parents:
+            return None          # 目录穿越
+        return p
+    except Exception:
+        return None
+
+
 def _srcset(src):
     """根据磁盘上的变体生成 srcset，没有变体则返回空串。"""
     site = _CTX.get("site")
     if not site:
         return ""
-    p = Path(site) / "html" / src.lstrip("/")
-    if not p.exists():
+    p = _safe_site_path(src)
+    if p is None or not p.exists():
         return ""
     main_w = _img_width(p)
     if not main_w:
@@ -64,17 +118,19 @@ def _srcset(src):
 
 
 def img_tag(src, alt="", sizes="100vw", cls="", loading="lazy"):
-    attrs = f'src="{src}" alt="{alt}" loading="{loading}"'
+    attrs = f'src="{esc(src)}" alt="{esc(alt)}" loading="{loading}"'
     if cls:
-        attrs = f'class="{cls}" ' + attrs
+        attrs = f'class="{esc(cls)}" ' + attrs
     ss = _srcset(src)
     if ss:
         attrs += f' srcset="{ss}" sizes="{sizes}"'
     site = _CTX.get("site")
     if site:
-        w, h = _img_size(Path(site) / "html" / src.lstrip("/"))
-        if w and h:
-            attrs += f' width="{w}" height="{h}"'
+        sp = _safe_site_path(src)
+        if sp is not None:
+            w, h = _img_size(sp)
+            if w and h:
+                attrs += f' width="{w}" height="{h}"'
     return f"<img {attrs}>"
 
 
@@ -85,13 +141,13 @@ def hx(level, text, cls=""):
         attr["className"] = cls
     c = f' class="wp-block-heading {cls}"'.replace("  ", " ") if cls else ' class="wp-block-heading"'
     return (f'<!-- wp:heading {json.dumps(attr)} -->\n'
-            f'<h{level}{c}>{text}</h{level}>\n<!-- /wp:heading -->\n')
+            f'<h{level}{c}>{esc(text)}</h{level}>\n<!-- /wp:heading -->\n')
 
 
 def pp(text, cls=""):
     attr = json.dumps({"className": cls}) if cls else "{}"
     c = f' class="{cls}"' if cls else ""
-    return f'<!-- wp:paragraph {attr} -->\n<p{c}>{text}</p>\n<!-- /wp:paragraph -->\n'
+    return f'<!-- wp:paragraph {attr} -->\n<p{c}>{esc(text)}</p>\n<!-- /wp:paragraph -->\n'
 
 
 def grp(cls, inner):
@@ -102,12 +158,13 @@ def grp(cls, inner):
 def btn(label, url):
     return ('<!-- wp:buttons -->\n<div class="wp-block-buttons">'
             '<!-- wp:button -->\n<div class="wp-block-button">'
-            f'<a class="wp-block-button__link wp-element-button" href="{url}">{label}</a>'
+            f'<a class="wp-block-button__link wp-element-button" href="{safe_url(url)}">'
+            f'{esc(label)}</a>'
             '</div>\n<!-- /wp:button --></div>\n<!-- /wp:buttons -->\n')
 
 
 def ul(items, cls="kf-list"):
-    lis = "".join(f"<li>{i}</li>" for i in items)
+    lis = "".join(f"<li>{esc(i)}</li>" for i in items)
     return f'<!-- wp:list {json.dumps({"className": cls})} -->\n<ul class="wp-block-list {cls}">{lis}</ul>\n<!-- /wp:list -->\n'
 
 
@@ -125,7 +182,7 @@ def r_hero(s):
     if s.get("cta"):
         body += btn(s["cta"]["label"], s["cta"].get("href", "/contact/"))
     if s.get("badges"):
-        spans = "".join(f'<span class="kf-badge">{b}</span>' for b in s["badges"])
+        spans = "".join(f'<span class="kf-badge">{esc(b)}</span>' for b in s["badges"])
         body += raw(f'<div class="kf-badges">{spans}</div>')
     copy = grp("kf-hero-copy", body)
     if s.get("art"):
@@ -165,7 +222,7 @@ def r_split(s):
 
 
 def r_stats(s):
-    cells = "".join(grp("kf-stat", f'<p><b>{v}</b></p>' + pp(l)) for v, l in
+    cells = "".join(grp("kf-stat", f'<p><b>{esc(v)}</b></p>' + pp(l)) for v, l in
                     [(i["value"], i["label"]) for i in s["items"]])
     return section("tight " + s.get("bg", ""), grp("kf-stats", cells))
 
@@ -179,13 +236,13 @@ def r_cta(s):
 def r_band(s):
     return section("tight", raw(
         f'<div class="kf-band">{img_tag(s["src"], s.get("alt", ""), "100vw")}'
-        f'<div class="kf-band-cap">{s.get("caption", "")}</div></div>'))
+        f'<div class="kf-band-cap">{esc(s.get("caption", ""))}</div></div>'))
 
 
 def r_gallery(s):
     cells = "".join(
         f'<div class="kf-shot">{img_tag(i["src"], i["label"], "(max-width:820px) 100vw, 33vw")}'
-        f'<span>{i["label"]}</span></div>' for i in s["items"])
+        f'<span>{esc(i["label"])}</span></div>' for i in s["items"])
     body = raw(f'<div class="kf-gallery">{cells}</div>')
     if s.get("note"):
         body += pp(s["note"], "kf-note")
@@ -195,7 +252,7 @@ def r_gallery(s):
 
 def r_quotes(s):
     def one(q):
-        av = raw(f'<div class="kf-avatar">{q.get("initial", "•")}</div>') if q.get("initial") else ""
+        av = raw(f'<div class="kf-avatar">{esc(q.get("initial", "•"))}</div>') if q.get("initial") else ""
         return grp("kf-quote", av + pp(f"\u201c{q['text']}\u201d") +
                    (pp(f"\u2014 {q['by']}", "kf-by") if q.get("by") else ""))
 
@@ -211,8 +268,8 @@ def r_quotes(s):
 
 
 def r_table(s):
-    th = "".join(f"<th>{h}</th>" for h in s["headers"])
-    tr = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in s["rows"])
+    th = "".join(f"<th>{esc(h)}</th>" for h in s["headers"])
+    tr = "".join("<tr>" + "".join(f"<td>{esc(c)}</td>" for c in r) + "</tr>" for r in s["rows"])
     body = raw(f'<table class="kf-table"><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>')
     if s.get("note"):
         body += pp(s["note"], "kf-note")
@@ -238,12 +295,13 @@ def r_form(s):
     if s.get("lead"):
         head += pp(s["lead"], "kf-lead")
     block = ('<!-- wp:shortcode -->\n[kf_contact_form submit="%s"]\n<!-- /wp:shortcode -->\n'
-             % (s.get("submit") or "Send message"))
+             % esc(s.get("submit") or "Send message"))
     return section(s.get("bg", ""), head + block)
 
 
 def r_rich(s):
-    return section(s.get("bg", ""), raw(s["html"]))
+    # rich 块允许 HTML，但必须净化掉脚本与事件处理器
+    return section(s.get("bg", ""), raw(sanitize_rich(s["html"])))
 
 
 RENDERERS = {
@@ -415,6 +473,9 @@ def get_content(site, pid):
 
 def backup(site, slug, sections, content_meta=None):
     import time
+    # slug 会进文件路径和 glob 模式，必须先做白名单校验
+    if not SAFE_SLUG.match(str(slug or "")):
+        raise ValueError("非法 slug：%r" % slug)
     d = Path(site) / ".backups"
     d.mkdir(exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")

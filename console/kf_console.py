@@ -148,6 +148,17 @@ def roles():
 
 SELF_SERVICE = ("/api/password", "/api/mfa")   # 任何登录者都能操作自己
 
+# 统一安全响应头：防点击劫持、MIME 嗅探、Referrer 外泄
+SECURITY_HEADERS = {
+    "X-Frame-Options": "SAMEORIGIN",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin",
+    "Content-Security-Policy":
+        "default-src 'self'; img-src 'self' data: blob:; "
+        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+        "frame-ancestors 'self'",
+}
+
 
 def can_write(role, path):
     if any(path.startswith(p) for p in SELF_SERVICE):
@@ -325,6 +336,10 @@ def save_sessions():
         data = {k: v for k, v in SESSIONS.items() if v.get("exp", 0) > time.time()}
         tmp = SESSIONS_F.with_suffix(".tmp")
         tmp.write_text(json.dumps(data))
+        try:
+            tmp.chmod(0o600)
+        except OSError:
+            pass
         tmp.replace(SESSIONS_F)
     except Exception:
         pass
@@ -429,6 +444,7 @@ _lock = threading.Lock()
 _file_lock = threading.Lock()
 
 SLUG_RE   = re.compile(r"^[a-z][a-z0-9-]{1,19}$")
+MAX_DNS_RECORDS = 200      # 单个域名的记录数上限，防止被灌爆做反射放大
 DOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
 
 # 优先嵌入系统 CJK 字体（自包含，任何阅读器都能显示）；没有则退回 CID 字体
@@ -551,10 +567,20 @@ def _read(path, default):
         return default
 
 
+SENSITIVE_FILES = ("users.json", "sessions.json", "settings.json", "roles.json",
+                   "loginfail.json", "ipfail.json")
+
+
 def _write(path, data):
+    """原子写入。敏感文件一律 600，只有属主可读写。"""
     p = Path(path)
     tmp = p.with_suffix(p.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    if p.name in SENSITIVE_FILES:
+        try:
+            tmp.chmod(0o600)
+        except OSError:
+            pass
     tmp.replace(p)
 
 
@@ -648,14 +674,15 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
     for p in pages:
         href = "%s/%s" % (base, p["slug"])
         cls = ' class="current-menu-item"' if p["slug"] == page["slug"] else ""
-        lis.append('<li%s><a href="%s">%s</a></li>' % (cls, href, p.get("title", p["slug"])))
+        lis.append('<li%s><a href="%s">%s</a></li>'
+                   % (cls, href, esc(p.get("title", p["slug"]))))
     nav = "".join(lis)
 
     label = "客户预览" if public else "预览"
     note = "仅供审阅，尚未上线" if public else "未发布的草稿"
     extra = "" if public else '<a href="http://127.0.0.1:18085/" target="_blank">查看线上</a>'
-    title = "%s · %s · %s" % (label, page.get("title", ""), meta.get("company", ""))
-    company = meta.get("company", "")
+    company = esc(meta.get("company", ""))
+    title = "%s · %s · %s" % (label, esc(page.get("title", "")), company)
 
     return "".join([
         '<!doctype html><html lang="en"><head><meta charset="utf-8">',
@@ -3459,6 +3486,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        for k, v in SECURITY_HEADERS.items():
+            self.send_header(k, v)
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -3555,11 +3584,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             return self._send(200, {"ok": True})
         if path == "/api/state":
+            # settings 里含 smtp.api_key 等敏感值，绝不能原样下发
+            pub = dict(settings())
+            sm = dict(pub.get("smtp") or {})
+            for k in ("api_key", "pass"):
+                if sm.get(k):
+                    sm[k] = "********"
+            pub["smtp"] = sm
             return self._send(200, {"role": getattr(self, "user_role", "ops"),
                                     "me": getattr(self, "user", ""),
                                     "staff": sorted(load_users().keys()),
                                     "sites": site_list(), "invoices": invoices(),
-                                    "plans": plans(), "settings": settings(),
+                                    "plans": plans(), "settings": pub,
                                     "industries": sorted(INDUSTRIES.items()),
                                     "free_port": free_port()})
         if path == "/export/invoices.csv":
@@ -3816,6 +3852,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/site/([a-z0-9-]+)/handover\.pdf$", path)
         if m:
             slug = m.group(1)
+            # 交接单含 WordPress 管理员密码，只给管理员和运营看
+            if getattr(self, "user_role", "ops") not in ("admin", "ops"):
+                return self._send(403, {"error": "当前角色无权导出交接单"})
             try:
                 pdf = handover_pdf(slug)
             except FileNotFoundError as e:
@@ -4655,7 +4694,10 @@ class Handler(BaseHTTPRequestHandler):
             users[uname].pop("mfa_secret", None)
             users[uname].pop("recovery", None)
             _write(USERS_F, users)
-            audit(getattr(self, "user", "-"), "mfa_reset", uname)
+            for sid in [k for k, v in SESSIONS.items() if v.get("user") == uname]:
+                SESSIONS.pop(sid, None)
+            save_sessions()
+            audit(getattr(self, "user", "-"), "mfa_reset", uname, "已踢掉该账号全部会话")
             return self._send(200, {"ok": True, "user": uname,
                                     "message": "已重置，该账号下次用密码登录"})
         elif act == "reset":
@@ -4666,7 +4708,17 @@ class Handler(BaseHTTPRequestHandler):
             users[uname]["hash"] = pin_hash(pw, salt)
             users[uname]["pwd_changed"] = datetime.now(SGT).strftime("%Y-%m-%d")
             _write(USERS_F, users)
-            return self._send(200, {"ok": True, "user": uname, "password": pw})
+            # 密码被重置意味着旧凭据可能已泄露，踢掉该账号全部会话
+            killed = 0
+            for sid in [k for k, v in SESSIONS.items() if v.get("user") == uname]:
+                SESSIONS.pop(sid, None)
+                killed += 1
+            if killed:
+                save_sessions()
+            audit(getattr(self, "user", "-"), "password_reset", uname,
+                  "踢掉 %d 个会话" % killed)
+            return self._send(200, {"ok": True, "user": uname, "password": pw,
+                                    "sessions_killed": killed})
         else:
             return self._send(400, {"error": "未知操作"})
         _write(USERS_F, users)
@@ -4712,6 +4764,9 @@ class Handler(BaseHTTPRequestHandler):
         z = zones.get(slug)
         if not z:
             return self._send(400, {"error": "请先启用 DNS 托管"})
+        if len(z.get("records") or []) >= MAX_DNS_RECORDS:
+            return self._send(400, {"error": "该域名的记录数已达上限（%d 条）"
+                                              % MAX_DNS_RECORDS})
         z["records"].append({"name": name, "type": rtype, "ttl": ttl, "value": value})
         m.save_zones(zones)
         return self._send(200, {"ok": True})

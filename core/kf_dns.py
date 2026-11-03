@@ -145,7 +145,8 @@ def answer(query):
     for r in zone["records"]:
         if absolute(r["name"], domain).lower() != qname:
             continue
-        if qtype == "ANY" or r["type"] == qtype:
+        # 不响应 ANY 查询：否则一次请求可拉走全部记录，成为 UDP 反射放大器
+        if r["type"] == qtype:
             matched.append(r)
 
     # CNAME 跟随（只跟一层，够用）
@@ -200,6 +201,9 @@ def serve_udp(port):
             continue
 
 
+MAX_DNS_MSG = 65535        # DNS over TCP 消息长度上限
+
+
 def serve_tcp(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -214,6 +218,9 @@ def serve_tcp(port):
                 conn.close()
                 continue
             need = int.from_bytes(ln, "big")
+            if need > MAX_DNS_MSG:
+                conn.close()      # 声明长度超限，直接拒绝，防止内存耗尽
+                continue
             buf = b""
             while len(buf) < need:
                 chunk = conn.recv(need - len(buf))

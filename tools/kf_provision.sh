@@ -40,6 +40,8 @@ services:
     mem_limit: 768m
     cpus: 2
 EOF
+# compose 里含数据库明文密码，必须只有属主可读
+chmod 600 "$SITE/docker-compose.yml"
 cd "$SITE"
 docker compose up -d --quiet-pull >/dev/null 2>&1
 for i in $(seq 1 40); do
@@ -82,7 +84,7 @@ cat > "$SITE/handover.md" <<EOF
 
 ## 数据库
 - 库名：wordpress　用户：wpuser
-- 密码：$DBPASS
+- 密码：由服务方保管，不随本单分发
 - 访问：仅容器内网 db:3306
 
 ## 端口

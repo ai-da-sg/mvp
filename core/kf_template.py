@@ -966,6 +966,13 @@ def main():
     if payload.get("design"):
         (site / "design.json").write_text(json.dumps(payload["design"], ensure_ascii=False, indent=1))
     (site / "kf_setup.php").write_text(PHP)
+    # site.json / kf_setup.php 决定 WordPress 的 option 与初始化脚本，
+    # 被改写即可植入恶意配置，必须只有属主可读写。
+    for f in ("site-spec.json", "site.json", "design.json", "kf_setup.php"):
+        try:
+            (site / f).chmod(0o600)
+        except OSError:
+            pass
 
     slug = site.name
     cmd = ["docker", "run", "--rm",
