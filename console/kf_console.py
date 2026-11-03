@@ -458,6 +458,19 @@ INDUSTRIES = {
     "tech": "科技",
 }
 
+def _retry(fn, tries=3, delay=2.0, label=""):
+    """网络抖动（DNS/连接）重试，最后一次失败才抛出。"""
+    last = None
+    for i in range(tries):
+        try:
+            return fn()
+        except Exception as e:
+            last = e
+            if i < tries - 1:
+                time.sleep(delay * (i + 1))
+    raise RuntimeError("%s%s" % (label, last))
+
+
 def send_mail(to, subject, body, smtp=None):
     """发信：优先走 HTTPS API（云主机普遍封 587/465），否则走 SMTP。"""
     import smtplib
@@ -480,14 +493,14 @@ def send_mail(to, subject, body, smtp=None):
                        "subject": subject,
                        "content": [{"type": "text/plain", "value": body}]}
             url, hdr = "https://api.sendgrid.com/v3/mail/send", {"Authorization": "Bearer " + key}
-        req = _ur.Request(url, data=json.dumps(payload).encode(),
-                          headers={**hdr, "Content-Type": "application/json"}, method="POST")
-        try:
+        def _post():
+            req = _ur.Request(url, data=json.dumps(payload).encode(),
+                              headers={**hdr, "Content-Type": "application/json"}, method="POST")
             with _ur.urlopen(req, timeout=25) as r:
                 if r.status >= 300:
                     raise RuntimeError("HTTP %d" % r.status)
-        except Exception as e:
-            raise RuntimeError("邮件 API 失败：%s" % e)
+            return True
+        _retry(_post, label="邮件 API 失败：")
         return
 
     host = (s.get("host") or "").strip()
@@ -500,21 +513,24 @@ def send_mail(to, subject, body, smtp=None):
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
-    if port == 465:
-        srv = smtplib.SMTP_SSL(host, port, timeout=20)
-    else:
-        srv = smtplib.SMTP(host, port, timeout=20)
-        if s.get("tls", True):
-            srv.starttls()
-    try:
-        if s.get("user"):
-            srv.login(s["user"], s.get("pass", ""))
-        srv.send_message(msg)
-    finally:
+    def _smtp():
+        if port == 465:
+            srv = smtplib.SMTP_SSL(host, port, timeout=20)
+        else:
+            srv = smtplib.SMTP(host, port, timeout=20)
+            if s.get("tls", True):
+                srv.starttls()
         try:
-            srv.quit()
-        except Exception:
-            pass
+            if s.get("user"):
+                srv.login(s["user"], s.get("pass", ""))
+            srv.send_message(msg)
+        finally:
+            try:
+                srv.quit()
+            except Exception:
+                pass
+        return True
+    _retry(_smtp, label="SMTP 发送失败：")
 
 
 DEFAULT_SETTINGS = {

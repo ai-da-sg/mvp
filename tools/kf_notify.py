@@ -172,12 +172,20 @@ def send(to, subject, body, smtp):
                        "from": {"email": frm}, "subject": subject,
                        "content": [{"type": "text/plain", "value": body}]}
             url, hdr = "https://api.sendgrid.com/v3/mail/send", {"Authorization": "Bearer " + key}
-        r = ur.Request(url, data=json.dumps(payload).encode(),
-                       headers={**hdr, "Content-Type": "application/json"}, method="POST")
-        with ur.urlopen(r, timeout=25) as resp:
-            if resp.status >= 300:
-                raise RuntimeError("HTTP %d" % resp.status)
-        return
+        last = None
+        for i in range(3):
+            try:
+                r = ur.Request(url, data=json.dumps(payload).encode(),
+                               headers={**hdr, "Content-Type": "application/json"}, method="POST")
+                with ur.urlopen(r, timeout=25) as resp:
+                    if resp.status >= 300:
+                        raise RuntimeError("HTTP %d" % resp.status)
+                return
+            except Exception as e:
+                last = e
+                if i < 2:
+                    time.sleep(2 * (i + 1))
+        raise RuntimeError("邮件 API 失败：%s" % last)
 
     import smtplib
     from email.message import EmailMessage

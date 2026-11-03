@@ -54,6 +54,12 @@ chmod +x install.sh
 
 完整参数见 `./install.sh --help`。
 
+升级已有安装（只换代码，不动数据）：
+
+```bash
+./install.sh --upgrade --dir /你原来的安装目录
+```
+
 ## 目录结构
 
 ```

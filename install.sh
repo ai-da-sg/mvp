@@ -17,6 +17,7 @@ WITH_DOCKER=1
 WITH_DEMO=0
 NON_INTERACTIVE=0
 FORCE=0
+UPGRADE=0
 PYTHON="${PYTHON:-python3}"
 REGISTRY="docker.m.daocloud.io/library"
 
@@ -53,6 +54,7 @@ KampongFlow 多租户建站平台 · 安装脚本 v${VERSION}
   --no-docker           只装控制台，不拉镜像、不建站点
 
 其他
+      --upgrade         升级已有安装：只换代码并重启，不动数据
   -y, --yes             非交互，全部用默认值/自动生成
   -f, --force           目标目录已存在时强制覆盖（会保留 sites/ 与 console/ 数据）
   -h, --help            显示本帮助
@@ -75,6 +77,7 @@ while [ $# -gt 0 ]; do
     --admin-pass)    ADMIN_PASS="${2:?}"; shift 2 ;;
     --email)         KF_EMAIL="${2:?}"; shift 2 ;;
     --python)        PYTHON="${2:?}"; shift 2 ;;
+    --upgrade)       UPGRADE=1; shift ;;
     --demo)          WITH_DEMO=1; shift ;;
     --no-docker)     WITH_DOCKER=0; shift ;;
     -y|--yes)        NON_INTERACTIVE=1; shift ;;
@@ -159,6 +162,77 @@ if ! command -v systemctl >/dev/null 2>&1; then
   HAS_SYSTEMD=0
 else
   HAS_SYSTEMD=1
+fi
+
+# ---------- 升级模式 ----------
+if [ "$UPGRADE" = "1" ]; then
+  head_ "升级模式"
+  [ -f "$KF_BASE/console/kf_console.py" ] || die "$KF_BASE 下没有已安装的后台，不能升级（用普通安装）"
+  [ "$SRC" != "$KF_BASE" ] || die "请从源码目录运行升级，不要指向安装目录自身"
+
+  TS="$(date +%Y%m%d-%H%M%S)"
+  BK="$KF_BASE/.upgrade-backup-$TS"
+  mkdir -p "$BK"
+  for d in console core tools theme templates; do
+    [ -d "$KF_BASE/$d" ] && cp -a "$KF_BASE/$d" "$BK/" 2>/dev/null || true
+  done
+  ok "已备份代码 → $BK"
+
+  # 只同步代码，不碰 sites/ 与 console 下的数据文件
+  for f in console/kf_console.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
+           tools/kf_update.py tools/kf_notify.py tools/kf_provision.sh; do
+    install -D -m 755 "$SRC/$f" "$KF_BASE/$f"
+  done
+  mkdir -p "$KF_BASE/theme"
+  cp -r "$SRC/theme/." "$KF_BASE/theme/"
+  chmod -R a+rX "$KF_BASE/theme"
+  ok "代码已更新"
+
+  if ! "$PYTHON" -m py_compile "$KF_BASE"/console/kf_console.py "$KF_BASE"/core/*.py \
+       "$KF_BASE"/tools/kf_*.py 2>/tmp/kf-upgrade-err; then
+    warn "新代码编译失败，回滚"
+    for d in console core tools theme templates; do
+      [ -d "$BK/$d" ] && cp -a "$BK/$d/." "$KF_BASE/$d/" 2>/dev/null || true
+    done
+    head -3 /tmp/kf-upgrade-err >&2
+    die "已回滚，服务未重启"
+  fi
+  ok "语法检查通过"
+
+  if [ "$HAS_SYSTEMD" = "1" ]; then
+    systemctl --user restart kf-console.service kf-dns.service 2>/dev/null || warn "重启失败，查 journalctl --user -u kf-console"
+  elif [ -x "$KF_BASE/start.sh" ]; then
+    bash "$KF_BASE/start.sh" >/dev/null 2>&1 || true
+  fi
+  sleep 4
+
+  FAIL=0
+  command -v systemctl >/dev/null 2>&1 && {
+    [ "$(systemctl --user is-active kf-console 2>/dev/null)" = "active" ] || FAIL=1
+    [ "$(systemctl --user is-active kf-dns 2>/dev/null)" = "active" ] || FAIL=1
+  }
+  CODE=$(curl -s -o /dev/null -w '%{http_code}\' "http://127.0.0.1:$KF_PORT/login" 2>/dev/null | grep -oE '[0-9]{3}' | head -1)
+  [ "$CODE" = "200" ] || FAIL=1
+
+  if [ "$FAIL" = "1" ]; then
+    warn "健康检查未通过，回滚代码"
+    for d in console core tools theme templates; do
+      [ -d "$BK/$d" ] && cp -a "$BK/$d/." "$KF_BASE/$d/" 2>/dev/null || true
+    done
+    systemctl --user restart kf-console.service kf-dns.service 2>/dev/null || true
+    sleep 3
+    C2=$(curl -s -o /dev/null -w '%{http_code}\' "http://127.0.0.1:$KF_PORT/login" 2>/dev/null | grep -oE '[0-9]{3}' | head -1)
+    [ "$C2" = "200" ] && ok "已回滚，服务恢复" || warn "回滚后仍异常（$C2），需人工介入"
+    die "升级失败"
+  fi
+
+  ok "服务已重启并通过健康检查（HTTP 200）"
+  printf '\n%s\n' "${C_B}升级完成${C_0}"
+  info "安装目录  $KF_BASE"
+  info "备份      $BK"
+  info "版本      $(cat "$SRC/VERSION" 2>/dev/null || echo '?')"
+  printf '\n'
+  exit 0
 fi
 
 # ---------- 2. 交互收集 ----------
