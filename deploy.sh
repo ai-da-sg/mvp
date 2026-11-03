@@ -20,6 +20,7 @@ SVC_CONSOLE="${KF_DEPLOY_SVC_CONSOLE:-kf-console}"
 SVC_DNS="${KF_DEPLOY_SVC_DNS:-kf-dns}"
 CPORT="${KF_DEPLOY_CONSOLE_PORT:-18090}"
 DPORT="${KF_DEPLOY_DNS_PORT:-5354}"
+PPORT="${KF_DEPLOY_PROXY_PORT:-18444}"
 BRANCH="${KF_DEPLOY_BRANCH:-main}"
 
 MSG=""
@@ -190,6 +191,18 @@ else
 
   C=$(rsh "curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:$CPORT/login" 2>/dev/null | tr -d '\r' | grep -oE '[0-9]{3}' | head -1)
   [ "$C" = "200" ] && ok "登录页 HTTP 200" || { warn "登录页返回 $C"; FAIL=1; }
+
+  # HTTPS 反代：真实用户走的是这条路径
+  P=$(rsh "curl -sk -o /dev/null -w '%{http_code}\\n' https://127.0.0.1:$PPORT/login" 2>/dev/null | tr -d '\r' | grep -oE '[0-9]{3}' | head -1)
+  [ "$P" = "200" ] && ok "HTTPS 反代 :$PPORT 200" || { warn "HTTPS 反代返回 ${P:-无响应}"; FAIL=1; }
+
+  # 后台必须只监听回环
+  L=$(rsh "ss -tln 2>/dev/null | grep ':$CPORT ' | awk '{print \$4}' | head -1" 2>/dev/null | tr -d '\r')
+  case "$L" in
+    127.0.0.1:*) ok "后台只监听回环 ($L)" ;;
+    "")           warn "查不到后台监听地址" ;;
+    *)            warn "后台监听在 $L，应改为 127.0.0.1"; FAIL=1 ;;
+  esac
 
   Z=$(rsh "ls '$RBASE'/dns/zones.json >/dev/null 2>&1 && echo yes" 2>/dev/null | tr -d '\r')
   if [ "$Z" = "yes" ]; then
