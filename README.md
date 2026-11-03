@@ -75,6 +75,23 @@ chmod +x install.sh
 
 运行数据（`sites/`、`console/*.json`、`assets/`）不进入版本库。
 
+## 发布
+
+改完代码，一条命令完成提交、推送、部署与健康检查：
+
+```bash
+cp deploy.env.example deploy.env   # 首次：填远程主机
+./deploy.sh -m "改了什么"
+```
+
+脚本会依次执行：本地检查 → 提交 → 推送 Gitee → 备份远端代码 → 同步 → 远端语法检查 →
+重启服务 → 健康检查（进程、登录页、DNS 解析）。**任一项失败自动回滚并报错**。
+
+```bash
+./deploy.sh --dry-run -m "看看会做什么"   # 只演一遍，不动手
+./deploy.sh --no-deploy -m "只推代码"     # 不部署
+```
+
 ## 环境要求
 
 - Linux（systemd 可选）
