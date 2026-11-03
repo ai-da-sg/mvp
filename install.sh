@@ -281,7 +281,12 @@ fi
 
 mkdir -p "$KF_BASE"/{sites,console,dns,assets,logs}
 chmod 700 "$KF_BASE/console"
-ok "目录结构就绪"
+# 敏感数据文件统一 600：账号哈希、会话、邮件 API Key 都在这些文件里
+for f in users.json sessions.json settings.json roles.json loginfail.json ipfail.json; do
+  [ -f "$KF_BASE/console/$f" ] && chmod 600 "$KF_BASE/console/$f"
+done
+[ -f "$KF_BASE/console/portal_secret" ] && chmod 600 "$KF_BASE/console/portal_secret"
+ok "目录结构就绪（敏感文件权限 600）"
 
 # 代码同步（源码目录与安装目录不同时）
 if [ "$SRC" != "$KF_BASE" ]; then

@@ -8,10 +8,13 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+SAFE_SLUG = re.compile(r"^[a-z][a-z0-9-]{1,19}$")
 
 BASE = Path(os.environ.get("KF_BASE", "/mnt/data1/kampongflow"))
 SITES = BASE / "sites"
@@ -101,6 +104,10 @@ def apply():
 
     results = []
     for slug in targets:
+        # slug 来自 updates.json，白名单化以防 cwd 逃出 SITES
+        if not SAFE_SLUG.match(str(slug or "")):
+            print(f"{slug}: 非法 slug，跳过", file=sys.stderr)
+            continue
         d = SITES / slug
         rc, out, err = sh(["docker", "compose", "up", "-d", "--force-recreate",
                            "--quiet-pull"], timeout=900, cwd=str(d))
@@ -110,7 +117,13 @@ def apply():
             meta = json.loads((d / "meta.json").read_text())
         except Exception:
             pass
-        port = int(meta.get("port") or 0)
+        try:
+            port = int(meta.get("port") or 0)
+        except Exception:
+            port = 0
+        # 只允许回环上的站点端口段，防止被改写成任意本地端口做探测
+        if not (18000 <= port <= 18999):
+            port = 0
         code = 0
         if ok and port:
             for _ in range(20):

@@ -904,7 +904,19 @@ update_option('kf_phone', $d['phone']);
 update_option('kf_email', 'hello@' . $d['domain']);
 update_option('kf_address', 'Singapore');
 if (!empty($d['options'])) {
+    // 只允许写入白名单内的 option，防止 site.json 被篡改后植入
+    // active_plugins / users_can_register / siteurl 之类的危险配置
+    $kf_allowed_options = [
+        'blogdescription', 'timezone_string', 'date_format', 'time_format',
+        'permalink_structure', 'default_comment_status', 'default_ping_status',
+        'kf_phone', 'kf_email', 'kf_address', 'kf_palette', 'kf_design',
+        'kf_schema_type', 'kf_cta_text', 'kf_cta_url',
+        'show_on_front', 'page_on_front', 'posts_per_page', 'blog_public',
+    ];
     foreach ($d['options'] as $ok => $ov) {
+        if (!in_array($ok, $kf_allowed_options, true)) {
+            continue;
+        }
         update_option($ok, $ov);
     }
 }

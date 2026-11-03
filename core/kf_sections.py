@@ -569,6 +569,14 @@ def main():
 
     site = Path(a.site).resolve()
 
+    # 页面 slug 会进文件路径与 glob 模式，必须白名单
+    if a.page_slug and not SAFE_SLUG.match(a.page_slug):
+        print("非法 page-slug: %r" % a.page_slug, file=sys.stderr)
+        sys.exit(2)
+    if a.only and not SAFE_SLUG.match(a.only):
+        print("非法 only: %r" % a.only, file=sys.stderr)
+        sys.exit(2)
+
     if a.save:
         payload = json.loads(Path(a.save).read_text())
         if a.stdout_html:

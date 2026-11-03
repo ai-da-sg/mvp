@@ -2,6 +2,20 @@
 # kf-provision.sh <公司名> <域名> <slug> <端口>
 set -euo pipefail
 COMPANY="${1:?公司名}"; DOMAIN="${2:?域名}"; SLUG="${3:?slug}"; PORT="${4:?端口}"
+# slug 与 port 都要白名单：它们会进文件路径、容器名与端口映射
+case "$SLUG" in
+  [a-z][a-z0-9-]*) ;;
+  *) echo "ERR: slug 只能用小写字母开头，含小写字母/数字/短横线，2-20 位" >&2; exit 1 ;;
+esac
+if [ "${#SLUG}" -lt 2 ] || [ "${#SLUG}" -gt 20 ]; then
+  echo "ERR: slug 长度需在 2-20 位" >&2; exit 1
+fi
+case "$PORT" in
+  ''|*[!0-9]*) echo "ERR: 端口必须是数字" >&2; exit 1 ;;
+esac
+if [ "$PORT" -lt 1024 ] || [ "$PORT" -gt 65535 ]; then
+  echo "ERR: 端口超出范围" >&2; exit 1
+fi
 PLAN="${5:-}"; PRICE="${6:-}"; INDUSTRY="${7:-}"; PLAN_ID="${8:-}"
 BASE="${KF_BASE:-/mnt/data1/kampongflow}"
 SITE="$BASE/sites/$SLUG"
