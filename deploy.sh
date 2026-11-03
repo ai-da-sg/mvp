@@ -182,20 +182,20 @@ else
   step "5/5 健康检查"
   FAIL=0
 
-  A=$(rsh "systemctl --user is-active $SVC_CONSOLE" 2>/dev/null | tr -d '\r')
+  A=$(rsh "systemctl --user is-active $SVC_CONSOLE" 2>/dev/null | tr -d '\r' | grep -oE '^(active|inactive|failed|activating|deactivating)' | head -1)
   [ "$A" = "active" ] && ok "控制台进程 active" || { warn "控制台状态 $A"; FAIL=1; }
 
-  D=$(rsh "systemctl --user is-active $SVC_DNS" 2>/dev/null | tr -d '\r')
+  D=$(rsh "systemctl --user is-active $SVC_DNS" 2>/dev/null | tr -d '\r' | grep -oE '^(active|inactive|failed|activating|deactivating)' | head -1)
   [ "$D" = "active" ] && ok "DNS 进程 active" || { warn "DNS 状态 $D"; FAIL=1; }
 
-  C=$(rsh "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$CPORT/login" 2>/dev/null | tr -d '\r')
+  C=$(rsh "curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:$CPORT/login" 2>/dev/null | tr -d '\r' | grep -oE '[0-9]{3}' | head -1)
   [ "$C" = "200" ] && ok "登录页 HTTP 200" || { warn "登录页返回 $C"; FAIL=1; }
 
   Z=$(rsh "ls '$RBASE'/dns/zones.json >/dev/null 2>&1 && echo yes" 2>/dev/null | tr -d '\r')
   if [ "$Z" = "yes" ]; then
-    Q=$(rsh "python3 -c \"import json,sys;print(list(json.load(open('$RBASE/dns/zones.json')).values())[0]['domain'])\" 2>/dev/null" | tr -d '\r')
+    Q=$(rsh "python3 -c \"import json;print(list(json.load(open('$RBASE/dns/zones.json')).values())[0]['domain'])\"" 2>/dev/null | tr -d '\r' | grep -E '^[a-z0-9.-]+$' | head -1)
     if [ -n "$Q" ]; then
-      R=$(rsh "dig +short @127.0.0.1 -p $DPORT $Q A | head -1" 2>/dev/null | tr -d '\r')
+      R=$(rsh "dig +short @127.0.0.1 -p $DPORT $Q A | head -1" 2>/dev/null | tr -d '\r' | grep -E '^[0-9a-fA-F:.]+$' | head -1)
       [ -n "$R" ] && ok "DNS 解析 $Q → $R" || { warn "DNS 解析 $Q 无结果"; FAIL=1; }
     fi
   fi
@@ -204,7 +204,7 @@ else
     printf '\n  %s健康检查未通过，自动回滚%s\n' "$ERR" "$N"
     rsh "tar xzf /tmp/kf-pre-$TS.tgz -C '$RBASE' --strip-components=1 2>/dev/null; systemctl --user restart $SVC_CONSOLE $SVC_DNS" || true
     sleep 3
-    C2=$(rsh "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$CPORT/login" 2>/dev/null | tr -d '\r')
+    C2=$(rsh "curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:$CPORT/login" 2>/dev/null | tr -d '\r' | grep -oE '[0-9]{3}' | head -1)
     [ "$C2" = "200" ] && ok "已回滚，服务恢复（HTTP 200）" || warn "回滚后仍是 $C2，需人工介入"
     die "发布失败"
   fi
