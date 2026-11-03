@@ -454,9 +454,15 @@ else
   cat > "$KF_BASE/start.sh" <<EOF
 #!/usr/bin/env bash
 export KF_BASE=$KF_BASE KF_PORT=$KF_PORT KF_DNS_PORT=5354
+# 后台只监听回环，外部经反代进来
+export KF_BIND=127.0.0.1 KF_FORCE_HTTPS=1 KF_TRUSTED_PROXIES=127.0.0.1
 nohup $PYTHON $KF_BASE/console/kf_console.py > $KF_BASE/logs/console.log 2>&1 &
 nohup $PYTHON $KF_BASE/core/kf_dns.py --port 5354 > $KF_BASE/logs/dns.log 2>&1 &
-echo "已启动控制台 :$KF_PORT 和 DNS :5354"
+sleep 1
+# 有证书就起反代，没有就先签一份自签
+[ -f "$KF_BASE/console/tls/cert.pem" ] || bash "$KF_BASE/tools/kf_tls.sh" >/dev/null 2>&1
+KF_BASE=$KF_BASE KF_PORT=$KF_PORT KF_PROXY_PORT=$KF_PROXY_PORT bash "$KF_BASE/tools/kf_proxy.sh" start
+echo "已启动控制台 :$KF_PORT（仅回环）、DNS :5354、HTTPS 反代 :$KF_PROXY_PORT"
 EOF
   chmod +x "$KF_BASE/start.sh"
   ok "已生成 $KF_BASE/start.sh（手动启动）"
@@ -502,7 +508,8 @@ fi
 
 printf '\n%s\n' "${C_B}安装完成${C_0}"
 printf '%s\n' "  ┌────────────────────────────────────────────"
-info "后台      http://127.0.0.1:$KF_PORT"
+info "后台      https://127.0.0.1:$KF_PROXY_PORT  (HTTPS，自签证书首次需信任)"
+info "          http://127.0.0.1:$KF_PORT  (仅本机可达)"
 info "账号      admin"
 if [ "${GENERATED_PASS:-0}" = "1" ]; then
   printf '%s\n' "  │ 密码      ${C_WARN}$ADMIN_PASS${C_0}   ${C_DIM}（自动生成，请立即保存）${C_0}"
@@ -516,10 +523,11 @@ printf '%s\n' "  └────────────────────
 cat <<EOF
 
   下一步
-    1. 浏览器打开后台，登录后立刻把密码保存好
-    2. 「团队」→「我的账号」开启两步验证，并保存 10 个恢复码
-    3. 「维护」→ 邮件发送：填 Resend / SendGrid 的 API Key 并点「发送测试」
-    4. 「站点」→ 开通第一个站点
+    1. 浏览器打开后台（HTTPS），首次访问需信任自签证书
+    2. 登录后立刻把密码保存好
+    3. 「团队」→「我的账号」开启两步验证，并保存 10 个恢复码
+    4. 「维护」→ 邮件发送：填 Resend / SendGrid 的 API Key 并点「发送测试」
+    5. 「站点」→ 开通第一个站点
 
   常用命令
     systemctl --user status kf-console     服务状态
