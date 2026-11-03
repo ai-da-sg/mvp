@@ -213,13 +213,15 @@ def serve_tcp(port):
     while True:
         conn, _ = s.accept()
         try:
+            # 超时：防止慢速连接占住服务（单线程串行处理，一个慢连接会拖住全部）
+            conn.settimeout(10)
             ln = conn.recv(2)
             if len(ln) < 2:
                 conn.close()
                 continue
             need = int.from_bytes(ln, "big")
             if need > MAX_DNS_MSG:
-                conn.close()      # 声明长度超限，直接拒绝，防止内存耗尽
+                conn.close()      # 声明长度超限，直接拒绝
                 continue
             buf = b""
             while len(buf) < need:
@@ -227,6 +229,9 @@ def serve_tcp(port):
                 if not chunk:
                     break
                 buf += chunk
+            if len(buf) < need:
+                conn.close()      # 没发完就断开
+                continue
             q = dns.message.from_wire(buf)
             out = answer(q).to_wire()
             conn.sendall(len(out).to_bytes(2, "big") + out)
