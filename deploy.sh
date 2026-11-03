@@ -78,7 +78,14 @@ else
   SSH=(ssh "${SSH_OPTS[@]}")
   SCP=(ssh "${SSH_OPTS[@]}")
 fi
-rsh() { "${SSH[@]}" "$REMOTE" "$@"; }
+BANNER='^(openjdk version|OpenJDK Runtime Environment|OpenJDK 64-Bit Server VM)'
+rsh() {
+  # 远端登录 shell 会打印 Java 版本横幅，这里过滤掉但保留真实退出码
+  local out rc=0
+  out=$("${SSH[@]}" "$REMOTE" "$@" 2>&1) || rc=$?
+  if [ -n "$out" ]; then printf '%s\n' "$out" | grep -vE "$BANNER" || true; fi
+  return $rc
+}
 
 printf '\n%s\n' "${B}KampongFlow 发布${N}"
 printf '  %s%s → %s:%s%s\n' "$DIM" "$SRC" "${REMOTE:-未配置}" "$RBASE" "$N"
