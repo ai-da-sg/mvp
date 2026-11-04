@@ -138,7 +138,7 @@ PYV="$("$PYTHON" -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
 ok "Python $PYV ($(command -v "$PYTHON"))"
 
 MISSING=()
-for mod in reportlab PIL dns; do
+for mod in reportlab PIL dns qrcode; do
   "$PYTHON" -c "import $mod" 2>/dev/null || MISSING+=("$mod")
 done
 if [ ${#MISSING[@]} -gt 0 ]; then
@@ -148,7 +148,7 @@ if [ ${#MISSING[@]} -gt 0 ]; then
   read -r -p "  继续安装？（功能会受限）[y/N]: " a || true
   case "$a" in y|Y) ;; *) die "已中止" ;; esac
 else
-  ok "Python 依赖齐全（reportlab / Pillow / dnspython）"
+  ok "Python 依赖齐全（reportlab / Pillow / dnspython / qrcode）"
 fi
 
 if [ "$WITH_DOCKER" = "1" ]; then
@@ -182,8 +182,8 @@ if [ "$UPGRADE" = "1" ]; then
   ok "已备份代码 → $BK"
 
   # 只同步代码，不碰 sites/ 与 console 下的数据文件
-  for f in console/kf_console.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
-           tools/kf_update.py tools/kf_notify.py tools/kf_provision.sh; do
+  for f in console/kf_console.py console/ai.js core/kf_ai.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
+           tools/kf_update.py tools/kf_notify.py tools/kf_provision.sh tools/kf_proxy.sh tools/kf_tls.sh; do
     install -D -m 755 "$SRC/$f" "$KF_BASE/$f"
   done
   mkdir -p "$KF_BASE/theme"
@@ -293,8 +293,8 @@ ok "目录结构就绪（敏感文件权限 600）"
 
 # 代码同步（源码目录与安装目录不同时）
 if [ "$SRC" != "$KF_BASE" ]; then
-  for f in console/kf_console.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
-           tools/kf_update.py tools/kf_notify.py tools/kf_provision.sh; do
+  for f in console/kf_console.py console/ai.js core/kf_ai.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
+           tools/kf_update.py tools/kf_notify.py tools/kf_provision.sh tools/kf_proxy.sh tools/kf_tls.sh; do
     install -D -m 755 "$SRC/$f" "$KF_BASE/$f"
   done
   mkdir -p "$KF_BASE/theme"
@@ -347,7 +347,7 @@ fi
 
 # ---------- 4. 语法自检 ----------
 head_ "4/7 代码自检"
-for f in console/kf_console.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
+for f in console/kf_console.py core/kf_ai.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
          tools/kf_update.py tools/kf_notify.py; do
   "$PYTHON" -m py_compile "$KF_BASE/$f" || die "语法错误：$f"
 done
@@ -423,6 +423,7 @@ Description=KampongFlow 每日摘要
 After=network.target
 
 [Service]
+Environment=KF_BASE=$KF_BASE
 Type=oneshot
 ExecStart=$PYTHON $KF_BASE/tools/kf_notify.py
 EOF

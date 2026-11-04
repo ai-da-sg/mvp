@@ -16,6 +16,7 @@
 |---|---|
 | 站点 | 每站点独立 WordPress + MariaDB 容器，一键开通/暂停/续费 |
 | 建站 | 12 类区块、5 套行业模板、结构化编辑器、图片自动转 WebP + srcset |
+| AI 建站 | GPT 模拟、可配置多服务商与模型、兼容接口、异步生成整站草稿 |
 | 发布 | 草稿/预览/发布分离，逐页发布，发布前校验与回滚 |
 | DNS | 自建权威解析，按站点托管区，记录增删、健康检查、公网委托检测 |
 | 账单 | 一次性交付账单、续费账单、中文 PDF、到期自动延期 |
@@ -27,7 +28,7 @@
 ## 快速开始
 
 ```bash
-git clone https://gitee.com/wesouler/mvp.git
+git clone https://github.com/ai-da-sg/mvp.git
 cd mvp
 chmod +x install.sh
 ./install.sh
@@ -83,29 +84,22 @@ chmod +x install.sh
 
 ## 发布
 
-改完代码，一条命令完成提交、推送、部署与健康检查：
+推送 main 或提交 PR 后，GitHub Actions 自动运行测试、语法检查并生成代码发布包。
+生产部署在 Actions → **Deploy production** 手动触发，需先配置 SSH Secrets 与部署路径。
+部署失败自动恢复代码，运行数据不参与备份回滚。完整配置及限制见 [CI/CD](docs/CI-CD.md)。
 
-```bash
-cp deploy.env.example deploy.env   # 首次：填远程主机
-./deploy.sh -m "改了什么"
-```
-
-脚本会依次执行：本地检查 → 提交 → 推送 Gitee → 备份远端代码 → 同步 → 远端语法检查 →
-重启服务 → 健康检查（进程、登录页、DNS 解析）。**任一项失败自动回滚并报错**。
-
-```bash
-./deploy.sh --dry-run -m "看看会做什么"   # 只演一遍，不动手
-./deploy.sh --no-deploy -m "只推代码"     # 不部署
-```
+历史 `deploy.sh` 不使用新的发布包与回滚机制，不建议用于生产。
 
 ## 环境要求
 
 - Linux（systemd 可选）
-- Python 3.8+
+- Python 3.9+（CI 验证 3.9 / 3.12）
 - Docker + Docker Compose（启用容器站点时）
 - 端口：控制台 18090、站点 18080 起、DNS 5354
 
 ## 文档
+
+- [AI 建站](docs/AI建站.md) — 模拟模式、模型配置、自动建站流程与 HTTP 接口
 
 - [部署](docs/部署.md) — 端口、服务、首次配置
 - [运维](docs/运维.md) — 日常操作、备份、排障

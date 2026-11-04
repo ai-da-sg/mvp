@@ -218,7 +218,7 @@ def r_split(s):
     right = grp("kf-panel", ul(s.get("items", []))) if s.get("items") else ""
     if s.get("image"):
         right = raw(img_tag(s["image"], s.get("alt", ""), "(max-width:900px) 100vw, 50vw", "kf-split-img"))
-    return section(s.get("bg", ""), grp("kf-split", left + right))
+    return section(s.get("bg", ""), grp("kf-split", grp("kf-split-copy", left) + right))
 
 
 def r_stats(s):

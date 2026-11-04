@@ -57,12 +57,14 @@ EOF
 # compose 里含数据库明文密码，必须只有属主可读
 chmod 600 "$SITE/docker-compose.yml"
 cd "$SITE"
-docker compose up -d --quiet-pull >/dev/null 2>&1
+docker compose up -d --quiet-pull >/dev/null
+READY=0
 for i in $(seq 1 40); do
   # 密码走环境变量，不进 argv（同主机其他用户 ps 可见）
-  docker exec -e MYSQL_PWD="$ROOTPASS" "${PROJ}-db-1" mariadb -uroot -e 'SELECT 1' >/dev/null 2>&1 && break
+  docker exec -e MYSQL_PWD="$ROOTPASS" "${PROJ}-db-1" mariadb -uroot -e 'SELECT 1' >/dev/null 2>&1 && { READY=1; break; }
   sleep 2
 done
+[ "$READY" = 1 ] || { echo "数据库未就绪" >&2; exit 1; }
 cat > "$SITE/wp.env" <<ENV
 WORDPRESS_DB_HOST=db:3306
 WORDPRESS_DB_USER=wpuser
@@ -70,10 +72,10 @@ WORDPRESS_DB_PASSWORD=$DBPASS
 WORDPRESS_DB_NAME=wordpress
 ENV
 chmod 600 "$SITE/wp.env"
-W() { docker run --rm --env-file "$SITE/wp.env" --network "${PROJ}_default" -v "$SITE/html:/var/www/html" --user 33:33 "$REG/wordpress:cli-php8.3" wp "$@"; }
+W() { docker run --rm -i --env-file "$SITE/wp.env" --network "${PROJ}_default" -v "$SITE/html:/var/www/html" --user 33:33 "$REG/wordpress:cli-php8.3" wp "$@"; }
 # WP 管理员密码改从 stdin 传入，不出现在 argv 里
 # （argv 对同主机所有用户可见，ps 就能看到）
-printf '%s' "$ADMINPW" | W core install --url="http://127.0.0.1:$PORT" --title="$COMPANY" \
+printf '%s\n' "$ADMINPW" | W core install --url="http://127.0.0.1:$PORT" --title="$COMPANY" \
   --admin_user="admin" --admin_email="admin@$DOMAIN" --skip-email \
   --prompt=admin_password >/dev/null 2>&1 || {
   # 老版本 wp-cli 不支持 --prompt，退回传参方式
@@ -86,11 +88,17 @@ W rewrite structure '/%postname%/' --hard >/dev/null
 if [ -n "$INDUSTRY" ]; then
   PY=$(command -v python3)
   "$PY" "$BASE/core/kf_template.py" --site "$SITE" --industry "$INDUSTRY" \
-    --company "$COMPANY" --domain "$DOMAIN" >/dev/null 2>&1 || echo "warn: 模板应用失败" >&2
+    --company "$COMPANY" --domain "$DOMAIN" >/dev/null || { echo "模板应用失败" >&2; exit 1; }
 fi
 CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/")
-printf '{"plan":"%s","company":"%s","domain":"%s","slug":"%s","port":%s,"created":"%s","http":%s}\n' \
-  "$PLAN" "$COMPANY" "$DOMAIN" "$SLUG" "$PORT" "$(date '+%Y-%m-%d %H:%M')" "$CODE" > "$SITE/meta.json"
+python3 - "$SITE/meta.json" "$PLAN" "$COMPANY" "$DOMAIN" "$SLUG" "$PORT" "$CODE" <<'PYJSON'
+import json, sys
+from datetime import datetime
+path, plan, company, domain, slug, port, code = sys.argv[1:]
+with open(path, 'w') as f:
+    json.dump(dict(plan=plan, company=company, domain=domain, slug=slug, port=int(port),
+                   created=datetime.now().strftime('%Y-%m-%d %H:%M'), http=int(code)), f, ensure_ascii=False)
+PYJSON
 cat > "$SITE/handover.md" <<EOF
 # 服务交接单
 
@@ -123,6 +131,10 @@ EOF
 chmod 600 "$SITE/handover.md"
 START=$(date '+%Y-%m-%d')
 EXP=$(date -d "+1 year" '+%Y-%m-%d')
-printf '{"plan_id":"%s","plan":"%s","started":"%s","expires":"%s","status":"active"}\n' \
-  "$PLAN_ID" "$PLAN" "$START" "$EXP" > "$SITE/billing.json"
+python3 - "$SITE/billing.json" "$PLAN_ID" "$PLAN" "$START" "$EXP" <<'PYJSON'
+import json, sys
+path, plan_id, plan, started, expires = sys.argv[1:]
+with open(path, 'w') as f:
+    json.dump(dict(plan_id=plan_id, plan=plan, started=started, expires=expires, status='active'), f, ensure_ascii=False)
+PYJSON
 echo "OK|$SLUG|http://127.0.0.1:$PORT|$CODE|$SITE/handover.md"

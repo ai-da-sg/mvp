@@ -166,7 +166,7 @@ else
   ok "代码已同步"
 
   # 远端自检
-  if ! rsh "cd '$RBASE' && python3 -m py_compile console/kf_console.py core/kf_sections.py core/kf_dns.py core/kf_template.py tools/kf_update.py tools/kf_notify.py" 2>/tmp/kf_err; then
+  if ! rsh "cd '$RBASE' && python3 -m py_compile console/kf_console.py core/kf_ai.py core/kf_sections.py core/kf_dns.py core/kf_template.py tools/kf_update.py tools/kf_notify.py" 2>/tmp/kf_err; then
     warn "远端编译失败，开始回滚"
     rsh "tar xzf /tmp/kf-pre-$TS.tgz -C '$RBASE' --strip-components=1 2>/dev/null; systemctl --user restart $SVC_CONSOLE $SVC_DNS" || true
     head -5 /tmp/kf_err >&2

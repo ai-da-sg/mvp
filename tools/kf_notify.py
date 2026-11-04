@@ -6,13 +6,14 @@
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-BASE = Path("/mnt/data1/kampongflow")
+BASE = Path(os.environ.get("KF_BASE", "/mnt/data1/kampongflow"))
 SITES = BASE / "sites"
 CONSOLE = BASE / "console"
 SETTINGS = CONSOLE / "settings.json"
@@ -229,7 +230,12 @@ def main():
     a = ap.parse_args()
 
     settings = read_json(SETTINGS, {})
-    smtp = settings.get("smtp") or {}
+    smtp = dict(settings.get("smtp") or {})
+    smtp.update(read_json(CONSOLE / "secrets.json", {}))
+    for key in ("api_key", "pass", "user"):
+        value = os.environ.get("KF_SMTP_" + key.upper())
+        if value:
+            smtp[key] = value
     to = (smtp.get("notify_to") or settings.get("support_email")
           or smtp.get("from") or "")
     body = build_digest(with_leads=True)

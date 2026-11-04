@@ -10,6 +10,7 @@ import time
 import importlib.util
 import html as _htmlesc
 import csv
+import qrcode
 import io
 import json
 import os
@@ -21,6 +22,9 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
+import kf_ai
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -34,7 +38,7 @@ from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
 
 BASE    = Path(os.environ.get("KF_BASE", "/mnt/data1/kampongflow"))
 SITES   = BASE / "sites"
-PROV    = BASE / "kf-provision.sh"
+PROV    = BASE / "tools" / "kf_provision.sh"
 CONSOLE = BASE / "console"
 PORT    = int(os.environ.get("KF_PORT", "18090"))
 HTTPS_PORT = int(os.environ.get("KF_HTTPS_PORT", "18443"))
@@ -121,6 +125,13 @@ def match_recovery(user_entry, code):
     return -1
 
 
+def mfa_qr_data(uri):
+    """Render enrollment locally; never send the TOTP secret to a third party."""
+    buf = io.BytesIO()
+    qrcode.make(uri, box_size=6, border=4).save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
 def totp_new_secret():
     import base64, secrets as _s
     return base64.b32encode(_s.token_bytes(20)).decode().rstrip("=")
@@ -133,7 +144,7 @@ DEFAULT_ROLES = {
     "ops": {"label": "运营", "write": [
         "/api/spec", "/api/design", "/api/media/", "/api/dns/", "/api/domain/manage",
         "/api/clients/save", "/api/shares", "/api/publish", "/api/create", "/api/suspend",
-        "/api/mfa", "/api/invoice/issue", "/api/ledger",
+        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build",
     ]},
     "finance": {"label": "财务", "write": [
         "/api/ledger", "/api/invoice", "/api/renew", "/api/clients/save",
@@ -625,7 +636,7 @@ def load_secrets():
     for k in ("KF_SMTP_API_KEY", "KF_SMTP_PASS", "KF_SMTP_USER"):
         v = os.environ.get(k)
         if v:
-            env[k[3:].lower()] = v
+            env[k[len("KF_SMTP_"):].lower()] = v
     stored = _read(SECRETS_F, {}) if SECRETS_F.exists() else {}
     out = dict(stored)
     out.update(env)          # 环境变量优先
@@ -754,6 +765,10 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
     base = base or ("/preview/%s" % slug)
     asset = asset or ("/pa/%s" % slug)
     body = ks().render_sections(page.get("sections", []), site=str(SITES / slug))
+    for linked_page in pages:
+        link_slug = linked_page["slug"]
+        body = body.replace('href="/%s/"' % link_slug, 'href="%s/%s"' % (base, link_slug))
+    body = body.replace('href="/"', 'href="%s/home"' % base)
 
     lis = []
     for p in pages:
@@ -1795,10 +1810,20 @@ def site_list():
 
 
 def free_port():
-    used = {int(x.get("port") or 0) for x in site_list()}
+    with _SITE_RESERVATION_LOCK:
+        used = set(_SITE_RESERVATIONS.values())
+        for d in SITES.iterdir() if SITES.exists() else []:
+            if d.is_dir():
+                used.add(int(load_meta(d.name).get("port") or 0))
+    import socket
     for p in range(18080, 18200):
         if p not in used:
-            return p
+            try:
+                with socket.socket() as probe:
+                    probe.bind(("127.0.0.1", p))
+                return p
+            except OSError:
+                continue
     return 0
 
 
@@ -1988,7 +2013,7 @@ cursor:pointer;font-weight:500}
 button.ghost{background:#21262d;border:1px solid var(--line);color:var(--fg);padding:5px 10px;font-size:12.5px}
 button:disabled{opacity:.5;cursor:default}
 .msg{margin-top:12px;font-size:13px}
-.msg.bad{color:var(--bad)}.msg.ok{color:var(--ok)}
+.msg.bad{color:var(--bad);background:transparent}.msg.ok{color:var(--ok);background:transparent}
 .hidden{display:none}
 footer{margin-top:26px;color:var(--dim);font-size:12px}
 .sec-list{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -2105,6 +2130,7 @@ input[type=color]{height:38px;padding:2px;cursor:pointer}
 <div class="tab on" data-t="sites">站点</div>
 <div class="tab" data-t="billing">账单</div>
 <div class="tab" data-t="plans">套餐</div>
+<div class="tab" data-t="ai">AI 建站</div>
 <div class="tab" data-t="layout">结构</div>
 <div class="tab" data-t="media">媒体</div>
 <div class="tab" data-t="share">分享</div>
@@ -2153,6 +2179,56 @@ input[type=color]{height:38px;padding:2px;cursor:pointer}
 </div>
 
 
+
+<div id="p-ai" class="hidden">
+<h2>AI 自动建站</h2>
+<p class="hint">描述企业、服务与风格，自动生成整站页面草稿。预览、调整后发布到网站。</p>
+<div class="callout" id="aiModeNotice">GPT 模拟模式无需密钥；真实模型请由管理员配置。</div>
+<form id="aiBuildForm">
+<div class="formrow">
+<div class="field"><label for="aiMode">建站方式</label><select id="aiMode"><option value="existing">为已有站点生成</option><option value="new">新建站点并生成</option></select></div>
+<div class="field" id="aiExistingWrap"><label for="aiSite">选择站点</label><select id="aiSite"></select></div>
+<div class="field"><label for="aiProfile">模型配置</label><select id="aiProfile"></select></div>
+<div class="field"><label for="aiLanguage">页面语言</label><select id="aiLanguage"><option value="zh">中文</option><option value="en">English</option></select></div>
+</div>
+<div id="aiNewFields" class="hidden"><div class="formrow">
+<div class="field"><label for="aiCompany">企业名称</label><input id="aiCompany" maxlength="60" placeholder="例如：海湾设计工作室"></div>
+<div class="field"><label for="aiDomain">域名</label><input id="aiDomain" maxlength="80" placeholder="example.com"></div>
+<div class="field"><label for="aiSlug">站点标识</label><input id="aiSlug" maxlength="20" pattern="[a-z][a-z0-9-]{1,19}" placeholder="bay-studio"></div>
+<div class="field"><label for="aiPlan">套餐</label><select id="aiPlan"></select></div>
+<div class="field"><label for="aiIndustry">行业与视觉模板</label><select id="aiIndustry"></select></div>
+</div><p class="hint">新站点会开通 WordPress 和数据库，并生成套餐账单。生成的 AI 内容先保存为草稿；域名解析可在交付前配置。</p></div>
+<div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍企业和主营服务、目标客户、网站风格、要突出的信息，以及真实的联系方式。例：新加坡室内设计工作室，服务住宅与小型办公室。风格简洁温暖，突出设计咨询、空间规划、施工跟进，希望访客通过联系表单预约。"></textarea></div>
+<label id="aiReplaceWrap" class="hint" style="display:block;margin:12px 0"><input id="aiReplace" type="checkbox"> 如果已有未发布草稿，我确认用本次结果替换（系统会备份原草稿）</label>
+<button id="aiGenerate" type="submit">生成整站草稿</button><span id="aiBuildMsg" class="msg" role="status" aria-live="polite"></span>
+</form>
+<h3 style="margin-top:28px">建站任务</h3>
+<div id="aiJobs" aria-live="polite"></div>
+<details id="aiSettings" style="margin-top:28px"><summary style="cursor:pointer">服务商与模型配置（管理员）</summary>
+<p class="hint">可保存多套模型。API 地址支持服务商 Base URL 或完整接口地址；模型 ID 按服务商提供的名称填写。密钥仅保存在服务器。</p>
+<div id="aiProfilesList"></div>
+<form id="aiConfigForm" style="margin-top:16px">
+<div class="formrow">
+<div class="field"><label for="aiPreset">快速填写</label><select id="aiPreset"><option value="">自定义配置</option></select></div>
+<div class="field"><label for="aiConfigId">配置 ID</label><input id="aiConfigId" required maxlength="40" pattern="[a-z0-9][a-z0-9_-]{0,39}" placeholder="my-provider"></div>
+<div class="field"><label for="aiConfigName">显示名称</label><input id="aiConfigName" required maxlength="80" placeholder="我的建站模型"></div>
+<div class="field"><label for="aiProtocol">接口协议</label><select id="aiProtocol"><option value="openai_chat">OpenAI 兼容 Chat Completions</option><option value="openai_responses">OpenAI Responses</option><option value="anthropic">Anthropic Messages</option><option value="gemini">Gemini GenerateContent</option></select></div>
+</div>
+<div class="formrow">
+<div class="field" style="flex:2"><label for="aiBaseUrl">API Base URL / 完整接口地址</label><input id="aiBaseUrl" type="url" required maxlength="500" placeholder="https://api.example.com/v1"></div>
+<div class="field"><label for="aiModel">模型 ID</label><input id="aiModel" required maxlength="150" placeholder="填写服务商提供的模型 ID"></div>
+<div class="field"><label for="aiKey">API Key（留空保留原密钥）</label><input id="aiKey" type="password" autocomplete="new-password" maxlength="4096" placeholder="本地服务可留空"></div>
+</div>
+<div class="formrow">
+<div class="field"><label for="aiTimeout">请求超时（秒）</label><input id="aiTimeout" type="number" min="5" max="300" value="120" required></div>
+<div class="field"><label for="aiMaxTokens">最大输出 Token</label><input id="aiMaxTokens" type="number" min="256" max="32768" value="8192" required></div>
+<div class="field"><label for="aiTokenParameter">Chat 接口输出长度参数</label><select id="aiTokenParameter"><option value="max_tokens">max_tokens（常见兼容接口）</option><option value="max_completion_tokens">max_completion_tokens</option><option value="none">不发送（使用服务商默认值）</option></select></div>
+</div>
+<label class="hint"><input id="aiJsonMode" type="checkbox"> 启用 JSON 输出模式（仅在服务商支持时勾选）</label>
+<label class="hint" style="margin-left:16px"><input id="aiClearKey" type="checkbox"> 清除已保存密钥</label>
+<div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="submit">保存配置</button><button type="button" class="ghost" id="aiResetConfig">新建配置</button><span id="aiConfigMsg" class="msg" role="status"></span></div>
+</form></details>
+</div>
 
 <div id="p-layout" class="hidden">
 <div class="formrow">
@@ -2352,7 +2428,7 @@ let STATE={sites:[],invoices:[],plans:[]};
 let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
-    ? ['layout','design','media','share','dns','maint','team']
+    ? ['ai','layout','design','media','share','dns','maint','team']
     : (ROLE==='admin' ? [] : ['team']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
@@ -2363,9 +2439,10 @@ function badge(s){const m={active:['ok','运行中'],provisioning:['warn','开�
  const [c,t]=m[s]||['warn',s];return `<span class="dot ${c}"></span>${t}`}
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
- ['sites','billing','plans','layout','media','share','domain','leads','maint','client','team','dns','design'].forEach(k=>$('#p-'+k).classList.toggle('hidden',k!==t.dataset.t));
+ ['sites','billing','plans','ai','layout','media','share','domain','leads','maint','client','team','dns','design'].forEach(k=>$('#p-'+k).classList.toggle('hidden',k!==t.dataset.t));
+ if(t.dataset.t==='ai') initAI();
  if(t.dataset.t==='design') initDesign();
- if(t.dataset.t==='layout') initLayout();
+ if(t.dataset.t==='layout') { const slug=window.aiEditorTarget; window.aiEditorTarget=null; initLayout(slug); }
  if(t.dataset.t==='media') initMedia();
  if(t.dataset.t==='share') initShare();
  if(t.dataset.t==='domain') initDomain();
@@ -2810,10 +2887,11 @@ async function loadMfa(){
     const uri=d.otpauth||'';
     box.innerHTML=`<div class="callout"><b>两步验证未开启</b>（${esc(d.user)}）
       <div style="margin-top:8px;font-size:12.5px;color:var(--dim)">
-        1. 在验证器 App（Google Authenticator / 1Password）里手动添加账号<br>
-        2. 密钥：<b style="color:var(--acc);font-family:monospace">${esc(d.secret||'')}</b>（或粘贴下面的链接）<br>
+        1. 在验证器 App（Google Authenticator / 1Password）里选择扫描二维码<br>
+        2. 扫描下方二维码；也可以手动输入密钥：<b style="color:var(--acc);font-family:monospace">${esc(d.secret||'')}</b>（或粘贴下面的链接）<br>
         3. 输入 App 显示的 6 位验证码完成绑定</div>
-      <div class="hint" style="margin-top:8px">${esc(uri)}</div>
+      <img src="${esc(d.qr_data||'')}" alt="两步验证绑定二维码" style="display:block;width:256px;max-width:100%;height:auto;margin-top:12px;image-rendering:pixelated">
+      <div class="hint" style="margin-top:8px;overflow-wrap:anywhere">${esc(uri)}</div>
       <div class="formrow" style="margin-top:10px">
         <div class="field" style="flex:0 0 160px"><label>验证码</label><input id="mfaCode" placeholder="6 位数字"></div>
         <div class="field" style="flex:0 0 auto"><label>&nbsp;</label>
@@ -3363,7 +3441,7 @@ async function loadSpec(slug){
   const r=await fetch('/api/spec/'+encodeURIComponent(slug));
   if(!r.ok){ $('#lMsg').textContent='读取失败'; return; }
   const d=await r.json();
-  LSPEC=d.spec; LSLUG=slug; LIDX=-1; LSCHEMAS=d.schemas||{};
+  LSPEC=d.spec; LSPEC.dirty=d.dirty; LSLUG=slug; LIDX=-1; LSCHEMAS=d.schemas||{};
   await loadMedia(slug);
   $('#lPage').innerHTML=(LSPEC.pages||[]).map(p=>`<option value="${p.slug}">${esc(p.title)}</option>`).join('');
   $('#lType').innerHTML=d.types.map(t=>`<option value="${t}">${esc((LSCHEMAS[t]||{}).label||t)}</option>`).join('');
@@ -3404,11 +3482,11 @@ async function publish(slug, page){
   const d=await r.json();
   $('#lMsg').className='msg '+(r.ok?'ok':'bad');
   $('#lMsg').textContent = r.ok ? ('已发布 '+d.pages+' 个页面') : ('发布失败：'+(d.error||''));
-  LSPEC.dirty = !r.ok && LSPEC.dirty;
+  LSPEC.dirty = r.ok ? d.dirty : LSPEC.dirty;
   paintDirty();
   if(r.ok) $('#lDiffBox').classList.add('hidden');
 }
-async function initLayout(){
+async function initLayout(preferredSlug){
   const sel=$('#lSlug');
   if(!sel.options.length){
     sel.innerHTML=STATE.sites.map(s=>`<option value="${s.slug}">${esc(s.company)}</option>`).join('');
@@ -3430,17 +3508,6 @@ async function initLayout(){
     $('#lDiff').onclick=showDiff;
     $('#lPublishAll').onclick=()=>publish(slugVal(), null);
     $('#lPublish').onclick=()=>publish(slugVal(), (curPage()||{}).slug);
-    $('#lPublish_old').onclick=async()=>{
-      if(!confirm('把草稿发布到线上？客户会立即看到这些改动。')) return;
-      $('#lMsg').className='msg'; $('#lMsg').textContent='发布中…';
-      const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({slug:sel.value})});
-      const d=await r.json();
-      $('#lMsg').className='msg '+(r.ok?'ok':'bad');
-      $('#lMsg').textContent = r.ok ? ('已发布 '+d.pages+' 个页面') : ('发布失败：'+(d.error||''));
-      LSPEC.dirty = !r.ok && LSPEC.dirty;
-      paintDirty();
-    };
     $('#lSave').onclick=async()=>{
       const page=curPage(); if(!page) return;
       if(LIDX>=0 && LW){ page.sections[LIDX]=LW; }
@@ -3456,7 +3523,8 @@ async function initLayout(){
       renderSecList();
     };
   }
-  await loadSpec(sel.value);
+  if(preferredSlug) sel.value=preferredSlug;
+  if(sel.value) await loadSpec(sel.value);
 }
 
 // ---------------- 设计 ----------------
@@ -3527,7 +3595,55 @@ async function initDesign(){
 }
 
 load();setInterval(load,5000);
-</script></body></html>"""
+</script>
+<script src="/ai.js"></script></body></html>"""
+
+
+_AI = None
+_AI_LOCK = threading.Lock()
+_DRAFT_LOCKS = {}
+_DRAFT_LOCKS_GUARD = threading.Lock()
+_SITE_RESERVATIONS = {}
+_SITE_RESERVATION_LOCK = threading.RLock()
+
+
+def ai_store():
+    global _AI
+    with _AI_LOCK:
+        if _AI is None:
+            _AI = kf_ai.AIStore(BASE)
+        return _AI
+
+
+def draft_lock(slug):
+    with _DRAFT_LOCKS_GUARD:
+        return _DRAFT_LOCKS.setdefault(slug, threading.RLock())
+
+
+def draft_operation(fn):
+    def wrapped(self, body):
+        slug = str(body.get("slug", "")).strip().lower()
+        with draft_lock(slug):
+            if ai_store().busy(slug):
+                return self._send(409, {"error": "自动建站任务正在运行，请完成后再编辑或发布"})
+            return fn(self, body)
+    return wrapped
+
+
+def reserve_site(slug):
+    with _SITE_RESERVATION_LOCK:
+        if (SITES / slug).exists() or slug in _SITE_RESERVATIONS:
+            raise kf_ai.AIError("该站点已存在或正在开通，请更换标识或选择已有站点")
+        port = free_port()
+        if not port:
+            raise kf_ai.AIError("没有可用站点端口")
+        _SITE_RESERVATIONS[slug] = port
+        return port
+
+
+def release_site(slug):
+    with _SITE_RESERVATION_LOCK:
+        _SITE_RESERVATIONS.pop(slug, None)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -3547,7 +3663,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _auth_ok(self):
         u = session_user(self.headers.get("Cookie"))
-        if u:
+        if u and (load_users().get(u) or {}).get("active"):
             self.user = u
             self.user_role = (load_users().get(u) or {}).get("role", "ops")
             return True
@@ -3649,6 +3765,153 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
         return True
 
+    def _ai_get(self, path):
+        if self.user_role not in ("admin", "ops"):
+            return self._send(403, {"error": "当前角色无权使用自动建站"})
+        store = ai_store()
+        if path == "/api/ai/config":
+            result = store.profiles()
+            if self.user_role != "admin":
+                result["profiles"] = [{k: p[k] for k in ("id", "name", "model", "protocol")}
+                                      for p in result["profiles"]]
+                result.pop("presets", None)
+            result["can_configure"] = self.user_role == "admin"
+            return self._send(200, result)
+        if path == "/api/ai/jobs":
+            return self._send(200, {"jobs": store.jobs()})
+        return self._send(404, {"error": "not found"})
+
+    def _ai_post(self, path, body):
+        if self.user_role not in ("admin", "ops"):
+            return self._send(403, {"error": "当前角色无权使用自动建站"})
+        if not isinstance(body, dict):
+            return self._send(400, {"error": "请求必须是 JSON 对象"})
+        try:
+            if path == "/api/ai/config":
+                if self.user_role != "admin":
+                    return self._send(403, {"error": "只有管理员可以配置模型服务商"})
+                result = ai_store().configure(body)
+                audit(self.user, "ai_config", str(body.get("id", "")), str(body.get("action", "save")))
+                return self._send(200, result)
+            if path == "/api/ai/test":
+                if self.user_role != "admin":
+                    return self._send(403, {"error": "只有管理员可以测试接口"})
+                profile, key = ai_store().resolve(body.get("profile_id"))
+                if profile["protocol"] != "mock":
+                    probe = dict(profile, max_tokens=512, timeout=min(30, profile["timeout"]))
+                    kf_ai.complete(probe, key, "Reply only with JSON: {\"ok\":true}", "Connection test; return JSON.")
+                return self._send(200, {"ok": True, "simulated": profile["protocol"] == "mock",
+                                        "message": "模拟模式可用（未调用外部模型）" if profile["protocol"] == "mock" else "接口连接成功，模型已返回内容"})
+            if path == "/api/ai/build":
+                return self._ai_build(body)
+            return self._send(404, {"error": "not found"})
+        except kf_ai.AIError as e:
+            return self._send(400, {"error": str(e)})
+
+    def _ai_build(self, body):
+        slug = kf_ai.text(body.get("slug", ""), "站点标识", 20, True).lower()
+        if not SLUG_RE.fullmatch(slug):
+            raise kf_ai.AIError("站点标识必须是小写字母开头的 2–20 位字母、数字或短横线")
+        mode = body.get("mode", "existing")
+        if mode not in ("new", "existing"):
+            raise kf_ai.AIError("请选择新站点或已有站点")
+        brief = kf_ai.text(body.get("brief", ""), "建站要求", 6000, True)
+        language = body.get("language", "zh")
+        if language not in ("zh", "en"):
+            raise kf_ai.AIError("请选择中文或英文")
+        profile, key = ai_store().resolve(body.get("profile_id"))
+        plan, port, industry = None, None, body.get("industry", "tech")
+        with draft_lock(slug):
+            if mode == "existing":
+                if not (SITES / slug / "meta.json").is_file():
+                    raise kf_ai.AIError("站点不存在，请先开通或选择新建站点")
+                meta = load_meta(slug)
+                company, domain = meta.get("company", slug), meta.get("domain", "")
+                original = read_draft(slug)
+                pages = original.get("pages", [])
+                if is_dirty(slug) and body.get("replace_draft") is not True:
+                    return self._send(409, {"error": "该站点已有未发布草稿；确认替换后再生成（旧草稿会备份）"})
+            else:
+                if not can_write(self.user_role, "/api/create"):
+                    return self._send(403, {"error": "当前角色没有新建站点权限"})
+                company = kf_ai.text(body.get("company", ""), "企业名称", 60, True)
+                domain = kf_ai.text(body.get("domain", ""), "域名", 80, True).lower()
+                if not DOMAIN_RE.fullmatch(domain) or industry not in INDUSTRIES:
+                    raise kf_ai.AIError("域名或行业模板不合法")
+                if domain in host_map():
+                    raise kf_ai.AIError("该域名已有站点，请选择已有站点或使用其他域名")
+                plan = next((p for p in plans() if p["id"] == body.get("plan_id")), None)
+                if plan is None:
+                    raise kf_ai.AIError("请选择套餐")
+                import kf_template
+                pages = kf_template.build_spec(industry, company, domain)
+                original = None
+            if not isinstance(pages, list) or not 1 <= len(pages) <= 12:
+                raise kf_ai.AIError("站点需要有 1–12 个可编辑页面")
+            if any(not SLUG_RE.fullmatch(p.get("slug", "")) for p in pages):
+                raise kf_ai.AIError("站点页面标识不符合建站规范")
+            if mode == "new":
+                port = reserve_site(slug)
+            try:
+                job = ai_store().create_job(slug, profile, self.user, mode)
+                args = (job, profile, key, company, domain, brief, language, pages,
+                        original, port, plan, industry)
+                threading.Thread(target=self._ai_worker, args=args, daemon=True).start()
+            except Exception:
+                if mode == "new":
+                    release_site(slug)
+                raise
+        audit(self.user, "ai_build", slug, "任务 %s；%s；%s" % (job["id"], profile["name"], profile["model"]))
+        return self._send(202, {"job": job})
+
+    def _ai_worker(self, job, profile, key, company, domain, brief, language,
+                   pages, original, port, plan, industry):
+        store, slug, jid = ai_store(), job["slug"], job["id"]
+        try:
+            store.update_job(jid, status="generating", message="正在模拟生成页面" if job["simulated"] else "正在调用模型生成页面")
+            result = kf_ai.generate(profile, key, company, brief, pages, language)
+            # Validate rendered content too, before provisioning or changing the draft.
+            for page in result["pages"]:
+                rendered = ks().render_sections(page["sections"])
+                if len(rendered) < ks().MIN_HTML:
+                    raise kf_ai.AIError("生成页面内容不足，草稿未更改")
+            if job["mode"] == "new":
+                store.update_job(jid, status="provisioning", message="页面已生成，正在开通 WordPress 与数据库（首次拉取镜像可能需要数分钟）")
+                provision(company, domain, slug, port, plan["name"], plan["price"], industry, plan["id"])
+                with _lock:
+                    failed = _live.get(slug, {}).get("state") == "failed"
+                if failed or not (SITES / slug / "site-spec.json").is_file():
+                    raise kf_ai.AIError("站点开通失败；请查看站点状态。已有目录会保留，请修复后选择已有站点重试")
+                if {p["slug"] for p in read_spec(slug).get("pages", [])} != {p["slug"] for p in pages}:
+                    raise kf_ai.AIError("站点模板初始化未完成，请修复后重试")
+                meta = load_meta(slug)
+                meta["plan_id"] = plan["id"]
+                kf_ai.atomic_json(SITES / slug / "meta.json", meta)
+                inv = self._make_invoice(slug, company, domain, plan)
+                store.update_job(jid, invoice=inv["no"])
+            store.update_job(jid, status="saving", message="正在校验并保存草稿")
+            with draft_lock(slug):
+                current = read_draft(slug)
+                if original is not None and current != original:
+                    raise kf_ai.AIError("生成期间草稿已改变，本次内容未覆盖；请重新生成")
+                backup = SITES / slug / ".backups" / ("ai-" + jid + ".json")
+                kf_ai.atomic_json(backup, current)
+                result["ai"] = {"job_id": jid, "simulated": job["simulated"], "model": profile["model"],
+                                "language": language, "generated_at": int(time.time())}
+                kf_ai.atomic_json(draft_path(slug), result)
+            store.update_job(jid, status="completed", message="模拟草稿已生成，请预览、编辑后发布" if job["simulated"] else "草稿已生成，请预览、编辑后发布",
+                             pages=len(result["pages"]), preview="/preview/" + slug + "/home")
+            audit(job["user"], "ai_complete", slug, jid)
+        except kf_ai.AIError as e:
+            store.update_job(jid, status="failed", message=str(e))
+            audit(job["user"], "ai_failed", slug, str(e))
+        except Exception as e:
+            store.update_job(jid, status="failed", message="建站任务失败（%s），请检查服务日志或站点状态后重试" % type(e).__name__)
+            audit(job["user"], "ai_failed", slug, type(e).__name__)
+        finally:
+            if job["mode"] == "new":
+                release_site(slug)
+
     def do_GET(self):
         if self._maybe_site():
             return
@@ -3675,6 +3938,10 @@ class Handler(BaseHTTPRequestHandler):
         path = raw.rstrip("/") or "/"
         if path == "/":
             return self._send(200, PAGE, "text/html; charset=utf-8")
+        if path == "/ai.js":
+            return self._send(200, (CONSOLE / "ai.js").read_text(), "application/javascript; charset=utf-8")
+        if path.startswith("/api/ai/"):
+            return self._ai_get(path)
         if path == "/health":
             return self._send(200, {"ok": True})
         if path == "/health/ip":
@@ -3789,6 +4056,7 @@ class Handler(BaseHTTPRequestHandler):
                 out["secret"] = sec
                 out["otpauth"] = ("otpauth://totp/KampongFlow:%s?secret=%s&issuer=KampongFlow"
                                   % (u, sec))
+                out["qr_data"] = mfa_qr_data(out["otpauth"])
             return self._send(200, out)
 
         if path == "/api/renewals":
@@ -3991,8 +4259,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/upload":
             return self._upload()
 
+        if path.startswith("/api/ai/"):
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                return self._send(400, {"error": "请求长度无效"})
+            if not 0 <= content_length <= 65536:
+                self.close_connection = True
+                return self._send(413, {"error": "AI 请求超过 64KB 限制"})
         body = self._body()
 
+        if path.startswith("/api/ai/"):
+            return self._ai_post(path, body)
         if path == "/api/create":
             return self._create(body)
         if path == "/api/invoice/issue":
@@ -4168,18 +4446,26 @@ class Handler(BaseHTTPRequestHandler):
         if not plan:
             return self._send(400, {"error": "请选择一个有效套餐"})
 
-        port = free_port()
-        if not port:
-            return self._send(507, {"error": "没有空闲端口了"})
+        try:
+            port = reserve_site(slug)
+        except kf_ai.AIError as e:
+            return self._send(409, {"error": str(e)})
 
-        inv = self._make_invoice(slug, company, domain, plan)
+        try:
+            inv = self._make_invoice(slug, company, domain, plan)
+        except Exception:
+            release_site(slug)
+            raise
         threading.Thread(target=self._run_provision,
                          args=(company, domain, slug, port, plan, industry), daemon=True).start()
         return self._send(202, {"slug": slug, "port": port, "state": "provisioning",
                                 "invoice": inv["no"]})
 
     def _run_provision(self, company, domain, slug, port, plan, industry=""):
-        provision(company, domain, slug, port, plan["name"], plan["price"], industry, plan["id"])
+        try:
+            provision(company, domain, slug, port, plan["name"], plan["price"], industry, plan["id"])
+        finally:
+            release_site(slug)
         mp = SITES / slug / "meta.json"
         try:
             meta = json.loads(mp.read_text())
@@ -4232,6 +4518,8 @@ class Handler(BaseHTTPRequestHandler):
             inv = next((i for i in invs if i["no"] == no), None)
             if not inv:
                 return self._send(404, {"error": "没有这张账单"})
+            if inv.get("status") == "paid":
+                return self._send(200, inv)
             inv["status"] = "paid"
             inv["paid_at"] = datetime.now(SGT).strftime("%Y-%m-%d %H:%M")
             _write(INVOICES_F, invs)
@@ -4948,6 +5236,7 @@ class Handler(BaseHTTPRequestHandler):
                           {"ok": ok, "status": b["status"],
                            "error": "" if ok else "容器操作失败"})
 
+    @draft_operation
     def _spec_save(self, body):
         slug = str(body.get("slug", "")).strip().lower()
         page = str(body.get("page", "")).strip()
@@ -4974,7 +5263,10 @@ class Handler(BaseHTTPRequestHandler):
                                 "dirty": is_dirty(slug), "message": "已保存到草稿"})
 
     def _render_check(self, slug, page, title, sections, write=False):
-        tmp = CONSOLE / ".tmp-page.json"
+        import tempfile
+        fd, tmp_name = tempfile.mkstemp(prefix=".tmp-page-", suffix=".json", dir=str(CONSOLE))
+        os.close(fd)
+        tmp = Path(tmp_name)
         tmp.write_text(json.dumps({"title": title, "sections": sections}, ensure_ascii=False))
         try:
             args = [sys.executable, str(BASE / "core" / "kf_sections.py"),
@@ -4989,6 +5281,7 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             tmp.unlink(missing_ok=True)
 
+    @draft_operation
     def _publish(self, body):
         slug = str(body.get("slug", "")).strip().lower()
         page_slug = str(body.get("page", "")).strip()
@@ -5002,6 +5295,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, {"ok": False, "error": "草稿里没有这一页"})
 
         failed = []
+        published = []
         for page in targets:
             res = self._render_check(slug, page["slug"], page.get("title", page["slug"]),
                                      page.get("sections", []), write=True)
@@ -5009,13 +5303,11 @@ class Handler(BaseHTTPRequestHandler):
                 failed.append({"page": page["slug"],
                                "error": "；".join(res.get("errors", ["失败"]))})
                 break
-        if failed:
-            return self._send(400, {"ok": False, "error": "发布中断，页面未被改动",
-                                    "failed": failed})
+            published.append(page)
 
         live = read_spec(slug)
         live_pages = live.get("pages", [])
-        for page in targets:
+        for page in published:
             cur = next((p for p in live_pages if p["slug"] == page["slug"]), None)
             if cur is None:
                 live_pages.append(json.loads(json.dumps(page)))
@@ -5023,8 +5315,15 @@ class Handler(BaseHTTPRequestHandler):
                 cur["sections"] = json.loads(json.dumps(page.get("sections", [])))
                 cur["title"] = page.get("title", cur.get("title", page["slug"]))
         live["pages"] = live_pages
-        spec_path(slug).write_text(json.dumps(live, ensure_ascii=False, indent=1))
-        return self._send(200, {"ok": True, "pages": len(targets), "dirty": is_dirty(slug)})
+        if "ai" in draft:
+            live["ai"] = draft["ai"]
+        if published:
+            kf_ai.atomic_json(spec_path(slug), live)
+        if failed:
+            return self._send(400, {"ok": False,
+                                    "error": "发布中断，已发布 %d 页；请检查失败页面后重试" % len(published),
+                                    "failed": failed, "pages": len(published), "dirty": is_dirty(slug)})
+        return self._send(200, {"ok": True, "pages": len(published), "dirty": is_dirty(slug)})
 
     def _design_save(self, body):
         slug = str(body.get("slug", "")).strip().lower()
@@ -5078,6 +5377,8 @@ if __name__ == "__main__":
         else:
             print("账号不存在：%s" % _u)
         sys.exit(0)
+
+    ai_store()  # Mark interrupted jobs only when starting the HTTP server.
 
     def serve_https():
         import ssl

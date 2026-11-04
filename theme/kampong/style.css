@@ -388,3 +388,13 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--kf-accent);outline-
 .kf-hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 .kf-form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:640px){.kf-form-row{grid-template-columns:1fr}}
+
+/* WordPress inserts an inner container into legacy Group blocks. Keep the
+   section grid identical to the draft preview after publication. */
+.kf-hero-grid > .wp-block-group__inner-container,
+.kf-grid > .wp-block-group__inner-container,
+.kf-split > .wp-block-group__inner-container,
+.kf-stats > .wp-block-group__inner-container {display:contents}
+.kf-hero-grid > .wp-block-group__inner-container > *,
+.kf-grid > .wp-block-group__inner-container > *,
+.kf-split > .wp-block-group__inner-container > * {margin-block-start:0;margin-block-end:0}

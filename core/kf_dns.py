@@ -159,7 +159,8 @@ def answer(query):
         if qname == domain + "." and qtype == "SOA":
             matched = [r for r in zone["records"] if r["type"] == "SOA"]
         else:
-            resp.set_rcode(dns.rcode.NXDOMAIN if not labels or True else dns.rcode.NOERROR)
+            exists = any(absolute(r["name"], domain).lower() == qname for r in zone["records"])
+            resp.set_rcode(dns.rcode.NOERROR if exists else dns.rcode.NXDOMAIN)
             return resp
 
     # CNAME 命中时，把目标地址一并带回，解析器少跑一轮
@@ -175,7 +176,7 @@ def answer(query):
     for r in matched:
         rdtype = dns.rdatatype.from_text(r["type"])
         try:
-            rr = dns.rrset.from_text(qname, r["ttl"], "IN", r["type"],
+            rr = dns.rrset.from_text(absolute(r["name"], domain), r["ttl"], "IN", r["type"],
                                      normalize_value(r["type"], r["value"], domain))
         except Exception as e:
             import traceback

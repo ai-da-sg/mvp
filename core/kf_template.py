@@ -11,12 +11,13 @@ import json
 import shutil
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import kf_sections as KS
 
-THEME_SRC = Path("/mnt/data1/kampongflow/theme/kampong")
+THEME_SRC = Path(os.environ.get("KF_BASE", "/mnt/data1/kampongflow")) / "theme/kampong"
 REG = "docker.m.daocloud.io/library/wordpress:cli-php8.3"
 
 
@@ -961,6 +962,7 @@ def main():
                         capture_output=True, text=True)
     if rc.returncode != 0:
         print("主题复制失败:", rc.stderr[-300:], file=sys.stderr)
+        sys.exit(1)
 
     payload = {
         "company": args.company,
@@ -992,12 +994,13 @@ def main():
            "--network", f"kf-{slug}_default",
            "-v", f"{site}/html:/var/www/html",
            "-v", f"{site}:/kfsite:ro",
-           "--user", "33:33",
-           REG, "wp", "eval-file", "/kfsite/kf_setup.php"]
+           "--user", "0:0",
+           REG, "wp", "--allow-root", "eval-file", "/kfsite/kf_setup.php"]
     r = subprocess.run(cmd, capture_output=True, text=True)
     print(r.stdout.strip())
-    if r.returncode != 0 or "ERR" in r.stdout:
+    if r.returncode != 0 or "ERR" in r.stdout or "OK pages=" not in r.stdout:
         print(r.stderr[-800:], file=sys.stderr)
+        sys.exit(1)
 
     # 激活主题
     cmd2 = ["docker", "run", "--rm",
@@ -1007,6 +1010,8 @@ def main():
             "--user", "33:33", REG, "wp", "theme", "activate", "kampong"]
     r2 = subprocess.run(cmd2, capture_output=True, text=True)
     print(r2.stdout.strip() or r2.stderr.strip()[:200])
+    if r2.returncode != 0:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
