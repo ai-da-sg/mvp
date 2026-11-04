@@ -5,6 +5,7 @@
 ## 持续集成
 
 - Ubuntu 24.04，Python 3.9 / 3.12：安装 requirements + constraints，执行 AI 接口与发布回滚测试。
+- Chromium 浏览器回归：恢复码输入、二级导航与权限、编辑保留、保存失败重试、预览/发布顺序及移动布局；使用隔离的模拟 API，不连接生产。
 - 检查 Python、控制台内联 JavaScript、独立 JavaScript、Bash、PHP 语法。
 - 所有检查通过后，按 Git 提交打包代码，保存 14 天的 release artifact。包内有提交号、逐文件 SHA256，旁附包校验和。
 - 白名单仅包含应用代码、主题、模板和依赖清单；不包含账号、密钥、证书、站点数据、数据库或本机环境文件。

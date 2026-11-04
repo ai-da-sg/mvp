@@ -165,6 +165,27 @@ class ConsoleTests(unittest.TestCase):
             time.sleep(.02)
         self.fail('Job did not terminate')
 
+    def test_recovery_login_consumes_code_once(self):
+        import urllib.parse
+        m = self.m
+        users = m.load_users()
+        users['admin']['mfa_secret'] = 'JBSWY3DPEHPK3PXP'
+        users['admin']['recovery'] = m.hash_recovery(['abcd-1234'], users['admin']['salt'])
+        m._write(m.USERS_F, users)
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+        opener = urllib.request.build_opener(NoRedirect)
+        data = urllib.parse.urlencode({'user':'admin', 'pw':'Test-Password-123', 'code':'abcd-1234'}).encode()
+        url = 'http://127.0.0.1:%d/login' % self.server.server_port
+        with self.assertRaises(urllib.error.HTTPError) as redirect:
+            opener.open(urllib.request.Request(url, data=data), timeout=10)
+        self.assertEqual(redirect.exception.code, 303)
+        redirect.exception.close()
+        self.assertEqual(m.load_users()['admin']['recovery'], [])
+        with opener.open(urllib.request.Request(url, data=data), timeout=10) as response:
+            self.assertIn('两步验证码不正确', response.read().decode())
+
     def test_permissions_and_secret_redaction(self):
         self.assertEqual(self.request('/api/ai/config', user=None)[0], 401)
         self.assertEqual(self.request('/api/ai/config', user='finance-test')[0], 403)
