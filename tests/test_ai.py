@@ -305,6 +305,19 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(self.request('/api/automation/providers',dict(body,version=0))[0],409)
         self.assertEqual(self.request('/api/automation/providers',{'action':'delete','id':'name-account','version':1})[0],200)
 
+    def test_provider_connection_test_is_admin_only_and_versioned(self):
+        import kf_sg_providers
+        body={'id':'sg-test','name':'cPanel','provider':'cpanel','enabled':True,'sites':['demo'],'capabilities':['dns'],'values':{'endpoint':'https://panel.example.com:2083','username':'demo','token':'private-token'}}
+        self.assertEqual(self.request('/api/automation/providers',body)[0],200)
+        with patch.object(kf_sg_providers,'probe',return_value={'provider':'cpanel','ok':True,'message':'Read-only probe'}) as probe:
+            for user in ('ops-test','finance-test'):
+                self.assertEqual(self.request('/api/automation/providers/test',{'id':'sg-test','version':1},user=user)[0],403)
+            self.assertEqual(self.request('/api/automation/providers/test',{'id':'sg-test','version':0})[0],409)
+            probe.assert_not_called()
+            status,data=self.request('/api/automation/providers/test',{'id':'sg-test','version':1});self.assertEqual(status,200);self.assertTrue(data['result']['ok'])
+            self.assertEqual(probe.call_count,1)
+        self.assertNotIn('private-token',(self.base/'console/audit.log').read_text())
+
     def test_mcp_admin_permissions_and_credential_redaction(self):
         import kf_mcp
         body={'id':'fixture','name':'Fixture','url':'https://example.com/mcp','token':'test-mcp-token','enabled':True}

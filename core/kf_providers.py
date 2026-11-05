@@ -24,6 +24,13 @@ for ident,label in [('resend','Resend'),('sendgrid','SendGrid'),('postmark','Pos
     CATALOG[ident]={'name':label,'capabilities':['mail'],'fields':[field('api_key','API Key / Server Token',True),field('sender','发件人')]}
 CATALOG['mailgun']={'name':'Mailgun','capabilities':['mail'],'fields':[field('api_key','API Key',True),field('domain','发送域名'),field('region','API 区域：us 或 eu',default='us'),field('sender','发件人')]}
 
+CATALOG['webnic']={'name':'WebNIC','capabilities':['dns'],'fields':[field('environment','API 环境：production 或 ote',default='production'),field('username','API 用户名',True),field('password','API Secret Key',True)],'note':'经销商 DNS API v2；需开通 API 并设置服务器出口 IP 白名单。公网 DNS 绑定仅支持 production。保留同名记录集其他值；不购买域名或订阅。'}
+CATALOG['cpanel']={'name':'通用 cPanel（CLDY / Oryon / HostSG 等）','capabilities':['dns','cloud'],'fields':[field('endpoint','cPanel HTTPS 地址（例如 https://panel.example.com:2083）'),field('username','cPanel 用户名',True),field('token','cPanel API Token',True)],'note':'需供应商套餐开放 cPanel API Token 和 DNS 权限。支持 DNS 变更及托管域名清单；要求有效 TLS 证书和公网地址。供应商品牌本身不保证 API 可用。'}
+CATALOG['vodien']={'name':'Vodien / Dreamscape 经销商','capabilities':['cloud'],'fields':[field('environment','API 环境：production 或 test',default='production'),field('reseller_id','Reseller ID',True),field('api_key','API Key',True)],'note':'使用 Dreamscape SOAP 2.1 经销商 API 查询域名清单；当前站点恰为注册域名时查询到期信息。需经销商 API 权限，普通门户密码不可代替；暂不支持 DNS 写入、注册或续费。'}
+CATALOG['readyspace']={'name':'ReadySpace Singapore','capabilities':['cloud'],'fields':[field('auth','认证方式：bearer 或 basic',default='bearer'),field('token','Bearer Token',True,False),field('username','Basic 用户名',True,False),field('password','Basic 密码',True,False)],'note':'仅查询新加坡账户的域名、服务和到期信息。优先使用完成供应商授权后的 Bearer Token；过期需更新，不自动绕过 MFA 或续费。'}
+
+for ident in ('webnic','cpanel','vodien','readyspace'):CATALOG[ident]['can_test']=True
+
 class ProviderStore(DomainVault):
     def __init__(self,base):
         super().__init__(base);self.path=self.root/'providers.json';self.key_path=self.root/'providers.key'
@@ -59,6 +66,10 @@ class ProviderStore(DomainVault):
                 merged[f['key']]=text(val,f['label'],16000 if f['key']=='service_account' else 4096,f['required'])
             if old and provider in ('smtp','cldy') and merged.get('host')!=old['config'].get('host'):
                 if not values.get('password'):raise AIError('更换 SMTP 主机需要重新填写密码，防止将旧凭据发送到新主机')
+            if old and provider=='cpanel' and merged.get('endpoint')!=old['config'].get('endpoint'):
+                if not values.get('token'):raise AIError('更换 cPanel 地址需要重新填写 API Token')
+            if old and provider in ('webnic','vodien') and merged.get('environment')!=old['config'].get('environment'):
+                if not all(values.get(f['key']) for f in fields if f['secret']):raise AIError('更换 API 环境需要重新填写该环境的全部凭据')
             validate(provider,merged)
             if 'mail' in caps and not merged.get('sender'):raise AIError('启用邮件能力需要填写发件人')
             secret={f['key']:merged[f['key']] for f in fields if f['secret']}
@@ -87,6 +98,19 @@ class ProviderStore(DomainVault):
         return [i for i in self.public() if i['enabled'] and slug in i['sites'] and capability in i['capabilities']]
 
 def validate(provider,c):
+    if provider=='webnic' and c['environment'] not in ('production','ote'):raise AIError('WebNIC 环境仅支持 production / ote')
+    if provider=='vodien':
+        if c['environment'] not in ('production','test'):raise AIError('Vodien 环境仅支持 production / test')
+        if not re.fullmatch(r'[0-9]{1,20}',c['reseller_id']):raise AIError('Reseller ID 必须是数字')
+    if provider=='cpanel':
+        from kf_sg_providers import cpanel_endpoint
+        cpanel_endpoint(c['endpoint'])
+        if not re.fullmatch(r'[a-zA-Z0-9_]{1,32}',c['username']):raise AIError('cPanel 用户名格式无效')
+        if not re.fullmatch(r'[!-~]{1,4096}',c['token']):raise AIError('cPanel Token 格式无效')
+    if provider=='readyspace':
+        if c['auth'] not in ('bearer','basic'):raise AIError('ReadySpace 认证方式仅支持 bearer / basic')
+        if c['auth']=='bearer' and (not c['token'] or not re.fullmatch(r'[!-~]+',c['token'])):raise AIError('请填写有效 Bearer Token')
+        if c['auth']=='basic' and (not c['username'] or not c['password'] or ':' in c['username']):raise AIError('请填写有效 Basic 用户名和密码')
     if provider=='namecom' and ':' in c['username']:raise AIError('API 用户名不能包含冒号')
     if provider=='aws':
         if c['auth'] not in ('keys','role'):raise AIError('AWS 认证方式仅支持 keys 或 role')
@@ -131,4 +155,17 @@ def mail_config(base,slug,fallback):
     result={**c,'provider':'ses' if provider=='aws' else 'smtp' if provider=='cldy' else provider,'from':c.get('sender',''),
             '_account_id':ident,'_account_version':item['version'],'_binding_version':binding['version']}
     if provider in ('smtp','cldy'):result.update(port=int(c['port']),tls=True,**{'pass':c['password']})
+    return result
+
+
+def test_account(base,body):
+    from kf_sg_providers import probe
+    store=ProviderStore(base)
+    item=next((i for i in store.public() if i['id']==body.get('id')),None)
+    if not item or not CATALOG[item['provider']].get('can_test'):raise AIError('此供应商不支持独立连接测试')
+    item,c=store.resolve(item['id'],item['sites'][0],item['capabilities'][0])
+    if item['version']!=body.get('version'):raise VaultConflict('账号已改变，请刷新后测试')
+    result=probe(item['provider'],c)
+    current,_=store.resolve(item['id'],item['sites'][0],item['capabilities'][0])
+    if current['version']!=item['version']:raise VaultConflict('测试期间账号已改变，请重新测试')
     return result

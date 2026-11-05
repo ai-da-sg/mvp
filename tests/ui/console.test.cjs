@@ -27,7 +27,7 @@ print(json.dumps(result))
  const context=await browser.newContext({viewport:{width:1440,height:1000}});
  const page=await context.newPage();page.setDefaultTimeout(8000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- let role='admin',failSave=false,failPublish=false;const calls=[];let domainAccounts=[],domainPassword='',mcpItems=[],providerItems=[];
+ let role='admin',failSave=false,failPublish=false;const calls=[];let domainAccounts=[],domainPassword='',mcpItems=[],providerItems=[],failProviderProbe=false;
  const state=()=>({role,me:'reviewer',sites:[{slug:'demo',company:'演示工作室',domain:'demo.example',state:'active',http:200,running:2,port:18080,owner:'reviewer',plan:'Starter',days_left:20}],plans:[{id:'starter',name:'Starter',price:1800}],industries:[['tech','科技']],invoices:[]});
  const spec={dirty:false,types:['hero'],schemas:{hero:{label:'首屏',fields:[{k:'title',label:'标题',type:'text'}]}},spec:{pages:[{slug:'home',title:'首页',sections:[{type:'hero',title:'A'},{type:'hero',title:'B'}]},{slug:'contact',title:'联系',sections:[{type:'hero',title:'Contact'}]}]}};
  await context.route('**/*',async route=>{
@@ -39,11 +39,12 @@ print(json.dumps(result))
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
   if(p==='/api/automation/config')await new Promise(resolve=>setTimeout(resolve,100));
-  if(p==='/api/automation/config')data={tools:[{name:'site.context',purpose:'build'},{name:'site.publish',purpose:'build'}],dns_providers:[],can_configure:role==='admin'};
+  if(p==='/api/automation/config')data={tools:[{name:'site.context',purpose:'build'},{name:'site.publish',purpose:'build'}],dns_providers:[],provider_accounts:providerItems,can_configure:role==='admin'};
   if(p==='/api/automation/providers'){
    if(req.method()==='POST'){const {values,...b}=req.postDataJSON();providerItems=b.action==='delete'?[]:[{...b,version:(b.version||0)+1,config:Object.fromEntries(Object.entries(values).filter(([k])=>!pages.providerCatalog[b.provider].fields.find(f=>f.key===k).secret))}];}
    data={catalog:pages.providerCatalog,items:providerItems};
   }
+  if(p==='/api/automation/providers/test'){if(failProviderProbe){status=400;data={error:'测试连接失败，请检查 Token 和权限'};}else data={result:{provider:'cpanel',ok:true,message:'只读连接测试成功；未验证 DNS 写入权限，也未修改资源。'}};}
   if(p==='/api/automation/available')data={items:[]};
   if(p==='/api/automation/actions'||p==='/api/automation/workflows')data={items:[]};
   if(p==='/api/automation/prepare'){const b=req.postDataJSON();data={item:{id:'fixture-action',slug:b.slug,tool:b.tool,user:'reviewer',mode:b.tool==='site.publish'?'confirm':'read',state:'prepared',summary:'Fixture operation',digest:'fixture-digest',arguments:{purpose:'build',...b.arguments}}};}
@@ -231,6 +232,15 @@ print(json.dumps(result))
  if(out)await page.screenshot({path:path.join(out,'providers-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});await page.locator('#providerCancel').click();
  page.once('dialog',d=>d.accept());await page.locator('[data-provider-delete]').click();await page.waitForFunction(()=>!document.querySelector('[data-provider-edit]'));
  console.log('PASS Name.com account scope, write-only credentials, CLDY capability guidance and responsive provider forms');
+ for(const kind of ['webnic','vodien','readyspace','cpanel']){await page.locator('#providerNew').click();await page.selectOption('#providerKind',kind);assert.ok((await page.locator('#providerFields').textContent()).length>50);if(['vodien','readyspace'].includes(kind))assert.equal(await page.locator('#providerCaps input[value=dns]').count(),0);await page.locator('#providerCancel').click();}
+ await page.locator('#providerNew').click();await page.selectOption('#providerKind','cpanel');await page.locator('#providerId').fill('cpanel-account');await page.locator('#providerName').fill('cPanel fixture');await page.locator('#provider-endpoint').fill('https://panel.example.com:2083');await page.locator('#provider-username').fill('demo');await page.locator('#provider-token').fill('private-cpanel-token');await page.selectOption('#providerSites',['demo']);await page.locator('#providerCaps input[value=dns]').check();await page.locator('#providerForm button[type=submit]').click();await page.waitForSelector('[data-provider-test]');
+ await page.locator('[data-provider-test]').click();await page.waitForFunction(()=>document.querySelector('#providerMsg').textContent.includes('只读连接测试成功'));assert.ok(!(await page.locator('#providerList').textContent()).includes('private-cpanel-token'));
+ failProviderProbe=true;await page.locator('[data-provider-test]').click();await page.waitForFunction(()=>document.querySelector('#providerMsg').textContent.includes('测试连接失败'));
+ await nav('automation');await page.locator('#autoDNSConfig').evaluate(e=>e.open=true);await page.waitForFunction(()=>!document.querySelector('#autoPrepare').disabled);await page.selectOption('#autoDNSProvider','cpanel');assert.equal(await page.locator('#autoDNSAccount option[value=cpanel-account]').count(),1);assert.equal(await page.locator('#autoDNSToken').isDisabled(),true);
+ await nav('providers');await page.locator('[data-provider-edit]').click();await page.setViewportSize({width:375,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);if(out)await page.screenshot({path:path.join(out,'sg-cpanel-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});await page.locator('#providerCancel').click();
+ page.once('dialog',d=>d.accept());await page.locator('[data-provider-delete]').click();await page.waitForFunction(()=>!document.querySelector('[data-provider-edit]'));
+ console.log('PASS Singapore provider capability boundaries, cPanel account, read-only probe success/failure and DNS account selection');
+
  await nav('domain');await page.locator('[data-domain-add]').click();
  await page.locator('#domainAccountProvider').fill('Registrar fixture');await page.locator('#domainAccountUrl').fill('https://registrar.example/');
  await page.locator('#domainAccountUsername').fill('operator@example.com');await page.locator('#domainAccountPassword').fill('fixture-password-only');await page.locator('#domainAccountConfig').fill('NS: ns1.example.com');

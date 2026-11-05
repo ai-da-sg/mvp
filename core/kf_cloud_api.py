@@ -108,8 +108,11 @@ def tencent(c,action,params,service='dnspod'):
 
 def quote(value):return urllib.parse.quote(str(value),safe='')
 
-def inventory(provider,c):
+def inventory(provider,c,domain=None):
     """A bounded, read-only view of the configured account scope. No lifecycle actions."""
+    if provider in ('vodien','readyspace','cpanel'):
+        from kf_sg_providers import inventory as sg_inventory
+        return sg_inventory(provider,c,domain)
     if provider=='aws':
         data=aws_call(c,'ec2','describe_instances',MaxResults=100);items=[i for r in data.get('Reservations',[]) for i in r.get('Instances',[])]
         result=[{'id':i['InstanceId'],'name':next((t['Value'] for t in i.get('Tags',[]) if t['Key']=='Name'),''),'state':i.get('State',{}).get('Name'),'type':i.get('InstanceType'),'zone':i.get('Placement',{}).get('AvailabilityZone')} for i in items]

@@ -7,11 +7,14 @@ from kf_ai import AIError
 from kf_cloud_api import aws_call,rest,aliyun,tencent,quote,namecom
 from kf_tool_runtime import fingerprint
 
-PROVIDERS=('aws','azure','gcp','aliyun','tencent','namecom')
+PROVIDERS=('aws','azure','gcp','aliyun','tencent','namecom','webnic','cpanel')
 TYPES=('A','AAAA','CNAME','MX','TXT','NS','SRV')
 
 def zone_key(provider,zone):
-    patterns={'namecom':r'[a-z0-9.-]{3,253}','aws':r'Z[A-Z0-9]{1,63}','azure':r'[a-z0-9.-]{3,253}','gcp':r'[a-z][a-z0-9-]{0,62}','aliyun':r'[a-z0-9.-]{3,253}','tencent':r'[a-z0-9.-]{3,253}'}
+    if provider in ('webnic','cpanel'):
+        from kf_health import domain_name
+        return domain_name(zone)
+    patterns={'webnic':r'[a-z0-9.-]{3,253}','cpanel':r'[a-z0-9.-]{3,253}','namecom':r'[a-z0-9.-]{3,253}','aws':r'Z[A-Z0-9]{1,63}','azure':r'[a-z0-9.-]{3,253}','gcp':r'[a-z][a-z0-9-]{0,62}','aliyun':r'[a-z0-9.-]{3,253}','tencent':r'[a-z0-9.-]{3,253}'}
     if not isinstance(zone,str) or not re.fullmatch(patterns[provider],zone):raise AIError('DNS 区域标识无效：AWS 填 Hosted Zone ID，GCP 填 Managed Zone 名称，其他填区域域名')
     return zone
 
@@ -62,6 +65,9 @@ def azure_values(raw):
 
 def list_records(provider,c,zone):
     z=zone_key(provider,zone);result=[]
+    if provider in ('webnic','cpanel'):
+        from kf_sg_dns import list_records as sg_records
+        return sg_records(provider,c,z)
     if provider=='aws':
         meta=aws_call(c,'route53','get_hosted_zone',Id=z)
         if meta['HostedZone'].get('Config',{}).get('PrivateZone'):raise AIError('仅支持公网 Hosted Zone')
@@ -129,10 +135,11 @@ def list_records(provider,c,zone):
 def validate_change(provider,old,new,records):
     if old and old.get('_blocked'):raise AIError('复杂路由、别名、停用或非默认线路记录请在服务商后台管理')
     if new:
+        if provider=='webnic' and (new['ttl']<60 or new['type']=='NS'):raise AIError('WebNIC 需要 TTL 至少 60 秒，且不支持此 NS 写入')
         if provider=='namecom' and new['ttl']<300:raise AIError('Name.com TTL 最低为 300 秒')
         if new['proxied']:raise AIError('该 DNS 服务商不支持 Cloudflare 代理字段')
         if new['ttl']==1:raise AIError('此供应商需要明确 TTL，不能使用自动 TTL')
-        if provider in ('aws','azure','gcp'):
+        if provider in ('aws','azure','gcp','webnic'):
             same=[r for r in records if r['name']==new['name'] and r['type']==new['type']]
             if any(r.get('_blocked') for r in same):raise AIError('同名记录集使用复杂路由，请在服务商后台管理')
             if old and (new['name'],new['type'])!=(old['name'],old['type']):raise AIError('记录集变更不能同时改名或改类型，请分别删除和新增')
@@ -140,6 +147,9 @@ def validate_change(provider,old,new,records):
 
 def apply(provider,c,zone,old,new,records):
     validate_change(provider,old,new,records);target=new or old;z=zone_key(provider,zone)
+    if provider in ('webnic','cpanel'):
+        from kf_sg_dns import apply as sg_apply
+        return sg_apply(provider,c,z,old,new,records)
     if provider=='namecom':
         path='/domains/'+quote(z)+'/records'+('/'+quote(old['id']) if old else '')
         body=None

@@ -13,6 +13,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from kf_ai import AIError, atomic_json, read_json, text
 
 _LOCK = threading.RLock()
+_HELD_LOCKS = threading.local()
 
 class VaultConflict(AIError): pass
 class VaultDenied(AIError): pass
@@ -29,10 +30,21 @@ class DomainVault:
     @contextmanager
     def locked(self):
         self.root.mkdir(parents=True,exist_ok=True)
-        with _LOCK, (self.root/'.domain-vault.lock').open('a') as lock:
-            fcntl.flock(lock,fcntl.LOCK_EX)
-            try: yield
-            finally: fcntl.flock(lock,fcntl.LOCK_UN)
+        # DNS/MCP stores resolve provider credentials inside an existing vault transaction.
+        # flock on a second descriptor is not reentrant, even in the same thread.
+        key=str(self.root.resolve())
+        with _LOCK:
+            held=getattr(_HELD_LOCKS,'roots',set())
+            if key in held:
+                yield
+                return
+            with (self.root/'.domain-vault.lock').open('a') as lock:
+                fcntl.flock(lock,fcntl.LOCK_EX)
+                _HELD_LOCKS.roots=held|{key}
+                try:yield
+                finally:
+                    _HELD_LOCKS.roots=held
+                    fcntl.flock(lock,fcntl.LOCK_UN)
 
     def cipher(self, items):
         if not self.key_path.exists():

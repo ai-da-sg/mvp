@@ -1,7 +1,7 @@
 /* Reviewed operations use immutable server tickets; browser state never authorizes execution. */
 let AUTO_CONFIG={tools:[],dns_providers:[]},AUTO_SERVERS=[],AUTO_ITEM=null,AUTO_RECORDS=[];
 window.aiContextActions=window.aiContextActions||[];
-const AUTO_LABELS={'cloud.inspect':'查询云资源清单','site.context':'读取建站资料','site.generate':'生成网站草稿','site.publish':'发布网站页面','dns.inspect':'检查域名与邮件解析','dns.change':'修改 DNS 记录','dns.verify':'验证已提交的 DNS 变更','mail.inspect':'检查邮件域名配置','mail.draft':'生成邮件草稿','mail.send':'发送邮件','mail.status':'查询邮件投递状态','maintenance.inspect':'运行运营健康检查','site.https':'检查 HTTPS 与证书'};
+const AUTO_LABELS={'cloud.inspect':'查询供应商资源与域名','site.context':'读取建站资料','site.generate':'生成网站草稿','site.publish':'发布网站页面','dns.inspect':'检查域名与邮件解析','dns.change':'修改 DNS 记录','dns.verify':'验证已提交的 DNS 变更','mail.inspect':'检查邮件域名配置','mail.draft':'生成邮件草稿','mail.send':'发送邮件','mail.status':'查询邮件投递状态','maintenance.inspect':'运行运营健康检查','site.https':'检查 HTTPS 与证书'};
 const AUTO_STATES={prepared:'待执行',running:'执行中',succeeded:'已完成',failed:'失败',uncertain:'结果待核实',interrupted:'中断待核实',cancelled:'已取消'};
 function autoField(name,label,type='text',value='',required=false){return `<div class="field"><label for="auto-${name}">${esc(label)}</label><input id="auto-${name}" name="${name}" type="${type}" value="${esc(value)}" ${required?'required':''}></div>`;}
 function autoText(name,label,value='',required=false){return `<div class="fld"><label for="auto-${name}">${esc(label)}</label><textarea id="auto-${name}" name="${name}" rows="5" ${required?'required':''}>${esc(value)}</textarea></div>`;}
@@ -37,7 +37,7 @@ async function autoFields(){
  const name=$('#autoTool').value;let html='';
  if($('#autoSource').value!=='builtin'){
   html=autoText('arguments','工具或提示词参数（JSON 对象；资源读取留空）','{}')+'<p class="hint">固定参数由管理员的绑定规则补入。服务端会验证参数、站点范围及执行规则。</p>';
- }else if(name==='cloud.inspect'){html='<div class="field"><label for="auto-account_id">供应商账号（已授权当前站点）</label><select id="auto-account_id" name="account_id" required><option value="">请选择</option>'+(AUTO_CONFIG.provider_accounts||[]).filter(a=>a.sites.includes($('#autoSite').value)&&a.capabilities.includes('cloud')).map(a=>`<option value="${esc(a.id)}">${esc(a.name+' / '+a.provider)}</option>`).join('')+'</select></div><p class="hint">查询账号授权区域/资源组/项目的资源清单，不修改云资源。</p>';}else if(['dns.inspect','mail.inspect','maintenance.inspect'].includes(name))html=autoField('selectors','DKIM 选择器（可选，逗号分隔）');
+ }else if(name==='cloud.inspect'){html='<div class="field"><label for="auto-account_id">供应商账号（已授权当前站点）</label><select id="auto-account_id" name="account_id" required><option value="">请选择</option>'+(AUTO_CONFIG.provider_accounts||[]).filter(a=>a.sites.includes($('#autoSite').value)&&a.capabilities.includes('cloud')).map(a=>`<option value="${esc(a.id)}">${esc(a.name+' / '+a.provider)}</option>`).join('')+'</select></div><p class="hint">查询账号授权范围内的云资源、托管域名或服务到期信息；只读取，不修改或续费。</p>';}else if(['dns.inspect','mail.inspect','maintenance.inspect'].includes(name))html=autoField('selectors','DKIM 选择器（可选，逗号分隔）');
  else if(name==='site.context')html='<fieldset><legend>选择建站资料</legend>'+[['client','客户资料'],['brand','品牌与风格'],['pages','现有页面'],['media','素材目录']].map(([v,t])=>`<label><input name="selected" type="checkbox" value="${v}" checked>${t}</label>`).join('')+'</fieldset>';
  else if(name==='dns.verify')html=autoField('change_action','已完成的 DNS 操作 ID','text','',true);
  else if(name==='mail.status')html=autoField('send_action','已完成的邮件发送操作 ID','text','',true);
@@ -122,6 +122,8 @@ function autoReadablePreview(item){
  return '';
 }
 function autoReadableResult(result){
+ if(result.provider&&Array.isArray(result.items))return `<p class="hint">${esc(result.note||'')}${result.truncated?'（仅显示部分资源）':''}</p><div style="overflow:auto"><table><thead><tr><th>名称</th><th>类型</th><th>状态</th><th>到期 / 下次到期</th></tr></thead><tbody>${result.items.map(i=>`<tr><td>${esc(i.name||i.id)}</td><td>${esc(i.type||'—')}</td><td>${esc(i.state||'—')}</td><td>${esc(i.expires||'未提供')}</td></tr>`).join('')||'<tr><td colspan="4">此账号未返回资源。</td></tr>'}</tbody></table></div><details><summary>完整资源信息</summary><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(result,null,2))}</pre></details>`;
+
  if(result.checks)return result.checks.map(c=>`<p><strong>${esc(c.name)}</strong> · ${esc(({ok:'正常',warn:'需检查',fail:'异常'})[c.status]||c.status)}<br><span data-user-content>${esc(c.detail)}</span></p>`).join('')+(result.note?`<p class="hint">${esc(result.note)}</p>`:'')+`<details><summary>完整检查结果</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(result,null,2))}</pre></details>`;
  if(result.state==='accepted')return '<p class="msg ok">邮件服务商已接受发送请求。最终送达状态尚未确认，可凭消息编号在服务商后台核实。</p>'+`<pre style="white-space:pre-wrap">${esc(JSON.stringify(result,null,2))}</pre>`;
  return `<details open><summary>执行结果</summary><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(result,null,2))}</pre></details>`;

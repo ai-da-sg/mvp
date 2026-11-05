@@ -23,7 +23,7 @@ class BusinessTools:
         snapshot={'domain':context['domain']};mode='read';summary=name+' / '+context['domain'];args=json.loads(json.dumps(args))
         if name=='cloud.inspect':
             ident=text(args.get('account_id',''),'供应商账号',40,True);account,credentials=ProviderStore(self.base).resolve(ident,context['slug'],'cloud')
-            return {'arguments':{'account_id':ident},'mode':'read','summary':'读取云资源清单 / '+account['name'],'snapshot':{**snapshot,'account_version':account['version']}}
+            return {'arguments':{'account_id':ident},'mode':'read','summary':'读取供应商资源清单 / '+account['name'],'snapshot':{**snapshot,'account_version':account['version']}}
         if name=='dns.change':return self.dns.plan(args,context)
         if name=='dns.verify':
             change=self.cb['action'](text(args.get('change_action',''),'DNS 操作 ID',32,True),user)
@@ -71,7 +71,7 @@ class BusinessTools:
         if name=='cloud.inspect':
             account,credentials=ProviderStore(self.base).resolve(args['account_id'],slug,'cloud')
             if account['version']!=item['snapshot']['account_version']:raise ActionConflict('供应商配置已改变')
-            return inventory(account['provider'],credentials)
+            return inventory(account['provider'],credentials,context['domain'])
         if name=='site.context':return self.cb['context'](slug,args['selected'])
         if name=='site.generate':return self.cb['generate'](item,context)
         if name=='site.publish':return self.cb['publish'](item,context)

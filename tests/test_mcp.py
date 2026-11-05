@@ -18,6 +18,22 @@ class MCPTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.store=m.MCPStore(self.tmp.name)
         self.body={'id':'example','name':'Example','url':'https://example.com/mcp','enabled':True,'token':'private-test-token'}
     def tearDown(self):self.tmp.cleanup()
+    def test_provider_backed_mcp_resolves_nested_vault_without_deadlock(self):
+        import signal
+        from kf_providers import ProviderStore
+        accounts=ProviderStore(self.tmp.name)
+        account=accounts.save({'id':'cf-account','name':'CF','provider':'cloudflare','enabled':True,'sites':['demo'],'capabilities':['mcp'],'values':{'token':'provider-secret'}},'admin')
+        policy={'sites':['demo'],'purposes':['build'],'tools':[{'name':'search','mode':'read'}]}
+        old_handler=signal.signal(signal.SIGALRM,lambda *args:(_ for _ in ()).throw(TimeoutError('Nested vault transaction blocked')))
+        signal.alarm(3)
+        try:
+            item=self.store.change({'id':'cf-server','name':'CF','url':'https://mcp.cloudflare.com/mcp','enabled':True,'account_id':account['id'],'policy':policy},'admin')
+            _,auth,_,_=self.store.resolve_call(item['id'],'demo','build','tools','search',{}, {'domain':'example.com'})
+            self.assertEqual(auth.credentials['token'],'provider-secret')
+            with self.assertRaises(AIError):self.store.resolve_call(item['id'],'other','build','tools','search',{}, {'domain':'example.com'})
+            self.assertEqual(len(accounts.public()),1)
+        finally:signal.alarm(0);signal.signal(signal.SIGALRM,old_handler)
+
     def test_vault_lifecycle_and_endpoint_binding(self):
         item=self.store.change(self.body,'admin');self.assertTrue(item['has_token'])
         self.assertNotIn('private-test-token',self.store.path.read_text());self.assertNotIn('secret',item)

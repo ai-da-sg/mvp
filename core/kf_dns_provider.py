@@ -81,6 +81,7 @@ class DNSProviders(DomainVault):
         if account_id:
             account,credentials=ProviderStore(self.root.parent).resolve(account_id,slug,'dns')
             if account['provider']!=provider:raise AIError('账号供应商与 DNS 配置不一致')
+            if provider=='webnic' and credentials['environment']!='production':raise AIError('公网 DNS 配置必须使用 WebNIC production 账号')
         if provider=='cloudflare' and not re.fullmatch('[a-f0-9]{32}',zone):raise AIError('Cloudflare Zone ID 须为 32 位十六进制字符串')
         token=body.get('token','')
         if not isinstance(token,str) or len(token)>4096 or any(not 33<=ord(c)<=126 for c in token):raise AIError('API Token 无效')
@@ -133,6 +134,7 @@ class DNSProviders(DomainVault):
             zone_domain,expected,result=kf_cloud_dns.list_records(item['provider'],token,item['zone_id'])
             if not (domain==zone_domain or domain.endswith('.'+zone_domain)):raise AIError('DNS 区域与站点域名不匹配')
             if not expected or auth['zone']!=zone_domain or expected!=auth['nameservers']:raise AIError('公网未委托给所选区域的权威服务器，禁止写入')
+            if item['provider']=='cpanel':item['zone_revision']=result[0]['_raw']['_serial']
             return item,sorted([r for r in result if r['name']==domain or r['name'].endswith('.'+domain)],key=lambda r:r['id']),auth
         zone=self.local.load_zones().get(context['slug'])
         if not zone or zone['domain']!=domain:raise AIError('本机尚未启用匹配的 DNS 区域')
@@ -159,10 +161,10 @@ class DNSProviders(DomainVault):
         if item['provider'] in kf_cloud_dns.PROVIDERS:kf_cloud_dns.validate_change(item['provider'],old,new,records)
         high=any(r and (r['type'] in ('MX','NS') or r['name']==context['domain']) for r in (old,new))
         return {'arguments':{'operation':operation,'before':old,'after':new},'mode':'totp' if high else 'confirm',
-            'summary':'DNS '+operation+' / '+(new or old)['name'],'snapshot':{'provider_version':item['version'],'account_version':item.get('account_version'),'records':fingerprint(records),'authority':auth}}
+            'summary':'DNS '+operation+' / '+(new or old)['name'],'snapshot':{'provider_version':item['version'],'account_version':item.get('account_version'),'zone_revision':item.get('zone_revision'),'records':fingerprint(records),'authority':auth}}
     def apply(self,ticket,context):
         item,records,auth=self.records(context);args=ticket['arguments'];snapshot=ticket['snapshot']
-        if item['version']!=snapshot['provider_version'] or item.get('account_version')!=snapshot.get('account_version') or fingerprint(records)!=snapshot['records'] or auth!=snapshot['authority']:raise ActionConflict('DNS 配置、记录或委托已改变，请重新生成变更单')
+        if item['version']!=snapshot['provider_version'] or item.get('account_version')!=snapshot.get('account_version') or item.get('zone_revision')!=snapshot.get('zone_revision') or fingerprint(records)!=snapshot['records'] or auth!=snapshot['authority']:raise ActionConflict('DNS 配置、记录或委托已改变，请重新生成变更单')
         op=args['operation'];old=args['before'];new=args['after']
         if item['provider']=='cloudflare':
             _,token=self.resolve(context);suffix='/dns_records'+('/'+old['id'] if old else '')
@@ -173,6 +175,7 @@ class DNSProviders(DomainVault):
             record_id=result.get('id')
         elif item['provider'] in kf_cloud_dns.PROVIDERS:
             _,credentials=self.resolve(context)
+            if item['provider']=='cpanel':credentials={**credentials,'_zone_revision':item['zone_revision']}
             record_id=kf_cloud_dns.apply(item['provider'],credentials,item['zone_id'],old,new,records)
         else:
             def change(zones):
