@@ -5,6 +5,19 @@
  * 站点选项 kf_design 存一份 JSON，改它就能换整套视觉，不用动 CSS。
  */
 
+function kampong_label($english, $chinese) {
+    return strpos(get_locale(), 'zh') === 0 ? $chinese : $english;
+}
+
+add_filter('body_class', function ($classes) {
+    $preset = kampong_design()['preset'] ?? '';
+    if (in_array($preset, ['nursery', 'robotics', 'wellness'], true)) {
+        $classes[] = 'kf-showcase';
+        $classes[] = 'kf-style-' . $preset;
+    }
+    return $classes;
+});
+
 function kampong_default_design(): array {
     return [
         'preset'  => 'default',
@@ -189,16 +202,16 @@ function kampong_contact_submit(WP_REST_Request $req) {
         return new WP_REST_Response(['ok' => true], 200);
     }
     if ($name === '' || $msg === '' || !is_email($email)) {
-        return new WP_REST_Response(['ok' => false, 'error' => 'Please fill in your name, a valid email and a message.'], 400);
+        return new WP_REST_Response(['ok' => false, 'error' => kampong_label('Please fill in your name, a valid email and a message.', '请填写姓名、有效邮箱和留言。')], 400);
     }
     if (mb_strlen($msg) > 4000) {
-        return new WP_REST_Response(['ok' => false, 'error' => 'Message is too long.'], 400);
+        return new WP_REST_Response(['ok' => false, 'error' => kampong_label('Message is too long.', '留言过长。')], 400);
     }
 
     $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
     $rl = 'kf_rl_' . md5($ip);
     if (get_transient($rl)) {
-        return new WP_REST_Response(['ok' => false, 'error' => 'Too many submissions, please try again in a minute.'], 429);
+        return new WP_REST_Response(['ok' => false, 'error' => kampong_label('Too many submissions, please try again in a minute.', '提交过于频繁，请稍后重试。')], 429);
     }
     set_transient($rl, 1, 60);
 
@@ -209,7 +222,7 @@ function kampong_contact_submit(WP_REST_Request $req) {
         'post_content' => $msg,
     ], true);
     if (is_wp_error($id)) {
-        return new WP_REST_Response(['ok' => false, 'error' => 'Could not save your message.'], 500);
+        return new WP_REST_Response(['ok' => false, 'error' => kampong_label('Could not save your message.', '留言保存失败，请稍后重试。')], 500);
     }
     update_post_meta($id, '_kf_email', $email);
     update_post_meta($id, '_kf_phone', $phone);
@@ -236,11 +249,12 @@ document.addEventListener('submit', function (e) {
   var f = e.target;
   if (!f.classList || !f.classList.contains('kf-form')) return;
   e.preventDefault();
+  if (!f.reportValidity()) return;
   var btn = f.querySelector('button[type=submit]');
   var msg = f.querySelector('.kf-form-msg');
   var data = {};
   new FormData(f).forEach(function (v, k) { data[k] = v; });
-  btn.disabled = true; btn.dataset.old = btn.textContent; btn.textContent = 'Sending…';
+  btn.disabled = true; btn.dataset.old = btn.textContent; btn.textContent = <?php echo wp_json_encode(kampong_label('Sending…', '正在提交…')); ?>;
   fetch('/wp-json/kf/v1/contact', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -248,14 +262,14 @@ document.addEventListener('submit', function (e) {
   }).then(function (r) { return r.json().then(function (j) { return [r.ok, j]; }); })
     .then(function (p) {
       var ok = p[0] && p[1].ok;
-      msg.textContent = ok ? 'Thank you — we will reply within one working day.'
-                           : (p[1].error || 'Something went wrong.');
+      msg.textContent = ok ? <?php echo wp_json_encode(kampong_label('Your message has been received.', '您的留言已收到。')); ?>
+                           : (p[1].error || <?php echo wp_json_encode(kampong_label('Something went wrong.', '提交失败，请重试。')); ?>);
       msg.className = 'kf-form-msg ' + (ok ? 'ok' : 'bad');
       if (ok) { f.reset(); }
       btn.disabled = false; btn.textContent = btn.dataset.old;
     })
     .catch(function () {
-      msg.textContent = 'Network error, please try again.';
+      msg.textContent = <?php echo wp_json_encode(kampong_label('Network error, please try again.', '网络异常，请重试。')); ?>;
       msg.className = 'kf-form-msg bad';
       btn.disabled = false; btn.textContent = btn.dataset.old;
     });
@@ -270,11 +284,11 @@ add_shortcode('kf_contact_form', function ($atts) {
     ob_start(); ?>
 <form class="kf-form" novalidate>
   <div class="kf-form-row">
-    <label>Your name<input name="name" required autocomplete="name"></label>
-    <label>Email<input type="email" name="email" required autocomplete="email"></label>
+    <label><?php echo esc_html(kampong_label('Your name', '您的姓名')); ?><input name="name" required autocomplete="name"></label>
+    <label><?php echo esc_html(kampong_label('Email', '电子邮箱')); ?><input type="email" name="email" required autocomplete="email"></label>
   </div>
-  <label>Phone<input name="phone" autocomplete="tel"></label>
-  <label>How can we help?<textarea name="message" required></textarea></label>
+  <label><?php echo esc_html(kampong_label('Phone', '联系电话')); ?><input type="tel" name="phone" autocomplete="tel"></label>
+  <label><?php echo esc_html(kampong_label('How can we help?', '留言内容')); ?><textarea name="message" required></textarea></label>
   <input class="kf-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
   <button type="submit"><?php echo esc_html($a['submit']); ?></button>
   <p class="kf-form-msg" role="status" aria-live="polite"></p>

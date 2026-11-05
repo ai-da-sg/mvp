@@ -1,0 +1,173 @@
+{
+  "domain": "clinic.ai-da.sg",
+  "slug": "demo-clinic",
+  "design": {
+    "preset": "wellness",
+    "palette": {
+      "primary": "#356553",
+      "primaryDark": "#213e35",
+      "accent": "#8b633a",
+      "bg": "#f7f6ef",
+      "surface": "#ffffff",
+      "ink": "#263a30",
+      "muted": "#586457",
+      "deep": "#213e35"
+    },
+    "shape": {
+      "radius": "16px",
+      "button": "8px"
+    },
+    "type": {
+      "heading": "serif"
+    },
+    "layout": {
+      "pad": "72px"
+    },
+    "photos": {
+      "overlay": "0.25"
+    }
+  },
+  "spec": {
+    "pages": [
+      {
+        "slug": "home",
+        "title": "Home",
+        "sections": [
+          {
+            "type": "rich",
+            "html": "<div class=\"kf-showcase-hero\"><div><p class=\"kf-eyebrow\">草木 · 留白 · 沟通</p><h1>从容了解，<br>安心沟通。</h1><p class=\"kf-lead\">了解机构理念、服务范围与到访流程。在认真沟通之前，先把重要的信息看清楚。</p><a class=\"kf-btn\" href=\"/solutions/\">了解服务介绍</a><p class=\"kf-demo-note\">演示品牌 · 非真实医疗机构</p></div><div class=\"kf-hero-art\"><svg viewBox=\"0 0 480 400\" role=\"img\" aria-label=\"草本植物与茶碗的原创插画\" style=\"width:100%;max-height:410px\"><rect x=\"20\" y=\"25\" width=\"440\" height=\"350\" rx=\"160\" fill=\"#e4e8dc\"/><circle cx=\"350\" cy=\"105\" r=\"53\" fill=\"#d6c7a6\"/><path d=\"M115 300q65-120 75-220m-50 170q100-90 150-160\" stroke=\"#517464\" stroke-width=\"5\" fill=\"none\"/><g fill=\"#799885\"><ellipse cx=\"165\" cy=\"133\" rx=\"17\" ry=\"42\" transform=\"rotate(-30 165 133)\"/><ellipse cx=\"200\" cy=\"165\" rx=\"17\" ry=\"42\" transform=\"rotate(35 200 165)\"/><ellipse cx=\"139\" cy=\"206\" rx=\"17\" ry=\"40\" transform=\"rotate(-35 139 206)\"/><ellipse cx=\"243\" cy=\"148\" rx=\"17\" ry=\"40\" transform=\"rotate(-45 243 148)\"/><ellipse cx=\"278\" cy=\"134\" rx=\"17\" ry=\"40\" transform=\"rotate(36 278 134)\"/></g><ellipse cx=\"288\" cy=\"322\" rx=\"105\" ry=\"15\" fill=\"#c3cbb8\"/><path d=\"M199 256h177q-12 71-88 71t-89-71\" fill=\"#a36e51\"/><ellipse cx=\"288\" cy=\"256\" rx=\"89\" ry=\"20\" fill=\"#d5b290\"/><ellipse cx=\"288\" cy=\"256\" rx=\"68\" ry=\"12\" fill=\"#674b37\"/><path d=\"M280 233q-20-27 2-43m23 44q-17-27 3-40\" fill=\"none\" stroke=\"#fbf8ee\" stroke-width=\"7\" stroke-linecap=\"round\"/></svg><div class=\"kf-hero-caption\"><span>01 — 从了解开始</span><span>↗</span></div></div></div>"
+          },
+          {
+            "type": "cards",
+            "title": "让每一步，都更清楚。",
+            "bg": "alt",
+            "accent": true,
+            "items": [
+              {
+                "title": "服务介绍",
+                "text": "用易读的页面说明服务范围与咨询流程。"
+              },
+              {
+                "title": "就诊准备",
+                "text": "展示预约前可了解的事项，减少不必要的往返。"
+              },
+              {
+                "title": "沟通入口",
+                "text": "通过简洁表单演示咨询流程，不收集真实病历。"
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "title": "尊重每一次认真沟通。",
+            "text": "和本中医是用于展示建站能力的虚构品牌。页面以自然色彩、清晰层级和留白组织信息，帮助访客找到下一步。",
+            "items": [
+              "服务说明一目了然",
+              "预约流程清楚明确",
+              "个人资料谨慎提供"
+            ],
+            "bg": ""
+          },
+          {
+            "type": "cta",
+            "title": "先了解，再沟通。",
+            "text": "您可以体验测试咨询表单。请勿提交真实症状、病历、证件或其他敏感资料。",
+            "button": "体验咨询流程",
+            "href": "/contact/"
+          }
+        ]
+      },
+      {
+        "slug": "solutions",
+        "title": "What We Build",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "服务介绍 / SERVICES",
+            "title": "清晰呈现，方便了解。",
+            "text": "以下为诊所展示网站的栏目示例，不代表本网站提供真实医疗服务。"
+          },
+          {
+            "type": "cards",
+            "title": "服务栏目示例",
+            "bg": "alt",
+            "accent": true,
+            "items": [
+              {
+                "title": "初次咨询",
+                "text": "用于介绍初次到访的沟通方式与流程。"
+              },
+              {
+                "title": "复诊沟通",
+                "text": "用于说明后续预约与资料准备事项。"
+              },
+              {
+                "title": "健康资料",
+                "text": "用于展示经审核的机构资讯与常见流程问题。"
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "title": "预约前，可以先了解。",
+            "text": "实际服务、费用、执业资质及适用范围，应以真实机构核实后的资料为准。本站不作疗效承诺。",
+            "items": [
+              "确认服务范围",
+              "了解预约方式",
+              "按机构要求准备必要资料"
+            ],
+            "bg": ""
+          }
+        ]
+      },
+      {
+        "slug": "about",
+        "title": "About Us",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "关于和本 / ABOUT",
+            "title": "自然、简洁、有温度。",
+            "text": "和本中医为演示品牌，展示中医诊所网站的信息组织和视觉设计。"
+          },
+          {
+            "type": "split",
+            "title": "让信息更容易被找到。",
+            "text": "我们以平静的草木色系与清晰的页面结构，呈现服务介绍、机构说明及联系入口。",
+            "items": [
+              "不展示虚构医师资质",
+              "不编造患者评价",
+              "不承诺诊疗结果"
+            ],
+            "bg": ""
+          },
+          {
+            "type": "cta",
+            "title": "体验一次清楚的沟通。",
+            "text": "演示表单仅用于功能测试，不建立医患关系。",
+            "button": "前往咨询页面",
+            "href": "/contact/"
+          }
+        ]
+      },
+      {
+        "slug": "contact",
+        "title": "Contact",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "预约咨询 / CONTACT",
+            "title": "先留下一条测试留言。",
+            "text": "本站不接受真实诊疗预约。请使用测试姓名和邮箱，不要填写真实病历或健康敏感信息。"
+          },
+          {
+            "type": "form",
+            "title": "测试咨询表单",
+            "lead": "提交结果仅用于验证网站线索功能。",
+            "submit": "提交测试留言"
+          }
+        ]
+      }
+    ]
+  }
+}

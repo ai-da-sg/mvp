@@ -90,6 +90,10 @@ if [ -n "$INDUSTRY" ]; then
   "$PY" "$BASE/core/kf_template.py" --site "$SITE" --industry "$INDUSTRY" \
     --company "$COMPANY" --domain "$DOMAIN" >/dev/null || { echo "模板应用失败" >&2; exit 1; }
 fi
+# The console writes media on the host; WordPress only needs to read these files.
+docker run --rm --user 0:0 -e KF_MEDIA_OWNER="$(id -u):$(id -g)" \
+  -v "$SITE/html:/var/www/html" "$REG/wordpress:cli-php8.3" sh -c \
+  'mkdir -p /var/www/html/wp-content/uploads/kampong && chown "$KF_MEDIA_OWNER" /var/www/html/wp-content/uploads/kampong && chmod 755 /var/www/html/wp-content/uploads/kampong'
 CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/")
 python3 - "$SITE/meta.json" "$PLAN" "$COMPANY" "$DOMAIN" "$SLUG" "$PORT" "$CODE" <<'PYJSON'
 import json, sys

@@ -283,6 +283,25 @@ HTTP 正常|HTTP healthy
 新版本已保存；已创建任务的提示词不受影响。|New version saved. Existing jobs retain their prompt snapshots.
 历史内容已恢复为新版本。|Historical content restored as a new version.
 恢复为新版本|Restore as new version
+童趣教育|Warm early learning
+精密科技|Precision technology
+草木静雅|Calm botanical
+UI 基本原则与可访问性|UI principles and accessibility
+UI 美学标准与视觉一致性|UI aesthetics and visual consistency
+幼儿园视觉：温暖与探索|Preschool visuals: warmth and exploration
+机器人视觉：精密与秩序|Robotics visuals: precision and order
+中医视觉：草木与静雅|Clinic visuals: natural calm
+幼儿园展示与参考站改编|Preschool showcase and reference adaptation
+机器人科技展示|Robotics showcase
+中医诊所展示|Traditional Chinese medicine clinic showcase
+健康服务|Health services
+参考站结构与平台适配|Reference structure and platform constraints
+演示站事实与发布检查|Demo facts and publication checks
+机器人方案与工程流程|Robotics solutions and delivery process
+中医诊所信息与咨询边界|Clinic information and enquiry boundaries
+参考页面结构，呈现课程、理念与家长咨询|Adapt reference structure for programmes, philosophy and parent enquiries
+呈现应用场景、方案边界与工程合作流程|Present use cases, scope and engineering collaboration
+清晰介绍机构、服务范围与咨询流程|Explain the practice, service scope and enquiry process
 企业服务官网|Business services website
 SaaS 产品介绍|SaaS product website
 本地服务预约|Local service enquiries

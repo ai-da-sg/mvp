@@ -40,6 +40,15 @@ def defaults():
         ('quality', '发布前内容检查', 'quality', '检查所有页面围绕 {{goal}} 服务 {{audience}}；区块之间不重复堆砌，按钮去向使用已存在页面；不把内部要求、占位符或“待补充”直接写入公开文案。资料不足时省略相关事实。仅生成平台支持的内容区块，遵守固定 JSON 输出约束。'),
         ('local', '本地服务信任', 'copy', '只有 {{facts}} 明确提供时才使用服务区域、地址和联系方式。通过服务边界和咨询步骤建立信任，不伪造地理覆盖、评分、执照或本地客户评价。'),
         ('education', '课程与学习路径', 'structure', '为 {{audience}} 解释 {{services}} 的适合人群、学习内容和咨询流程。只展示已提供的课程信息；不承诺成绩、升学、资格认证或学习效果。'),
+        ('reference', '参考站结构与平台适配', 'structure', '只根据已提供的参考站观察整理信息层级、核心页面和行动路径；URL 本身不代表你已经浏览。提取结构规律，重新撰写文案，不逐字复制原站。使用已有页面 slug 和平台支持区块，不虚构二级菜单、视频轮播、支付或预约能力；照片、品牌色与字体作为后续媒体和视觉配置事项，不输出 HTML、CSS 或远程图片地址。'),
+        ('demo-truth', '演示站事实与发布检查', 'quality', '依据 {{facts}} 区分真实业务与演示资料。未提供真实品牌资料时明确标注演示，不编造地址、电话、邮箱、费用、校区、团队、客户案例、资质和评价；测试表单不声称完成真实预约。删除行业模板遗留的示例事实。普通标题与文本字段不写 HTML 标签；表单成功只确认收到，不承诺未提供的回复时限。页面正文不得出现内部检查清单；发布前人工核对链接、图片、表单及移动端。'),
+        ('robotics', '机器人方案与工程流程', 'structure', '围绕 {{services}} 面向 {{audience}} 说明应用场景、输入条件、方案范围、需求澄清、原型验证和交付流程。只描述已经核实的能力，不编造精度、吞吐量、节省比例、认证或客户名称。突出 {{goal}}，引导提供非机密的项目概况，不索要凭据或生产敏感数据。'),
+        ('clinic-scope', '中医诊所信息与咨询边界', 'quality', '只根据 {{facts}} 介绍机构和 {{services}}，以清楚的服务说明和 {{goal}} 为主。没有真实机构资料时标明演示品牌；不编造医师身份、执业资格、地址、诊疗费用、患者评价、疗效或治愈率。不提供诊断、处方、剂量或治疗建议，不将普通留言表单描述为已确认医疗预约；演示咨询不索要真实症状、病历或证件。'),
+        ('ui-principles', 'UI 基本原则与可访问性', 'quality', '围绕 {{audience}} 和 {{goal}} 建立清楚的信息层级：每页一个主标题，标题顺序合理，一个主要行动，按钮说明下一步；导航名称和位置跨页一致。正文简短、可扫描，不能把操作说明混入营销正文。实施检查标准：正文对比度至少 4.5:1，关键控件至少 44px，键盘可操作且焦点可见，表单有可见标签、错误和真实提交反馈；375/768/1024/1440px 无横向溢出，尊重减少动态效果偏好。这里只输出支持的 JSON 内容；字体、尺寸、对比度和交互由视觉预设与主题实现，生成文案本身不能证明已经通过 UI 检查。'),
+        ('ui-aesthetics', 'UI 美学标准与视觉一致性', 'style', '为 {{services}} 选择一种统一的视觉方向。先安排首屏价值主张、核心服务、工作方式、行动入口，再考虑装饰。标题短而有辨识度，说明具体，不使用无依据的数字墙或评价填充版面。实施标准：限制主色和强调色，用语义色统一文字、背景、卡片与按钮；最多两类字体，以 8px 间距节奏、统一容器和有限圆角建立秩序；正文 16px 起、行高 1.5–1.8，短标题自然换行；图标风格统一，留白有层次，不堆叠渐变、玻璃效果、漂浮卡片或无意义动画。样式交给视觉预设，禁止在普通标题字段写 HTML/CSS。'),
+        ('ui-nursery', '幼儿园视觉：温暖与探索', 'style', '面向家长，采用温暖、亲切、清楚的表达；以课程体验、教育理念和家长下一步为主线。视觉实施选择 nursery（童趣教育）：奶油底色、暖陶主色、低饱和辅助色，柔和圆角、原创学习主题插画和轻松留白；避免把成人阅读界面做成儿童游戏或用过多卡通装饰遮挡信息。'),
+        ('ui-robotics', '机器人视觉：精密与秩序', 'style', '面向企业决策者，以任务、方案范围和工程流程组织内容。视觉实施选择 robotics（精密科技）：冷白与深海军蓝、清晰栅格、少量高对比强调色、几何设备插画和克制边框；避免泛化 AI 光效、没有依据的技术指标及装饰性数据。'),
+        ('ui-wellness', '中医视觉：草木与静雅', 'style', '以清晰、平静、有分寸的文案介绍服务与咨询。视觉实施选择 wellness（草木静雅）：米白与深草木绿、少量赭色、标题衬线与清晰正文、草本插画和充足留白；避免刺眼营销、疗效暗示、虚构专家背书或用传统意象替代真实机构资料。'),
     ]
     rows = [{'id': mid, 'name': name, 'category': cat, 'description': name+'，可跨场景复用',
              'body': body, 'enabled': True, 'version': 1, 'updated_at': 0, 'history': []}
@@ -53,10 +62,15 @@ def defaults():
         ('catalog', '产品目录与 B2B 询价', '产品展示', '清晰分类、产品对比与询价入口', ['conversion','catalog','minimal','copy','quality'], '筛选产品与供应商的采购方', '提交产品询价', '准确、务实、专业'),
         ('campaign', '活动推广落地页', '营销活动', '围绕一个行动组织活动介绍', ['conversion','services','warm','copy','quality'], '对活动主题感兴趣的访客', '提交活动咨询', '有活力、简洁、不夸大'),
         ('consulting', '专业咨询品牌', '专业咨询', '解释服务方法与合作流程，建立可信预期', ['booking','services','minimal','copy','quality'], '希望解决具体问题的客户', '预约初步沟通', '严谨、易懂、有分寸'),
+        ('preschool-showcase', '幼儿园展示与参考站改编', '教育培训', '参考页面结构，呈现课程、理念与家长咨询', ['conversion','reference','education','warm','copy','demo-truth','quality'], '了解幼儿园理念与课程的家长', '了解课程并发起参观咨询', '温暖、具体、尊重儿童'),
+        ('robotics-showcase', '机器人科技展示', '数字产品', '呈现应用场景、方案边界与工程合作流程', ['conversion','robotics','minimal','copy','demo-truth','quality'], '评估机器人与自动化方案的企业团队', '提交非机密项目概况', '理性、精确、清晰'),
+        ('tcm-showcase', '中医诊所展示', '健康服务', '清晰介绍机构、服务范围与咨询流程', ['booking','services','minimal','copy','clinic-scope','demo-truth','quality'], '了解机构与咨询流程的访客', '了解服务并发起一般咨询', '沉稳、清楚、审慎'),
     ]
+    ui_styles = {'preschool-showcase': 'ui-nursery', 'robotics-showcase': 'ui-robotics', 'tcm-showcase': 'ui-wellness'}
     ts = [{'id': tid, 'name': name, 'category': cat, 'description': desc,
            'body': '为此场景组织完整站点内容：'+desc+'。以客户真实资料为依据，服从现有页面与支持区块的限制。',
-           'module_ids': mids, 'defaults': {'audience': audience, 'goal': goal, 'tone': tone},
+           'module_ids': mids + ['ui-principles', 'ui-aesthetics'] + ([ui_styles[tid]] if tid in ui_styles else []),
+           'defaults': {'audience': audience, 'goal': goal, 'tone': tone},
            'enabled': True, 'version': 1, 'updated_at': 0, 'history': []}
           for tid,name,cat,desc,mids,audience,goal,tone in templates]
     return {'schema_version': 1, 'revision': 1, 'modules': rows, 'templates': ts}

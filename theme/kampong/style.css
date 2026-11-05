@@ -398,3 +398,99 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--kf-accent);outline-
 .kf-hero-grid > .wp-block-group__inner-container > *,
 .kf-grid > .wp-block-group__inner-container > *,
 .kf-split > .wp-block-group__inner-container > * {margin-block-start:0;margin-block-end:0}
+
+/* Accessible navigation and shared interaction baseline. */
+.kf-menu-toggle{display:none;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:44px;padding:8px 12px;border:1px solid var(--g300);border-radius:8px;background:var(--kf-surface);color:var(--kf-ink);font:600 14px var(--kf-font-body);cursor:pointer}
+.kf-nav a{display:flex;align-items:center;min-height:44px}
+.kf-nav a:focus-visible,.kf-menu-toggle:focus-visible{outline:2px solid var(--kf-primary);outline-offset:3px}
+.kf-form input,.kf-form textarea{font-size:16px;min-height:48px}
+.kf-form label{font-size:14px;color:var(--kf-ink)}
+.kf-form button{min-height:48px}
+@media(max-width:900px){
+ .kf-header-inner{padding:12px 20px;gap:12px}
+ .kf-logo{font-size:17px;min-width:0;white-space:normal;overflow-wrap:anywhere}
+ .kf-menu-toggle{display:inline-flex;flex:none}
+ .kf-header-inner>.kf-btn-sm{display:none}
+ .kf-header[data-nav-enhanced] .kf-nav-wrap{display:none}
+ .kf-header[data-nav-enhanced].nav-open .kf-nav-wrap{display:block}
+ .kf-header .kf-nav{flex-direction:column;gap:4px;padding:12px 0 0;overflow:visible;border-top:1px solid var(--g200)}
+ .kf-header .kf-nav a{padding:8px 12px;border-radius:6px;font-size:16px}
+ .kf-header .kf-nav .current-menu-item a{background:var(--kf-bg)}
+}
+
+/* UI UX Pro Max reviewed visual systems, selected by the existing preset token. */
+.kf-showcase{--kf-max:1180px;--shadow-1:0 2px 6px rgba(20,35,45,.03);--shadow-2:0 12px 32px rgba(20,35,45,.06)}
+.kf-showcase .kf-container{padding-inline:32px}
+.kf-showcase .kf-header{background:var(--kf-bg);backdrop-filter:none;box-shadow:none;border-bottom:1px solid rgba(35,52,62,.1)}
+.kf-showcase .kf-header-inner{height:88px;gap:32px}
+.kf-showcase .kf-logo{letter-spacing:-.04em;font-size:21px}
+.kf-showcase .kf-nav{justify-content:flex-end;gap:24px}
+.kf-showcase .kf-nav a{font-size:14px;color:var(--kf-ink)}
+.kf-showcase .kf-nav .current-menu-item a{font-weight:700;color:var(--kf-primary)}
+.kf-showcase .kf-content .wp-block-group.kf-container{max-width:var(--kf-max);padding-inline:32px}
+.kf-showcase .kf-content .wp-block-group.kf-section{background:transparent;padding-block:var(--kf-pad)}
+.kf-showcase .kf-content .wp-block-group.kf-section.alt{background:var(--kf-surface)}
+.kf-showcase .kf-content .kf-grid,.kf-showcase .kf-content .kf-split{padding-inline:0;gap:32px}
+.kf-showcase .kf-content .kf-grid{margin-top:36px}
+.kf-showcase h1,.kf-showcase h2,.kf-showcase h3{text-wrap:balance}
+.kf-showcase h2{font-size:clamp(28px,3.1vw,42px);line-height:1.2;letter-spacing:-.035em;max-width:24ch}
+.kf-showcase p{line-height:1.75}
+.kf-showcase .kf-showcase-hero{display:grid;grid-template-columns:1.08fr 1fr;align-items:center;gap:64px;min-height:530px;padding-block:12px}
+.kf-showcase-hero>div{min-width:0}
+.kf-showcase .kf-showcase-hero h1{font-size:clamp(40px,4.5vw,64px);line-height:1.05;letter-spacing:-.055em;margin:24px 0;max-width:14ch}
+.kf-showcase .kf-showcase-hero .kf-lead{font-size:18px;line-height:1.8;max-width:44ch;color:var(--kf-muted);margin-bottom:32px}
+.kf-showcase .kf-showcase-hero .kf-eyebrow{font-size:11px;letter-spacing:.17em;line-height:1.6;font-weight:700;color:var(--kf-primary)}
+.kf-showcase .kf-hero-art{position:relative;padding:20px;background:var(--kf-surface);border:1px solid rgba(35,52,62,.08);border-radius:var(--kf-radius)}
+.kf-showcase .kf-hero-art svg{display:block;width:100%;height:auto;max-height:440px}
+.kf-showcase .kf-hero-caption{display:flex;justify-content:space-between;gap:12px;padding:12px 16px 4px;font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--kf-muted)}
+.kf-showcase .kf-demo-note{font-size:11px;letter-spacing:.07em;color:var(--kf-muted);margin-top:24px;line-height:1.6}
+.kf-showcase .kf-card,.kf-showcase .kf-card.gem{border:1px solid rgba(35,52,62,.12);padding:32px!important;box-shadow:none;background:var(--kf-bg);border-radius:var(--kf-radius)}
+.kf-showcase .kf-card:hover{transform:none;box-shadow:none}
+.kf-showcase .kf-card .kf-num{font:500 12px var(--kf-font-body);background:transparent!important;color:var(--kf-primary)!important;border:1px solid currentColor;border-radius:50%;width:34px;height:34px;margin-bottom:30px;display:grid;place-items:center}
+.kf-showcase .kf-card h3{font-size:22px;line-height:1.3;margin-bottom:16px}
+.kf-showcase .kf-card p{color:var(--kf-muted);font-size:16px}
+.kf-showcase .kf-panel{padding:32px!important;background:var(--kf-surface);border:1px solid rgba(35,52,62,.12);box-shadow:none}
+.kf-showcase .kf-cta{padding:48px!important;box-shadow:none;border-radius:var(--kf-radius);background:var(--kf-deep)}
+.kf-showcase .kf-cta h2{color:#fff;max-width:26ch;margin-inline:auto}
+.kf-showcase .kf-cta p{color:#e8eeee;max-width:55ch;margin-inline:auto}
+.kf-showcase .kf-cta a{background:#fff;color:var(--kf-deep);border-color:#fff}
+.kf-showcase .kf-footer{padding-top:64px;background:var(--kf-deep)}
+.kf-showcase .kf-footer::before,.kf-showcase .kf-footmark{display:none}
+.kf-showcase .kf-footer h4{color:#ffffff;opacity:1;font-size:12px;letter-spacing:.1em}
+.kf-showcase .kf-footer,.kf-showcase .kf-footer a,.kf-showcase .kf-bottom{color:#d6e1dc}
+.kf-showcase .kf-bottom{border-top-color:rgba(255,255,255,.2)}
+.kf-showcase .kf-form{padding:36px;background:var(--kf-surface);border:1px solid rgba(35,52,62,.16);max-width:720px;box-shadow:none}
+.kf-style-nursery .kf-hero-art{border-radius:48% 48% 24px 24px;background:#faead2;border:0}
+.kf-style-nursery .kf-card:nth-child(2){background:#edf2e9}
+.kf-style-nursery .kf-card:nth-child(3){background:#f4eef7}
+.kf-style-nursery .kf-showcase-hero h1{letter-spacing:-.04em}
+.kf-style-robotics .kf-hero-art{background:#111d39;border-color:#263958;box-shadow:16px 16px 0 #e0e5f2}
+.kf-style-robotics .kf-hero-caption{color:#c6d8e9}
+.kf-style-robotics .kf-showcase-hero .kf-eyebrow{font-family:ui-monospace,monospace;letter-spacing:.12em}
+.kf-style-robotics .kf-card{border-top:3px solid var(--kf-primary)}
+.kf-style-wellness .kf-showcase-hero h1{font-size:clamp(42px,4.8vw,68px);font-weight:500;letter-spacing:.03em;line-height:1.3;max-width:10ch}
+.kf-style-wellness h2{font-weight:500;letter-spacing:.01em}
+.kf-style-wellness .kf-hero-art{background:#e9ecdf;border-radius:50% 50% 16px 16px;border:0}
+.kf-style-wellness .kf-card{background:transparent;border-width:1px 0 0;border-radius:0;padding-inline:8px!important}
+.kf-style-wellness .kf-form{border-radius:4px}
+@media(max-width:900px){
+ .kf-showcase .kf-header-inner{height:auto;gap:12px}
+ .kf-showcase .kf-container,.kf-showcase .kf-content .wp-block-group.kf-container{padding-inline:24px}
+ .kf-showcase .kf-showcase-hero{grid-template-columns:1fr;gap:36px;min-height:0;padding:0}
+ .kf-showcase .kf-showcase-hero h1{font-size:clamp(40px,8vw,58px);max-width:16ch}
+ .kf-showcase .kf-showcase-hero .kf-lead{font-size:17px;max-width:52ch}
+ .kf-showcase .kf-content .wp-block-group.kf-section{padding-block:48px}
+ .kf-showcase .kf-hero-art{max-width:560px;width:100%;margin-inline:auto;padding:12px}
+ .kf-showcase .kf-hero-caption{font-size:10px;padding:8px}
+ .kf-showcase .kf-content .kf-grid{gap:16px;margin-top:28px}
+ .kf-showcase .kf-card,.kf-showcase .kf-card.gem{padding:28px!important}
+ .kf-showcase .kf-cta{padding:32px 24px!important}
+ .kf-showcase .kf-form{padding:24px}
+ .kf-style-robotics .kf-hero-art{box-shadow:8px 8px 0 #e0e5f2;width:calc(100% - 8px);margin-left:0}
+ .kf-style-wellness .kf-showcase-hero h1{max-width:10ch;line-height:1.35;letter-spacing:.02em}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+.kf-showcase .kf-hero .kf-kicker{color:#fff;opacity:.92}
+.kf-showcase .kf-hero h1{max-width:20ch}
+.kf-showcase .kf-cta .wp-block-buttons{justify-content:center}
+.kf-showcase .kf-btn,.kf-showcase .wp-block-button__link{box-shadow:none}

@@ -1,0 +1,59 @@
+{
+  "sites": [
+    {
+      "url": "https://preschool.ai-da.sg",
+      "slug": "demo-preschool",
+      "preset": "nursery",
+      "upstream": "127.0.0.1:18083",
+      "data_directory": "/home/ec2-user/mvp/.venv/clone-lab/sites/demo-preschool",
+      "console_site_symlink": "/home/ec2-user/mvp/.venv/kampongflow/sites/demo-preschool",
+      "pages": 4,
+      "email_delivery": "disabled in demo mu-plugin",
+      "indexing": "noindex, nofollow"
+    },
+    {
+      "url": "https://tech.ai-da.sg",
+      "slug": "demo-tech",
+      "preset": "robotics",
+      "upstream": "127.0.0.1:18084",
+      "data_directory": "/home/ec2-user/mvp/.venv/clone-lab/sites/demo-tech",
+      "console_site_symlink": "/home/ec2-user/mvp/.venv/kampongflow/sites/demo-tech",
+      "pages": 4,
+      "email_delivery": "disabled in demo mu-plugin",
+      "indexing": "noindex, nofollow"
+    },
+    {
+      "url": "https://clinic.ai-da.sg",
+      "slug": "demo-clinic",
+      "preset": "wellness",
+      "upstream": "127.0.0.1:18085",
+      "data_directory": "/home/ec2-user/mvp/.venv/clone-lab/sites/demo-clinic",
+      "console_site_symlink": "/home/ec2-user/mvp/.venv/kampongflow/sites/demo-clinic",
+      "pages": 4,
+      "email_delivery": "disabled in demo mu-plugin",
+      "indexing": "noindex, nofollow"
+    }
+  ],
+  "dns": {
+    "type": "A",
+    "address": "13.229.103.43",
+    "cloudflare_proxy": "DNS only"
+  },
+  "console": "https://mvp.ai-da.sg",
+  "nginx_config": "/etc/nginx/conf.d/kf-showcases.conf",
+  "tls": {
+    "provider": "Lets Encrypt",
+    "cert_name": "ai-da-showcases",
+    "path": "/etc/letsencrypt/live/ai-da-showcases/",
+    "expires": "2027-02-03",
+    "renewal": "certbot-renew.timer",
+    "dry_run": "PASS"
+  },
+  "credentials": "Existing console login unchanged; credentials/private keys are not included.",
+  "test_evidence_directory": "/home/ec2-user/mvp/.venv/clone-evidence",
+  "limitations": [
+    "Demonstration brands; no real contact details or medical credentials.",
+    "Customer portal returns HTTP 410 in the current product.",
+    "AI provider quality is not evaluated; mock pipeline and local protocol contracts tested."
+  ]
+}

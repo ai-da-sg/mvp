@@ -8,13 +8,13 @@
         <p><?php bloginfo('description'); ?></p>
       </div>
       <div>
-        <h4>Contact</h4>
+        <h4><?php echo esc_html(kampong_label('Contact', '联系信息')); ?></h4>
         <p><?php echo esc_html(get_option('kf_phone', '+65 6000 0000')); ?></p>
         <p><a href="mailto:<?php echo esc_attr(get_option('kf_email', 'hello@example.sg')); ?>"><?php echo esc_html(get_option('kf_email', 'hello@example.sg')); ?></a></p>
         <p><?php echo esc_html(get_option('kf_address', 'Singapore')); ?></p>
       </div>
       <div>
-        <h4>Links</h4>
+        <h4><?php echo esc_html(kampong_label('Links', '页面导航')); ?></h4>
         <?php wp_nav_menu([
             'theme_location' => 'footer',
             'container' => false,

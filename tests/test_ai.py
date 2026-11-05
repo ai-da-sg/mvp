@@ -166,6 +166,60 @@ class ConsoleTests(unittest.TestCase):
             time.sleep(.02)
         self.fail('Job did not terminate')
 
+    def test_preview_assets_and_form_placeholder(self):
+        spec = copy.deepcopy(self.original)
+        spec['pages'][0]['sections'] = [
+            {'type':'band','src':'/wp-content/uploads/kampong/photo.webp','alt':'Photo'},
+            {'type':'form','title':'Contact'}]
+        ai.atomic_json(self.base/'sites/demo/site-draft.json', spec)
+        page = self.m.preview_html('demo', 'home', base='/s/test', asset='/sa/test', public=True)
+        self.assertIn('/sa/test/uploads/kampong/photo.webp', page)
+        self.assertNotIn('/wp-content/uploads/', page)
+        self.assertNotIn('[kf_contact_form', page)
+        self.assertIn('Form preview only', page)
+        self.assertNotIn('127.0.0.1:18085', page)
+
+    def test_pdf_font_fallback(self):
+        inv = {'no':'TEST-001','company':'测试客户','domain':'example.test','plan_name':'Demo',
+               'plan_specs':'测试服务','subtotal':100,'gst':0,'total':100,'status':'unpaid',
+               'issued_at':'2026-11-05','paid_at':''}
+        self.assertTrue(self.m.invoice_pdf(inv).startswith(b'%PDF'))
+        (self.base/'sites/demo/handover.md').write_text('# Test\n## 网站\n- 演示信息\n')
+        self.assertTrue(self.m.handover_pdf('demo').startswith(b'%PDF'))
+
+    def test_showcase_preset_text_contrast(self):
+        def luminance(value):
+            rgb = [int(value[i:i+2], 16)/255 for i in (1,3,5)]
+            linear = [v/12.92 if v<=0.04045 else ((v+0.055)/1.055)**2.4 for v in rgb]
+            return sum(a*b for a,b in zip(linear, (0.2126,0.7152,0.0722)))
+        for name in ('nursery','robotics','wellness'):
+            palette = self.m.presets()[name]['palette']
+            for text, background in [(palette['primary'],'#ffffff'),(palette['ink'],palette['bg']),
+                                     (palette['muted'],palette['bg']),('#d6e1dc',palette['deep'])]:
+                a,b = sorted((luminance(text),luminance(background)))
+                self.assertGreaterEqual((b+0.05)/(a+0.05),4.5,(name,text,background))
+
+    def test_upload_unique_names_and_permission_error(self):
+        import io
+        from PIL import Image
+        buf = io.BytesIO(); Image.new('RGB', (32, 32), 'red').save(buf, format='PNG')
+        body = b'--testboundary\r\nContent-Disposition: form-data; name="file"; filename="photo.png"\r\nContent-Type: image/png\r\n\r\n' + buf.getvalue() + b'\r\n--testboundary--\r\n'
+        def upload():
+            req = urllib.request.Request('http://127.0.0.1:%d/api/upload?slug=demo' % self.server.server_port,
+                data=body, headers={'Content-Type':'multipart/form-data; boundary=testboundary', 'Cookie':self.cookies['admin']})
+            try: response = urllib.request.urlopen(req)
+            except urllib.error.HTTPError as e: response = e
+            with response:
+                return response.status, json.load(response)
+        with patch.object(self.m.time, 'time', return_value=time.time()):
+            status, first = upload(); self.assertEqual(status, 200)
+            status, second = upload(); self.assertEqual(status, 200)
+        self.assertNotEqual(first['name'], second['name'])
+        with patch.object(Path, 'mkdir', side_effect=PermissionError('test')):
+            status, error = upload()
+        self.assertEqual(status, 500)
+        self.assertIn('error', error)
+
     def test_prompt_permissions_preview_and_job_snapshot(self):
         status, library = self.request('/api/ai/prompts', user='ops-test')
         self.assertEqual(status, 200)

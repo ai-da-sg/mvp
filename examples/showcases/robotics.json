@@ -1,0 +1,182 @@
+{
+  "domain": "tech.ai-da.sg",
+  "slug": "demo-tech",
+  "design": {
+    "preset": "robotics",
+    "palette": {
+      "primary": "#354ac6",
+      "primaryDark": "#101d35",
+      "accent": "#167565",
+      "bg": "#f4f6fc",
+      "surface": "#ffffff",
+      "ink": "#18253a",
+      "muted": "#536077",
+      "deep": "#101d35"
+    },
+    "shape": {
+      "radius": "12px",
+      "button": "8px"
+    },
+    "type": {
+      "heading": "sans"
+    },
+    "layout": {
+      "pad": "72px"
+    },
+    "photos": {
+      "overlay": "0.25"
+    }
+  },
+  "spec": {
+    "pages": [
+      {
+        "slug": "home",
+        "title": "Home",
+        "sections": [
+          {
+            "type": "rich",
+            "html": "<div class=\"kf-showcase-hero\"><div><p class=\"kf-eyebrow\">PRECISION / CONNECTION</p><h1>Thoughtful robots.<br>Real possibilities.</h1><p class=\"kf-lead\">Robotic systems, machine vision and connected operations — designed around the task, built around the people.</p><a class=\"kf-btn\" href=\"/solutions/\">Explore solutions</a><p class=\"kf-demo-note\">DEMONSTRATION BRAND / KAMPONGFLOW</p></div><div class=\"kf-hero-art\"><svg viewBox=\"0 0 480 400\" role=\"img\" aria-label=\"Geometric illustration of a robotic arm and connected automation platform\" style=\"width:100%;max-height:410px\"><rect x=\"15\" y=\"20\" width=\"450\" height=\"360\" rx=\"36\" fill=\"#111d39\"/><g stroke=\"#273757\" fill=\"none\"><path d=\"M40 100h400M40 180h400M40 260h400M40 340h400M100 40v320M180 40v320M260 40v320M340 40v320M420 40v320\"/></g><ellipse cx=\"240\" cy=\"330\" rx=\"120\" ry=\"24\" fill=\"#263c65\"/><rect x=\"195\" y=\"270\" width=\"90\" height=\"60\" rx=\"15\" fill=\"#6a78f4\"/><path d=\"M240 275l-70-100 93-67 71 70\" stroke=\"#c9d4ff\" stroke-width=\"34\" stroke-linejoin=\"round\" fill=\"none\"/><g fill=\"#243356\" stroke=\"#7ee1ca\" stroke-width=\"8\"><circle cx=\"240\" cy=\"275\" r=\"22\"/><circle cx=\"170\" cy=\"175\" r=\"22\"/><circle cx=\"263\" cy=\"108\" r=\"22\"/></g><path d=\"M330 178l-22 38 24 20m3-57l33 27-10 28\" fill=\"none\" stroke=\"#7ee1ca\" stroke-width=\"14\"/><rect x=\"305\" y=\"252\" width=\"57\" height=\"47\" rx=\"8\" fill=\"#546ad5\"/><g fill=\"#7ee1ca\"><circle cx=\"82\" cy=\"72\" r=\"7\"/><circle cx=\"100\" cy=\"72\" r=\"7\"/><circle cx=\"118\" cy=\"72\" r=\"7\"/></g><path d=\"M375 75h48v45h-48z\" fill=\"none\" stroke=\"#7ee1ca\" stroke-width=\"2\"/></svg><div class=\"kf-hero-caption\"><span>01 — ENGINEERED TOGETHER</span><span>↗</span></div></div></div>"
+          },
+          {
+            "type": "cards",
+            "title": "One connected automation journey.",
+            "bg": "alt",
+            "accent": true,
+            "items": [
+              {
+                "title": "Robotic systems",
+                "text": "Modular workcells for repetitive handling and coordinated tasks."
+              },
+              {
+                "title": "Machine vision",
+                "text": "Inspection and perception workflows that connect visual information with action."
+              },
+              {
+                "title": "Systems integration",
+                "text": "Devices, data and operations connected through a planned integration approach."
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "title": "Start with the process. Then design the system.",
+            "text": "A useful automation conversation begins with requirements, constraints and the people who operate the system.",
+            "items": [
+              "Map the task and environment",
+              "Define evaluation criteria",
+              "Prototype before wider deployment"
+            ],
+            "bg": "alt"
+          },
+          {
+            "type": "cta",
+            "title": "What would you automate next?",
+            "text": "Use this demo enquiry flow to describe a sample project.",
+            "button": "Start a conversation",
+            "href": "/contact/"
+          }
+        ]
+      },
+      {
+        "slug": "solutions",
+        "title": "What We Build",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "SOLUTIONS",
+            "title": "Built around the task.",
+            "text": "An illustrative portfolio for a robotics and automation business."
+          },
+          {
+            "type": "cards",
+            "title": "Explore the solution areas",
+            "bg": "alt",
+            "accent": true,
+            "items": [
+              {
+                "title": "Robotic handling",
+                "text": "A configurable presentation for picking, transfer and repetitive workflows."
+              },
+              {
+                "title": "Vision-assisted operations",
+                "text": "An introduction to visual inspection, recognition and operator support."
+              },
+              {
+                "title": "Connected monitoring",
+                "text": "A space to explain status dashboards, event visibility and system handover."
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "title": "From concept to evaluation.",
+            "text": "Real implementations require a site-specific assessment; this demonstration does not assert certifications or operating performance.",
+            "items": [
+              "Discovery and requirements",
+              "Prototype and evaluation",
+              "Integration and handover"
+            ],
+            "bg": ""
+          }
+        ]
+      },
+      {
+        "slug": "about",
+        "title": "About Us",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "OUR APPROACH",
+            "title": "Engineering starts with asking better questions.",
+            "text": "Orbit Robotics is a fictional demonstration brand for the KampongFlow website platform."
+          },
+          {
+            "type": "cards",
+            "title": "A practical working process",
+            "bg": "alt",
+            "accent": true,
+            "items": [
+              {
+                "title": "Understand",
+                "text": "Describe the workflow and define the limits."
+              },
+              {
+                "title": "Explore",
+                "text": "Compare possible approaches and build a small proof of concept."
+              },
+              {
+                "title": "Evaluate",
+                "text": "Measure against agreed criteria before deciding what comes next."
+              }
+            ]
+          },
+          {
+            "type": "cta",
+            "title": "A clear brief is a good beginning.",
+            "text": "Tell us about a sample workflow using the demonstration contact form.",
+            "button": "Start a project",
+            "href": "/contact/"
+          }
+        ]
+      },
+      {
+        "slug": "contact",
+        "title": "Contact",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "START A PROJECT",
+            "title": "Bring a problem worth exploring.",
+            "text": "Demo form only. Do not include confidential production data, credentials or proprietary designs."
+          },
+          {
+            "type": "form",
+            "title": "Project enquiry",
+            "lead": "Use sample details to test the enquiry workflow.",
+            "submit": "Send test brief"
+          }
+        ]
+      }
+    ]
+  }
+}

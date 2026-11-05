@@ -514,6 +514,10 @@ for _cand in ("/usr/share/fonts/google-droid/DroidSansFallback.ttf",):
     except Exception:
         continue
 
+if FONT == "STSong-Light":
+    pdfmetrics.registerFont(UnicodeCIDFont(FONT))
+pdfmetrics.registerFontFamily(FONT, normal=FONT, bold=FONT, italic=FONT, boldItalic=FONT)
+
 DEFAULT_PLANS = [
     {"id": "starter", "name": "Starter", "price": 1800, "period": "首年",
      "specs": "1 个站点 · 5 个邮箱 · 20GB · 2C/4G", "dns": True},
@@ -770,6 +774,10 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
         link_slug = linked_page["slug"]
         body = body.replace('href="/%s/"' % link_slug, 'href="%s/%s"' % (base, link_slug))
     body = body.replace('href="/"', 'href="%s/home"' % base)
+    # Preview assets must stay under their authenticated or share-token route.
+    body = body.replace('/wp-content/uploads/', asset + '/uploads/')
+    body = re.sub(r'\[kf_contact_form\b[^\]]*\]',
+                  '<p class="kf-note">Form preview only. Publish the page to test submissions.</p>', body)
 
     lis = []
     for p in pages:
@@ -781,9 +789,13 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
 
     label = "客户预览" if public else "预览"
     note = "仅供审阅，尚未上线" if public else "未发布的草稿"
-    extra = "" if public else '<a href="http://127.0.0.1:18085/" target="_blank">查看线上</a>'
+    extra = ""  # Local container ports are not public URLs.
     company = esc(meta.get("company", ""))
     title = "%s · %s · %s" % (label, esc(page.get("title", "")), company)
+    preset = site_design(slug).get('preset', '')
+    body_class = 'wp-theme-kampong'
+    if preset in ('nursery', 'robotics', 'wellness'):
+        body_class += ' kf-showcase kf-style-' + preset
 
     return "".join([
         '<!doctype html><html lang="en"><head><meta charset="utf-8">',
@@ -796,7 +808,7 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
         "font:13px/1.5 -apple-system,Segoe UI,sans-serif;padding:7px 14px;",
         "display:flex;gap:14px;align-items:center;flex-wrap:wrap}",
         ".kf-pvbar b{color:#d29922}.kf-pvbar a{color:#58a6ff;text-decoration:none}",
-        "</style></head><body class=\"wp-theme-kampong\">",
+        '</style></head><body class="%s">' % body_class,
         '<div class="kf-pvbar"><b>%s</b> %s · %s' % (label, note, company),
         '<a href="%s/" target="_self">首页</a>%s</div>' % (base, extra),
         '<header class="kf-header"><div class="kf-container kf-header-inner">',
@@ -1673,7 +1685,18 @@ def share_for(token):
 
 
 def presets():
-    return _read(PRESETS_F, {})
+    result = _read(PRESETS_F, {})
+    # Reusable visual directions, separate from model-generated page content.
+    for name, primary, dark, accent, bg, ink, muted, heading, radius in [
+        ('nursery', '#985039', '#503a2d', '#a47b22', '#fff9ef', '#302d27', '#625b4f', 'rounded', '24px'),
+        ('robotics', '#354ac6', '#101d35', '#167565', '#f4f6fc', '#18253a', '#536077', 'sans', '12px'),
+        ('wellness', '#356553', '#213e35', '#8b633a', '#f7f6ef', '#263a30', '#586457', 'serif', '16px'),
+    ]:
+        result.setdefault(name, {'preset': name, 'palette': {'primary': primary, 'primaryDark': dark,
+            'accent': accent, 'bg': bg, 'surface': '#ffffff', 'ink': ink, 'muted': muted, 'deep': dark},
+            'shape': {'radius': radius, 'button': '999px' if name == 'nursery' else '8px'},
+            'type': {'heading': heading}, 'layout': {'pad': '72px'}, 'photos': {'overlay': '0.25'}})
+    return result
 
 
 def site_design(slug):
@@ -3713,8 +3736,10 @@ async function fetchDesign(slug){
   const d=await r.json();
   DPRESETS=d.presets||{};
   const ps=$('#dPreset');
-  ps.innerHTML='<option value="">自定义</option>'+Object.keys(DPRESETS).map(k=>`<option value="${k}">${k}</option>`).join('');
+  const labels={nursery:'童趣教育',robotics:'精密科技',wellness:'草木静雅'};
+  ps.innerHTML='<option value="">自定义</option>'+Object.keys(DPRESETS).map(k=>`<option value="${esc(k)}">${esc(labels[k]||k)}</option>`).join('');
   fillDesign(d.tokens||{});
+  ps.value=d.tokens?.preset||'';
 }
 async function initDesign(){
   const sel=$('#dSlug');
@@ -5028,9 +5053,13 @@ class Handler(BaseHTTPRequestHandler):
             pass  # 压缩失败就用原图，不阻断上传
 
         outdir = SITES / slug / "html" / MEDIA_DIR
-        outdir.mkdir(parents=True, exist_ok=True)
-        fname = f"{slug}-{int(time.time())}{ext}"
-        (outdir / fname).write_bytes(data)
+        import secrets
+        fname = f"{slug}-{int(time.time())}-{secrets.token_hex(4)}{ext}"
+        try:
+            outdir.mkdir(parents=True, exist_ok=True)
+            (outdir / fname).write_bytes(data)
+        except OSError:
+            return self._send(500, {"error": "媒体目录不可写，请检查站点上传目录权限"})
         try:
             (outdir / fname).chmod(0o644)
         except OSError:

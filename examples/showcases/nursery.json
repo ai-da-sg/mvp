@@ -1,0 +1,193 @@
+{
+  "domain": "preschool.ai-da.sg",
+  "slug": "demo-preschool",
+  "design": {
+    "preset": "nursery",
+    "palette": {
+      "primary": "#985039",
+      "primaryDark": "#503a2d",
+      "accent": "#a47b22",
+      "bg": "#fff9ef",
+      "surface": "#ffffff",
+      "ink": "#302d27",
+      "muted": "#625b4f",
+      "deep": "#503a2d"
+    },
+    "shape": {
+      "radius": "24px",
+      "button": "999px"
+    },
+    "type": {
+      "heading": "rounded"
+    },
+    "layout": {
+      "pad": "72px"
+    },
+    "photos": {
+      "overlay": "0.25"
+    }
+  },
+  "spec": {
+    "pages": [
+      {
+        "slug": "home",
+        "title": "Home",
+        "sections": [
+          {
+            "type": "rich",
+            "html": "<div class=\"kf-showcase-hero\"><div><p class=\"kf-eyebrow\">PLAY / WONDER / GROW</p><h1>A bright beginning.<br>Room to grow.</h1><p class=\"kf-lead\">A joyful place to wonder, create and grow. Thoughtful spaces and playful experiences make room for every little discovery.</p><a class=\"kf-btn\" href=\"/programmes/\">Explore our programmes</a><p class=\"kf-demo-note\">DEMONSTRATION BRAND / KAMPONGFLOW</p></div><div class=\"kf-hero-art\"><svg viewBox=\"0 0 480 400\" role=\"img\" aria-label=\"Playful illustration of a sun, rainbow and learning blocks\" style=\"width:100%;max-height:410px\"><rect x=\"20\" y=\"25\" width=\"440\" height=\"350\" rx=\"120\" fill=\"#f9dfbc\"/><circle cx=\"360\" cy=\"95\" r=\"43\" fill=\"#f4b947\"/><path d=\"M90 230a130 130 0 01260 0\" fill=\"none\" stroke=\"#e9a6a4\" stroke-width=\"35\"/><path d=\"M120 230a100 100 0 01200 0\" fill=\"none\" stroke=\"#f1c755\" stroke-width=\"24\"/><path d=\"M145 230a75 75 0 01150 0\" fill=\"none\" stroke=\"#86a98d\" stroke-width=\"22\"/><rect x=\"72\" y=\"246\" width=\"96\" height=\"92\" rx=\"17\" fill=\"#dd795c\"/><circle cx=\"123\" cy=\"290\" r=\"25\" fill=\"#fcebd0\"/><rect x=\"178\" y=\"246\" width=\"96\" height=\"92\" rx=\"17\" fill=\"#7b9c8c\"/><path d=\"M198 312l28-45 28 45z\" fill=\"#fcebd0\"/><rect x=\"284\" y=\"246\" width=\"96\" height=\"92\" rx=\"17\" fill=\"#c6b8d7\"/><path d=\"M315 276h35v35h-35z\" fill=\"#fcebd0\"/><path d=\"M64 110l9 14 16 2-12 12 2 17-15-8-15 8 3-17-12-12 16-2z\" fill=\"#7b9c8c\"/></svg><div class=\"kf-hero-caption\"><span>01 — A WORLD TO EXPLORE</span><span>↗</span></div></div></div>"
+          },
+          {
+            "type": "cards",
+            "title": "Room to become themselves",
+            "bg": "alt",
+            "accent": true,
+            "items": [
+              {
+                "title": "Wonder every day",
+                "text": "Open-ended play makes space for questions, ideas and small discoveries."
+              },
+              {
+                "title": "Grow together",
+                "text": "Shared stories and caring routines help children feel part of a community."
+              },
+              {
+                "title": "Create with confidence",
+                "text": "Art, movement and making give children many ways to express themselves."
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "title": "Childhood, at its own pace.",
+            "text": "Our demonstration school brings together playful learning, thoughtful spaces and a close partnership with families.",
+            "items": [
+              "Welcoming daily rhythms",
+              "Learning through hands-on exploration",
+              "Time for creativity and conversation"
+            ],
+            "bg": ""
+          },
+          {
+            "type": "cta",
+            "title": "Come imagine a day with us.",
+            "text": "Explore the demonstration enquiry page and see how a family can start a conversation.",
+            "button": "Plan a visit",
+            "href": "/contact/"
+          }
+        ]
+      },
+      {
+        "slug": "programmes",
+        "title": "Our Programmes",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "OUR PROGRAMMES",
+            "title": "A little more discovery, every day.",
+            "text": "An illustrative early-years journey, designed to show how a preschool can present its programmes."
+          },
+          {
+            "type": "cards",
+            "title": "A continuous learning journey",
+            "bg": "alt",
+            "accent": true,
+            "items": [
+              {
+                "title": "Early Explorers",
+                "text": "A gentle introduction to routines, sensory play and shared experiences."
+              },
+              {
+                "title": "Curious Creators",
+                "text": "Stories, construction, language and imaginative play invite new possibilities."
+              },
+              {
+                "title": "Ready for New Horizons",
+                "text": "Projects and everyday responsibilities encourage independence and collaboration."
+              }
+            ]
+          },
+          {
+            "type": "split",
+            "title": "One question can open a whole world.",
+            "text": "Experiences connect language, creative expression, movement and early mathematical thinking.",
+            "items": [
+              "Observe and ask",
+              "Explore and make",
+              "Share and reflect"
+            ],
+            "bg": "alt"
+          },
+          {
+            "type": "cta",
+            "title": "Find your family’s next step.",
+            "text": "Programme details and age groups here are illustrative, not an enrolment offer.",
+            "button": "Visit the enquiry page",
+            "href": "/contact/"
+          }
+        ]
+      },
+      {
+        "slug": "about",
+        "title": "About Us",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "OUR STORY",
+            "title": "A place to belong. Space to grow.",
+            "text": "Little Horizons is a demonstration brand exploring a warm, child-centred preschool experience."
+          },
+          {
+            "type": "split",
+            "title": "Thoughtful spaces. Meaningful relationships.",
+            "text": "We believe a clear website should help families understand a school’s approach before starting a conversation.",
+            "items": [
+              "A welcoming introduction",
+              "Clear programme information",
+              "A straightforward enquiry journey"
+            ],
+            "bg": ""
+          },
+          {
+            "type": "cards",
+            "title": "Our guiding ideas",
+            "bg": "alt",
+            "accent": true,
+            "items": [
+              {
+                "title": "Curiosity",
+                "text": "Leave space for children’s questions."
+              },
+              {
+                "title": "Connection",
+                "text": "Build trust through everyday interactions."
+              },
+              {
+                "title": "Creativity",
+                "text": "Value different ways of thinking and making."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "slug": "contact",
+        "title": "Contact",
+        "sections": [
+          {
+            "type": "hero",
+            "kicker": "VISIT US",
+            "title": "Let’s start a conversation.",
+            "text": "This is a demonstration enquiry form. Please use test information only; no real school visit will be booked."
+          },
+          {
+            "type": "form",
+            "title": "Plan a visit · Test enquiry",
+            "lead": "Send a sample question to test the website enquiry workflow.",
+            "submit": "Send test enquiry"
+          }
+        ]
+      }
+    ]
+  }
+}

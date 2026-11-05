@@ -1,0 +1,133 @@
+{
+  "date": "2026-11-05",
+  "scope": "Isolated clone fixtures and three live demonstration sites; existing customer data unchanged.",
+  "backend_tests": 25,
+  "console_browser_regression": "PASS",
+  "showcase_viewports": [
+    375,
+    768,
+    1024,
+    1440
+  ],
+  "showcase_browser": "PASS: navigation, keyboard Escape/focus, links, form labels, reduced motion, valid TLS",
+  "showcase_enquiries": "PASS: local database capture; external email disabled",
+  "feature_checks": [
+    {
+      "feature": "All console module read APIs",
+      "status": "PASS"
+    },
+    {
+      "feature": "Client agreement and domain management",
+      "status": "PASS"
+    },
+    {
+      "feature": "Plan management",
+      "status": "PASS"
+    },
+    {
+      "feature": "Ledger top-up and cost",
+      "status": "PASS"
+    },
+    {
+      "feature": "Invoice payment/idempotency, renewal, CSV and PDF exports",
+      "status": "PASS",
+      "resolution": "Registered CID fallback font and verified PDF outputs."
+    },
+    {
+      "feature": "DNS zone, record creation and deletion",
+      "status": "PASS"
+    },
+    {
+      "feature": "Public preview share creation and revocation",
+      "status": "PASS"
+    },
+    {
+      "feature": "PIN-protected customer portal and revocation",
+      "status": "UNSUPPORTED",
+      "error": "('/portal/7zuNWfwhUIwTtg', 410, b'<h1>\\xe5\\xae\\xa2\\xe6\\x88\\xb7\\xe9\\x97\\xa8\\xe6\\x88\\xb7\\xe5\\xb7\\xb2\\xe5\\x81\\x9c\\xe7\\x94\\xa8</h1><p>\\xe5\\xae\\xa2\\xe6\\x88\\xb7\\xe6\\x97\\xa0\\xe9\\x9c\\x80\\xe7\\x99\\xbb\\xe5\\xbd\\x95\\xef\\xbc\\x8c\\xe4\\xb8\\x80\\xe5\\x88\\x87\\xe7\\x94\\xb1\\xe6\\x88\\x91\\xe4\\xbb\\xac\\xe4\\xbb\\xa3\\xe7\\xae\\xa1\\xe3\\x80\\x82</p>')",
+      "resolution": "Customer portal intentionally returns HTTP 410 in current product; UI is a legacy entry. Not represented as working."
+    },
+    {
+      "feature": "Staff creation, admin/ops/finance permissions and account disable",
+      "status": "PASS",
+      "resolution": "Retested after PDF fix."
+    },
+    {
+      "feature": "MFA QR, TOTP, one-use recovery codes and password changes",
+      "status": "PASS"
+    },
+    {
+      "feature": "SMTP and daily digest with local mail sink (no external delivery)",
+      "status": "PASS"
+    },
+    {
+      "feature": "Real container suspend and resume",
+      "status": "PASS"
+    }
+  ],
+  "prompt_composition": [
+    {
+      "template": "preschool-showcase",
+      "modules": [
+        "conversion",
+        "reference",
+        "education",
+        "warm",
+        "copy",
+        "demo-truth",
+        "quality",
+        "ui-principles",
+        "ui-aesthetics",
+        "ui-nursery"
+      ],
+      "status": "PASS",
+      "real_model_quality": "not_evaluated"
+    },
+    {
+      "template": "robotics-showcase",
+      "modules": [
+        "conversion",
+        "robotics",
+        "minimal",
+        "copy",
+        "demo-truth",
+        "quality",
+        "ui-principles",
+        "ui-aesthetics",
+        "ui-robotics"
+      ],
+      "status": "PASS",
+      "real_model_quality": "not_evaluated"
+    },
+    {
+      "template": "tcm-showcase",
+      "modules": [
+        "booking",
+        "services",
+        "minimal",
+        "copy",
+        "clinic-scope",
+        "demo-truth",
+        "quality",
+        "ui-principles",
+        "ui-aesthetics",
+        "ui-wellness"
+      ],
+      "status": "PASS",
+      "real_model_quality": "not_evaluated"
+    }
+  ],
+  "limitations": [
+    "Customer portal is intentionally disabled (HTTP 410).",
+    "Real AI model quality, external mail provider delivery, actual payment processing and public authoritative DNS delegation are not claimed as verified.",
+    "Reference clones use existing block layouts; legacy nested navigation, video hero and carousel are not reproduced pixel for pixel."
+  ],
+  "fixed": [
+    "New site media directory permissions",
+    "Upload filename collision and permission error handling",
+    "Preview media routing and form placeholder",
+    "PDF font fallback registration",
+    "Unsupported form response-time promise"
+  ],
+  "visual_review": "UI UX Pro Max informed three reusable presets; layout and text contrast also validated by browser and automated checks."
+}
