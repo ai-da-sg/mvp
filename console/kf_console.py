@@ -32,6 +32,7 @@ import kf_domain_vault
 import kf_mcp
 import kf_automation
 import kf_tool_runtime
+import kf_providers
 import kf_builtin_tools
 import kf_dns_provider
 import kf_stepup
@@ -2191,7 +2192,7 @@ input[type=color]{height:38px;padding:2px;cursor:pointer}
 .sidebar{position:sticky;top:20px;max-height:calc(100dvh - 40px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
 #aiContextOptions,#mcpForm fieldset{min-inline-size:0;border:1px solid var(--line);border-radius:10px;padding:16px;margin:16px 0}
 #aiContextOptions label,#mcpPurposes label{display:inline-block;margin:6px 14px 6px 0}
-#mcpForm textarea,#workflowDNS{width:100%;max-width:100%;padding:10px;background:var(--input,#0d1117);color:var(--fg);border:1px solid var(--line);border-radius:6px;resize:vertical}
+#providerForm textarea,#providerForm input,#providerForm select{max-width:100%;box-sizing:border-box}#providerForm textarea{width:100%;background:var(--input,#0d1117);color:var(--fg);border:1px solid var(--line);padding:10px}#providerForm fieldset{min-inline-size:0;margin:16px 0;border:1px solid var(--line)}#providerForm label{margin:8px 0}#mcpForm textarea,#workflowDNS{width:100%;max-width:100%;padding:10px;background:var(--input,#0d1117);color:var(--fg);border:1px solid var(--line);border-radius:6px;resize:vertical}
 #p-automation pre,#mcpResult pre{max-height:360px;overflow:auto}
 #p-automation .field{min-width:min(180px,100%)}
 #p-automation summary,#mcpForm summary{padding:10px 0;cursor:pointer}
@@ -2242,7 +2243,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <details class="nav-group" data-group="0" open><summary>站点运营</summary><div class="submenu"><button type="button" class="tab" data-t="automation" aria-controls="p-automation">运营助手</button><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
 <details class="nav-group" data-group="1"><summary>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
 <details class="nav-group" data-group="2"><summary>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
-<details class="nav-group" data-group="3"><summary>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
+<details class="nav-group" data-group="3"><summary>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
 <div class="page-heading"><div><div class="breadcrumb" id="breadcrumb">站点运营 / 站点总览</div><h2 id="pageTitle" tabindex="-1">站点总览</h2></div><span id="editorGlobalState" role="status"></span></div>
 <div id="globalMsg" class="msg hidden" role="alert" tabindex="-1"></div>
@@ -2380,24 +2381,31 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <form id="autoForm"><div class="formrow"><div class="field"><label for="autoSource">工具来源</label><select id="autoSource"><option value="builtin">MVP 内置业务</option></select></div><div class="field"><label for="autoTool">操作</label><select id="autoTool"></select></div></div>
 <div id="autoFields"></div><button type="submit" id="autoPrepare">生成操作预览</button><div id="autoMsg" class="msg" role="status"></div></form>
 <section id="autoReview" class="hidden" style="margin-top:20px" aria-live="polite"></section>
-<details id="autoDNSConfig" style="margin-top:24px"><summary>DNS 执行服务商（管理员）</summary><p class="hint">仅为当前站点配置。Cloudflare 请使用仅授权对应 Zone 的 DNS API Token。保存配置不会修改解析。</p>
-<form id="autoDNSForm"><div class="formrow"><div class="field"><label for="autoDNSProvider">服务商</label><select id="autoDNSProvider"><option value="disabled">未启用</option><option value="local">本机权威 DNS</option><option value="cloudflare">Cloudflare</option></select></div><div class="field"><label for="autoDNSZone">Cloudflare Zone ID</label><input id="autoDNSZone" maxlength="32"></div><div class="field"><label for="autoDNSToken">API Token（留空保留）</label><input id="autoDNSToken" type="password" autocomplete="new-password"></div></div><label><input id="autoDNSClear" type="checkbox">清除凭据</label><button type="submit">保存 DNS 执行配置</button><div id="autoDNSMsg" class="msg" role="status"></div></form></details>
+<details id="autoDNSConfig" style="margin-top:24px"><summary>DNS 执行服务商（管理员）</summary><p class="hint">仅为当前站点配置。Cloudflare 请使用仅授权对应 Zone 的 DNS API Token。其他服务商请先在系统设置保存账号；AWS 填 Hosted Zone ID，Google 填 Managed Zone 名称，Azure / 阿里云 / 腾讯云填区域域名。保存配置不会修改解析。</p>
+<form id="autoDNSForm"><div class="formrow"><div class="field"><label for="autoDNSProvider">服务商</label><select id="autoDNSProvider"><option value="disabled">未启用</option><option value="local">本机权威 DNS</option><option value="cloudflare">Cloudflare</option><option value="aws">AWS Route 53</option><option value="azure">Azure DNS</option><option value="gcp">Google Cloud DNS</option><option value="aliyun">阿里云 DNS</option><option value="tencent">腾讯云 DNSPod</option><option value="namecom">Name.com</option></select></div><div class="field"><label for="autoDNSAccount">供应商账号</label><select id="autoDNSAccount"><option value="">使用下方 Cloudflare Token / 本机</option></select></div><div class="field"><label for="autoDNSZone">DNS 区域（Zone ID / Managed Zone 名称 / 区域域名）</label><input id="autoDNSZone" maxlength="253"></div><div class="field"><label for="autoDNSToken">API Token（留空保留）</label><input id="autoDNSToken" type="password" autocomplete="new-password"></div></div><label><input id="autoDNSClear" type="checkbox">清除凭据</label><button type="submit">保存 DNS 执行配置</button><div id="autoDNSMsg" class="msg" role="status"></div></form></details>
 <details style="margin-top:24px"><summary>创建网站交付流程</summary><p class="hint">为当前站点生成草稿，预览确认后发布，再执行所选 DNS 变更、检查 HTTPS，最后预览确认交付邮件。已完成步骤不会重复执行。</p>
 <form id="workflowForm"><div class="fld"><label for="workflowBrief">建站要求</label><textarea id="workflowBrief" rows="4" maxlength="6000" required></textarea></div><div class="formrow"><div class="field"><label for="workflowProfile">模型配置 ID（留空使用默认）</label><input id="workflowProfile"></div><div class="field"><label for="workflowRecipient">交付邮件收件人（留空跳过发送）</label><input id="workflowRecipient" type="email"></div></div><label><input id="workflowInherit" type="checkbox">沿用 AI 建站页当前选择的提示词、风格和参考资料（须为同一站点）</label><label><input id="workflowReplace" type="checkbox">允许替换当前未发布草稿（旧草稿会备份）</label>
 <details><summary>可选 DNS 变更</summary><label for="workflowDNS">变更数组（JSON，最多 5 条）</label><textarea id="workflowDNS" rows="4" spellcheck="false">[]</textarea><p class="hint">每条包含 operation（add/update/delete）、record_id（修改/删除）和 record（新增/修改）。留空数组保持现有解析。每项变更会在执行前单独预览确认。</p></details>
 <button type="submit">创建交付流程</button><div id="workflowMsg" class="msg" role="status"></div></form></details>
 <h3>交付流程</h3><div id="autoWorkflows"></div>
-<h3>操作记录</h3><div id="autoActions"></div>
+<details id="autoMailConfig"><summary>本站点邮件发送账号（管理员）</summary><form id="autoMailForm"><label for="autoMailAccount">邮件供应商账号</label><select id="autoMailAccount"></select><p class="hint">未绑定时使用系统默认发送配置。绑定后影响运营助手与交付流程的邮件；保存不会发送邮件。</p><button type="submit">保存邮件账号绑定</button><div id="autoMailMsg" class="msg" role="status"></div></form></details><h3>操作记录</h3><div id="autoActions"></div>
 </div>
+<div id="p-providers" class="hidden">
+<p class="hint">统一管理云平台、DNS 和邮件账号。凭据加密保存且不回显；为每个账号选择站点与能力，再在运营助手绑定使用。云资源清单覆盖账号授权范围，IAM / RAM / RBAC 应同时限制实际资源。</p>
+<div class="formrow"><div class="field"><label for="providerSearch">搜索供应商账号</label><input id="providerSearch" type="search"></div><button id="providerNew" type="button">添加供应商账号</button><button id="providerRefresh" type="button" class="ghost">刷新</button></div>
+<div id="providerList"></div><div id="providerMsg" class="msg" role="status"></div>
+<form id="providerForm" class="hidden"><h3>供应商账号配置</h3><div class="formrow"><div class="field"><label for="providerId">账号 ID</label><input id="providerId" required pattern="[a-z][a-z0-9_-]{1,39}"></div><div class="field"><label for="providerName">账号名称</label><input id="providerName" required></div><div class="field"><label for="providerKind">供应商</label><select id="providerKind"></select></div></div>
+<div id="providerFields" class="formrow"></div><fieldset><legend>允许使用的能力</legend><div id="providerCaps"></div></fieldset><label for="providerSites">允许使用的站点（可多选）</label><select id="providerSites" multiple size="4" style="width:100%"></select><label><input id="providerEnabled" type="checkbox" checked>启用账号</label><div><button type="submit">保存供应商账号</button><button type="button" class="ghost" id="providerCancel">取消</button></div><div id="providerFormMsg" class="msg" role="status"></div></form>
+<details><summary>供应商能力对照</summary><div id="providerMatrix" style="overflow:auto"></div><p class="hint">通用 SMTP 可连接支持密码或应用密码认证的企业邮箱；OAuth-only SMTP 尚未支持。AWS role 使用服务器 SDK 凭据链，keys 使用所填凭据。复杂 DNS 路由、云主机创建/销毁、CDN 配置和数据库迁移不在本页直接执行范围内。</p></details></div>
 <div id="p-mcp" class="hidden">
 <p class="hint">管理远程 MCP 服务，测试连接并查看工具、资源及提示词。配置用途、站点范围与白名单后，可在运营助手调用，并将只读结果用于 AI 建站。</p>
-<p class="hint">支持公开 HTTPS（443 端口）的 Streamable HTTP，协议 2025-06-18 / 2025-03-26；认证支持无认证或 Bearer Token。暂不支持本地 stdio、旧 SSE 端点或 OAuth 登录。</p>
-<div class="formrow"><div class="field"><label for="mcpSearch">搜索 MCP 名称、地址或说明</label><input id="mcpSearch" type="search"></div><button id="mcpRefresh" type="button" class="ghost">刷新</button><button id="mcpNew" type="button">添加 MCP 服务</button></div>
+<p class="hint">支持公开 HTTPS（443 端口）的 Streamable HTTP，协议 2025-06-18 / 2025-03-26；认证支持无认证、Bearer Token 或已保存的 AWS / Cloudflare 账号。暂不支持本地 stdio、旧 SSE 端点或 OAuth 登录。</p>
+<div class="formrow"><div class="field"><label for="mcpPreset">官方 MCP 预设</label><select id="mcpPreset"><option value="">请选择</option><option value="cloudflare-docs">Cloudflare 文档</option><option value="cloudflare-api">Cloudflare API</option><option value="aws-knowledge">AWS Knowledge</option><option value="aws-api">AWS MCP（新加坡）</option><option value="custom">其他标准 HTTPS MCP</option></select></div><button id="mcpUsePreset" type="button" class="ghost">使用预设</button></div><div class="formrow"><div class="field"><label for="mcpSearch">搜索 MCP 名称、地址或说明</label><input id="mcpSearch" type="search"></div><button id="mcpRefresh" type="button" class="ghost">刷新</button><button id="mcpNew" type="button">添加 MCP 服务</button></div>
 <div id="mcpList" style="margin-top:16px"></div><div id="mcpMsg" class="msg" role="status"></div>
 <form id="mcpForm" class="hidden"><h3 id="mcpFormTitle">MCP 服务配置</h3>
 <div class="formrow"><div class="field"><label for="mcpId">配置 ID</label><input id="mcpId" required pattern="[a-z][a-z0-9_-]{1,39}" maxlength="40"></div><div class="field"><label for="mcpName">服务名称</label><input id="mcpName" required maxlength="80"></div></div>
 <div class="fld"><label for="mcpUrl">MCP 服务地址</label><input id="mcpUrl" type="url" required maxlength="2000" placeholder="https://example.com/mcp"></div>
-<div class="fld"><label for="mcpToken">Bearer Token（留空保留原凭据）</label><input id="mcpToken" type="password" maxlength="4096" autocomplete="new-password"></div>
+<div class="fld"><label for="mcpAccount">供应商账号认证（可选）</label><select id="mcpAccount"><option value="">使用下方 Bearer Token / 无认证</option></select></div><div class="fld"><label for="mcpToken">Bearer Token（留空保留原凭据）</label><input id="mcpToken" type="password" maxlength="4096" autocomplete="new-password"></div>
 <label><input id="mcpClear" type="checkbox">清除已保存凭据</label>
 <div class="fld"><label for="mcpDescription">服务说明</label><textarea id="mcpDescription" rows="3" maxlength="1000"></textarea></div>
 <label><input id="mcpEnabled" type="checkbox" checked>启用此服务</label>
@@ -2644,8 +2652,8 @@ let STATE={sites:[],invoices:[],plans:[]};
 let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
-    ? ['automation','ai','prompts','layout','design','media','share','dns','maint','team','llm','mcp']
-    : (ROLE==='admin' ? [] : ['team','llm','mcp']);
+    ? ['automation','ai','prompts','layout','design','media','share','dns','maint','team','llm','mcp','providers']
+    : (ROLE==='admin' ? [] : ['team','llm','mcp','providers']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
   });
@@ -2671,7 +2679,7 @@ function navigateTo(key, updateHistory=true){
  $('#navGroups').classList.remove('expanded');$('#navToggle').setAttribute('aria-expanded','false');
  if(updateHistory && location.hash!=='#'+key) history.pushState(null,'','#'+key);
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
- const initializers={automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
+ const initializers={providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
  if(updateHistory)$('#pageTitle').focus({preventScroll:true});
  return true;
@@ -3924,7 +3932,7 @@ siteDomain.addEventListener('input',()=>{if(siteSlug.dataset.manual)return;const
 async function refreshConsole(){try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/ai.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script></body></html>"""
+<script src="/ai.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -4314,7 +4322,7 @@ def automation_store():
     with _AUTOMATION_LOCK:
         if _AUTOMATION is None:
             providers=kf_dns_provider.DNSProviders(BASE,dnsmod())
-            callbacks={'action':lambda ident,user:automation_store().actions.get(ident,user),'draft':read_draft,'context':selected_site_context,'smtp':lambda:settings().get('smtp',{}),
+            callbacks={'action':lambda ident,user:automation_store().actions.get(ident,user),'draft':read_draft,'context':selected_site_context,'smtp':lambda:settings().get('smtp',{}),'site_smtp':lambda slug:kf_providers.mail_config(BASE,slug,lambda:settings().get('smtp',{})),
                        'generate':automation_generate,'publish':automation_publish,'maintenance':automation_maintenance,'model':lambda pid:ai_store().resolve(pid)}
             builtins=kf_builtin_tools.BusinessTools(BASE,callbacks,providers).registry()
             _AUTOMATION=kf_automation.Automation(BASE,automation_context,automation_access,automation_totp,builtins)
@@ -4456,10 +4464,15 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/api/automation/action/'):
                 item=store.actions.get(path.rsplit('/',1)[-1],None if self.user_role=='admin' else self.user)
                 return self._send(200,{'item':item})
+            if path=='/api/automation/providers':
+                if self.user_role!='admin':return self._send(403,{'error':'仅管理员可管理供应商账号'})
+                return self._send(200,{'catalog':kf_providers.CATALOG,'items':kf_providers.ProviderStore(BASE).public()})
             if path=='/api/automation/config':
                 providers=kf_dns_provider.DNSProviders(BASE,dnsmod()).public() if self.user_role=='admin' else []
                 return self._send(200,{'tools':[{'name':n,'purpose':v['purpose']} for n,v in store.builtins.items()],
-                                       'dns_providers':providers,'can_configure':self.user_role=='admin'})
+                                       'dns_providers':providers,'can_configure':self.user_role=='admin',
+                                       'provider_accounts':[{k:i[k] for k in ('id','name','provider','sites','capabilities')} for i in kf_providers.ProviderStore(BASE).public() if i['enabled']],
+                                       'mail_bindings':kf_ai.read_json(BASE/'console'/'provider-bindings.json',{}) if self.user_role=='admin' else {}})
             return self._send(404,{'error':'not found'})
         except kf_tool_runtime.ActionDenied as exc:return self._send(403,{'error':str(exc)})
         except kf_ai.AIError as exc:return self._send(400,{'error':str(exc)})
@@ -4470,6 +4483,18 @@ class Handler(BaseHTTPRequestHandler):
         if session_user(self.headers.get('Cookie'))!=self.user:return self._send(403,{'error':'请从 MVP 登录页登录后操作'})
         store=automation_store()
         try:
+            if path=='/api/automation/providers':
+                if self.user_role!='admin':raise kf_tool_runtime.ActionDenied('仅管理员可管理供应商账号')
+                if not isinstance(body.get('sites',[]),list):raise kf_ai.AIError('站点范围必须是列表')
+                for slug in body.get('sites',[]):automation_context(slug)
+                item=kf_providers.ProviderStore(BASE).save(body,self.user)
+                audit(self.user,'provider_'+str(body.get('action','save')),item['id'],item['provider'])
+                return self._send(200,{'item':item})
+            if path=='/api/automation/mail-binding':
+                if self.user_role!='admin':raise kf_tool_runtime.ActionDenied('仅管理员可绑定邮件账号')
+                automation_context(body.get('slug'))
+                item=kf_providers.bind_mail(BASE,body);audit(self.user,'provider_mail_bind',body['slug'],item['account_id'])
+                return self._send(200,{'item':item})
             if path=='/api/automation/workflow/create':
                 item=workflow_store().create(self.user,body)
                 audit(self.user,'workflow_create',item['id'],item['slug'])
@@ -4708,7 +4733,7 @@ class Handler(BaseHTTPRequestHandler):
         path = raw.rstrip("/") or "/"
         if path == "/":
             return self._send(200, PAGE, "text/html; charset=utf-8")
-        if path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js"):
+        if path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})

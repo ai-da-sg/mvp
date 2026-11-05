@@ -5,3 +5,4 @@ dnspython>=2.4       # DNS 托管与解析检查
 qrcode>=7.4,<8      # 两步验证绑定二维码（本地生成）
 cryptography>=46.0.7,<47  # 域名管理密码的认证加密（Fernet）
 jsonschema>=4.25.1,<4.26  # MCP tool input validation (Python 3.9+)
+boto3>=1.40.76,<1.41  # AWS signed APIs / SDK credential chain (Python 3.9+)

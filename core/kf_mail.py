@@ -34,6 +34,30 @@ def send(to,subject,body,smtp,request_id=''):
     if len(senders)!=1:raise AIError('请配置单个发件人')
     display,mailbox=senders[0];mailbox=address(mailbox);frm=formataddr((display,mailbox)) if display else mailbox
     provider=smtp.get('provider','smtp');receipt={'state':'accepted','provider':provider,'delivered':None}
+    if provider=='ses':
+        from kf_cloud_api import aws_call
+        data=aws_call(smtp,'sesv2','send_email',FromEmailAddress=frm,Destination={'ToAddresses':[msgdata['to']]},
+            Content={'Simple':{'Subject':{'Data':msgdata['subject'],'Charset':'UTF-8'},'Body':{'Text':{'Data':msgdata['body'],'Charset':'UTF-8'}}}})
+        if not data.get('MessageId'):raise AIError('SES 未返回消息编号，请核实发送状态')
+        return {**receipt,'provider_id':data['MessageId']}
+    if provider in ('postmark','brevo','mailgun'):
+        from kf_cloud_api import request,quote
+        import base64
+        key=smtp.get('api_key','')
+        if not key:raise AIError('邮件 API 未配置')
+        if provider=='postmark':
+            data=request('https://api.postmarkapp.com/email','POST',{'From':frm,'To':msgdata['to'],'Subject':msgdata['subject'],'TextBody':msgdata['body']},{'X-Postmark-Server-Token':key})
+            if data.get('ErrorCode',0):raise AIError('Postmark 拒绝发送，请核对发件人和权限')
+            ident=data.get('MessageID')
+        elif provider=='brevo':
+            data=request('https://api.brevo.com/v3/smtp/email','POST',{'sender':{'email':mailbox,**({'name':display} if display else {})},'to':[{'email':msgdata['to']}],'subject':msgdata['subject'],'textContent':msgdata['body']},{'api-key':key})
+            ident=data.get('messageId')
+        else:
+            host='api.eu.mailgun.net' if smtp.get('region')=='eu' else 'api.mailgun.net'
+            data=request('https://'+host+'/v3/'+quote(smtp['domain'])+'/messages','POST',{'from':frm,'to':msgdata['to'],'subject':msgdata['subject'],'text':msgdata['body']},{'Authorization':'Basic '+base64.b64encode(('api:'+key).encode()).decode()},form=True)
+            ident=data.get('id')
+        if not ident:raise AIError('邮件服务未返回消息编号，请核实发送状态')
+        return {**receipt,'provider_id':str(ident)[:200]}
     if provider in ('resend','sendgrid'):
         key=smtp.get('api_key','')
         if not key:raise AIError('邮件 API 未配置')
@@ -74,6 +98,8 @@ def delivery_status(receipt,smtp,recipient):
     import urllib.error
     provider=receipt.get('provider','smtp');ident=receipt.get('provider_id','')
     if provider=='smtp':return {'state':'unknown','delivered':None,'message':'SMTP 没有通用投递查询接口，请凭 Message-ID 在邮件服务商后台或退信记录中核实','message_id':receipt.get('message_id','')}
+    if provider in ('ses','postmark','brevo','mailgun'):
+        return {'state':'unknown','delivered':None,'provider':provider,'provider_id':ident,'message':'已保存发送回执；此适配器尚未接入投递事件，请凭消息编号在服务商后台核实，勿重复发送'}
     if not ident or not re.fullmatch(r'[A-Za-z0-9._+=/-]{1,200}',ident):raise AIError('发送记录缺少可查询的服务商消息编号')
     if smtp.get('provider')!=provider or not smtp.get('api_key'):raise AIError('原邮件服务商凭据不可用，请在原服务商后台核实')
     if provider=='resend':url='https://api.resend.com/emails/'+urllib.parse.quote(ident,safe='')

@@ -292,6 +292,19 @@ class ConsoleTests(unittest.TestCase):
             self.assertEqual(send.call_count,1)
         self.assertNotIn('Approved content',(self.base/'console/audit.log').read_text())
 
+    def test_provider_account_permissions_and_redaction(self):
+        body={'id':'name-account','name':'Name.com','provider':'namecom','enabled':True,'sites':['demo'],'capabilities':['dns'],'values':{'username':'api-user','token':'private-provider-token'}}
+        self.assertEqual(self.request('/api/automation/providers',user=None)[0],401)
+        for user in ('ops-test','finance-test'):
+            self.assertEqual(self.request('/api/automation/providers',user=user)[0],403)
+            self.assertEqual(self.request('/api/automation/providers',body,user=user)[0],403)
+        status,data=self.request('/api/automation/providers',body);self.assertEqual(status,200,data)
+        for path in ('/api/automation/providers','/api/automation/config'):
+            status,data=self.request(path);self.assertEqual(status,200);self.assertNotIn('private-provider-token',json.dumps(data));self.assertNotIn('gAAAA',json.dumps(data))
+        self.assertNotIn('private-provider-token',(self.base/'console/audit.log').read_text())
+        self.assertEqual(self.request('/api/automation/providers',dict(body,version=0))[0],409)
+        self.assertEqual(self.request('/api/automation/providers',{'action':'delete','id':'name-account','version':1})[0],200)
+
     def test_mcp_admin_permissions_and_credential_redaction(self):
         import kf_mcp
         body={'id':'fixture','name':'Fixture','url':'https://example.com/mcp','token':'test-mcp-token','enabled':True}

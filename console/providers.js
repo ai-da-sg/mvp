@@ -1,0 +1,24 @@
+/* Account credentials are write-only and cleared when the page is hidden. */
+let PROVIDERS={catalog:{},items:[]},PROVIDER_EDIT=null;
+const PROVIDER_CAPS={dns:'DNS 解析',cloud:'云资源清单（只读）',mail:'邮件发送',mcp:'官方 MCP 认证'};
+async function loadProviders(){PROVIDERS=await aiRequest('/api/automation/providers');renderProviders();}
+function renderProviders(){
+ const q=$('#providerSearch').value.trim().toLowerCase();
+ $('#providerList').innerHTML=(PROVIDERS.items||[]).filter(i=>(i.name+' '+i.provider+' '+i.id).toLowerCase().includes(q)).map(i=>`<article class="dom-row"><div class="h"><strong>${esc(i.name)}</strong><span class="pill">${esc(PROVIDERS.catalog[i.provider]?.name||i.provider)}</span><span>${i.enabled?'已启用':'已停用'}</span><button type="button" data-provider-edit="${esc(i.id)}">编辑</button><button type="button" class="ghost" data-provider-delete="${esc(i.id)}">删除</button></div><p>${esc(i.capabilities.map(c=>PROVIDER_CAPS[c]).join(' · '))}</p><p class="hint">授权站点：${esc(i.sites.join('、'))} · 配置版本 ${i.version}</p></article>`).join('')||'<p class="hint">尚未配置供应商账号。</p>';
+ $('#providerMatrix').innerHTML='<table><thead><tr><th>供应商</th><th>已接入能力</th></tr></thead><tbody>'+Object.entries(PROVIDERS.catalog||{}).map(([k,p])=>`<tr><td>${esc(p.name)}</td><td>${esc(p.capabilities.map(c=>PROVIDER_CAPS[c]).join('、'))}${p.note?`<p class="hint">${esc(p.note)}</p>`:''}</td></tr>`).join('')+'</tbody></table>';
+}
+function providerFields(){
+ const p=PROVIDERS.catalog[$('#providerKind').value];if(!p)return;
+ const item=PROVIDER_EDIT?.provider===$('#providerKind').value?PROVIDER_EDIT:null;
+ $('#providerFields').innerHTML=(p.note?`<p class="hint">${esc(p.note)}</p>`:'')+p.fields.map(f=>`<div class="field"><label for="provider-${esc(f.key)}">${esc(f.label)}${f.secret?'（留空保留已保存值）':''}</label>${f.key==='service_account'?`<textarea id="provider-${f.key}" name="${f.key}" rows="5" data-secret autocomplete="off"></textarea>`:`<input id="provider-${f.key}" name="${f.key}" type="${f.secret?'password':'text'}" value="${esc(f.secret?'':item?.config?.[f.key]??f.default)}" autocomplete="${f.secret?'new-password':'off'}" ${f.secret?'data-secret':''}>`}</div>`).join('');
+ $('#providerCaps').innerHTML=p.capabilities.map(c=>`<label><input type="checkbox" value="${c}" ${item?.capabilities.includes(c)?'checked':''}>${PROVIDER_CAPS[c]}</label>`).join('');
+}
+function editProvider(item){PROVIDER_EDIT=item;$('#providerForm').reset();$('#providerId').value=item?.id||'';$('#providerId').readOnly=!!item;$('#providerName').value=item?.name||'';$('#providerEnabled').checked=item?item.enabled:true;
+ $('#providerKind').innerHTML=Object.entries(PROVIDERS.catalog).map(([k,p])=>`<option value="${k}">${esc(p.name)}</option>`).join('');if(item)$('#providerKind').value=item.provider;$('#providerKind').disabled=!!item;
+ $('#providerSites').innerHTML=STATE.sites.map(s=>`<option value="${esc(s.slug)}" ${item?.sites.includes(s.slug)?'selected':''}>${esc(s.company+' / '+s.domain)}</option>`).join('');providerFields();$('#providerForm').classList.remove('hidden');aiMessage('#providerFormMsg','');$('#providerName').focus();}
+$('#providerNew').onclick=()=>editProvider(null);$('#providerKind').onchange=providerFields;$('#providerSearch').oninput=renderProviders;
+$('#providerRefresh').onclick=()=>loadProviders().catch(e=>aiMessage('#providerMsg',e.message,true));
+$('#providerCancel').onclick=()=>{$('#providerForm').classList.add('hidden');$('#providerFields').innerHTML='';PROVIDER_EDIT=null;};
+$('#providerForm').onsubmit=async e=>{e.preventDefault();e.submitter.disabled=true;try{const values=Object.fromEntries(new FormData(e.target));await aiRequest('/api/automation/providers',{id:$('#providerId').value,name:$('#providerName').value,provider:$('#providerKind').value,version:PROVIDER_EDIT?.version,enabled:$('#providerEnabled').checked,sites:[...$('#providerSites').selectedOptions].map(v=>v.value),capabilities:[...document.querySelectorAll('#providerCaps input:checked')].map(v=>v.value),values});$('#providerCancel').click();await loadProviders();aiMessage('#providerMsg','供应商账号已保存；未执行 DNS 修改或邮件发送。');}catch(err){aiMessage('#providerFormMsg',err.message,true);}finally{e.submitter.disabled=false;}};
+$('#providerList').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const item=PROVIDERS.items.find(i=>i.id===(b.dataset.providerEdit||b.dataset.providerDelete));if(!item)return;if(b.dataset.providerEdit){editProvider(item);return;}if(!confirm('删除账号会使引用它的 DNS、邮件与 MCP 配置不可用，继续删除？'))return;try{await aiRequest('/api/automation/providers',{action:'delete',id:item.id,version:item.version});$('#providerCancel').click();await loadProviders();}catch(err){aiMessage('#providerMsg',err.message,true);}};
+new MutationObserver(()=>{if($('#p-providers').classList.contains('hidden'))document.querySelectorAll('#providerFields [data-secret]').forEach(e=>e.value='');}).observe($('#p-providers'),{attributes:true,attributeFilter:['class']});

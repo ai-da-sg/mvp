@@ -45,7 +45,7 @@ class Automation:
             allowed={p.get('name') for p in params if isinstance(p,dict)}
             required={p.get('name') for p in params if isinstance(p,dict) and p.get('required')}
             if not set(args)<=allowed or not required<=set(args):raise AIError('提示词参数缺失或包含未知项')
-        request={'server':ident,'server_version':item['version'],'slug':slug,'purpose':purpose,'kind':kind,'name':name,'arguments':args,'schema':schema}
+        request={'server':ident,'server_version':item['version'],'account_version':getattr(token,'version',None),'slug':slug,'purpose':purpose,'kind':kind,'name':name,'arguments':args,'schema':schema}
         return self.actions.prepare(user=user,slug=slug,tool='mcp.'+ident+'.'+kind+'.'+name,
             arguments=request,mode=mode,summary=item['name']+' / '+name,
             snapshot={'domain':context['domain'],'definition':fingerprint(found)},request_key=body.get('request_key',''))
@@ -56,6 +56,7 @@ class Automation:
         if item['tool'].startswith('mcp.'):
             current,token,args,mode=self.mcp.resolve_call(request['server'],item['slug'],purpose,request['kind'],request['name'],
                 request['arguments'],context,request['server_version'])
+            if getattr(token,'version',None)!=request.get('account_version'):raise ActionConflict('供应商账号已改变，请重新准备操作')
             if mode!=item['mode'] or args!=request['arguments'] or context['domain']!=item['snapshot']['domain']:
                 raise ActionConflict('站点或授权规则已改变，请重新准备操作')
         else:

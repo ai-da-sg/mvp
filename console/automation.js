@@ -1,13 +1,13 @@
 /* Reviewed operations use immutable server tickets; browser state never authorizes execution. */
 let AUTO_CONFIG={tools:[],dns_providers:[]},AUTO_SERVERS=[],AUTO_ITEM=null,AUTO_RECORDS=[];
 window.aiContextActions=window.aiContextActions||[];
-const AUTO_LABELS={'site.context':'读取建站资料','site.generate':'生成网站草稿','site.publish':'发布网站页面','dns.inspect':'检查域名与邮件解析','dns.change':'修改 DNS 记录','dns.verify':'验证已提交的 DNS 变更','mail.inspect':'检查邮件域名配置','mail.draft':'生成邮件草稿','mail.send':'发送邮件','mail.status':'查询邮件投递状态','maintenance.inspect':'运行运营健康检查','site.https':'检查 HTTPS 与证书'};
+const AUTO_LABELS={'cloud.inspect':'查询云资源清单','site.context':'读取建站资料','site.generate':'生成网站草稿','site.publish':'发布网站页面','dns.inspect':'检查域名与邮件解析','dns.change':'修改 DNS 记录','dns.verify':'验证已提交的 DNS 变更','mail.inspect':'检查邮件域名配置','mail.draft':'生成邮件草稿','mail.send':'发送邮件','mail.status':'查询邮件投递状态','maintenance.inspect':'运行运营健康检查','site.https':'检查 HTTPS 与证书'};
 const AUTO_STATES={prepared:'待执行',running:'执行中',succeeded:'已完成',failed:'失败',uncertain:'结果待核实',interrupted:'中断待核实',cancelled:'已取消'};
 function autoField(name,label,type='text',value='',required=false){return `<div class="field"><label for="auto-${name}">${esc(label)}</label><input id="auto-${name}" name="${name}" type="${type}" value="${esc(value)}" ${required?'required':''}></div>`;}
 function autoText(name,label,value='',required=false){return `<div class="fld"><label for="auto-${name}">${esc(label)}</label><textarea id="auto-${name}" name="${name}" rows="5" ${required?'required':''}>${esc(value)}</textarea></div>`;}
 async function loadAutomation(){
  const previous=window.autoPendingAction?.slug||$('#autoSite').value;$('#autoSite').innerHTML=(STATE.sites||[]).map(s=>`<option value="${esc(s.slug)}">${esc(s.company)} / ${esc(s.domain)}</option>`).join('');if(previous)$('#autoSite').value=previous;
- AUTO_CONFIG=await aiRequest('/api/automation/config');$('#autoDNSConfig').hidden=!AUTO_CONFIG.can_configure;
+ AUTO_CONFIG=await aiRequest('/api/automation/config');$('#autoDNSConfig').hidden=!AUTO_CONFIG.can_configure;$('#autoMailConfig').hidden=!AUTO_CONFIG.can_configure;
  await autoSources();await autoHistory();await autoWorkflows();
  if(window.autoPendingAction){const item=window.autoPendingAction;window.autoPendingAction=null;showAutoReview(item);}
  if(!AUTO_POLL)AUTO_POLL=setInterval(()=>{if(!$('#p-automation').classList.contains('hidden'))autoWorkflows().catch(e=>aiMessage('#workflowMsg',e.message,true));},5000);
@@ -17,7 +17,8 @@ async function autoSources(){
  const slug=$('#autoSite').value;if(!slug){$('#autoFields').innerHTML='<p>请先创建站点。</p>';return;}
  const d=await aiRequest('/api/automation/available',{slug,purpose:$('#autoPurpose').value});AUTO_SERVERS=d.items||[];
  $('#autoSource').innerHTML='<option value="builtin">MVP 内置业务</option>'+AUTO_SERVERS.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');autoTools();
- const config=(AUTO_CONFIG.dns_providers||[]).find(x=>x.slug===slug);$('#autoDNSProvider').value=config?.provider||'disabled';$('#autoDNSZone').value=config?.zone_id||'';$('#autoDNSToken').value='';$('#autoDNSClear').checked=false;
+ const config=(AUTO_CONFIG.dns_providers||[]).find(x=>x.slug===slug);$('#autoDNSProvider').value=config?.provider||'disabled';$('#autoDNSZone').value=config?.zone_id||'';$('#autoDNSToken').value='';$('#autoDNSClear').checked=false;autoDNSAccounts(config?.account_id||'');
+ $('#autoMailAccount').innerHTML='<option value="">系统默认发送配置</option>'+(AUTO_CONFIG.provider_accounts||[]).filter(a=>a.sites.includes(slug)&&a.capabilities.includes('mail')).map(a=>`<option value="${esc(a.id)}">${esc(a.name+' / '+a.provider)}</option>`).join('');$('#autoMailAccount').value=AUTO_CONFIG.mail_bindings?.[slug]?.account_id||'';
 }
 function autoTools(){
  const source=$('#autoSource').value,purpose=$('#autoPurpose').value;
@@ -33,7 +34,7 @@ async function autoFields(){
  const name=$('#autoTool').value;let html='';
  if($('#autoSource').value!=='builtin'){
   html=autoText('arguments','工具或提示词参数（JSON 对象；资源读取留空）','{}')+'<p class="hint">固定参数由管理员的绑定规则补入。服务端会验证参数、站点范围及执行规则。</p>';
- }else if(['dns.inspect','mail.inspect','maintenance.inspect'].includes(name))html=autoField('selectors','DKIM 选择器（可选，逗号分隔）');
+ }else if(name==='cloud.inspect'){html='<div class="field"><label for="auto-account_id">供应商账号（已授权当前站点）</label><select id="auto-account_id" name="account_id" required><option value="">请选择</option>'+(AUTO_CONFIG.provider_accounts||[]).filter(a=>a.sites.includes($('#autoSite').value)&&a.capabilities.includes('cloud')).map(a=>`<option value="${esc(a.id)}">${esc(a.name+' / '+a.provider)}</option>`).join('')+'</select></div><p class="hint">查询账号授权区域/资源组/项目的资源清单，不修改云资源。</p>';}else if(['dns.inspect','mail.inspect','maintenance.inspect'].includes(name))html=autoField('selectors','DKIM 选择器（可选，逗号分隔）');
  else if(name==='site.context')html='<fieldset><legend>选择建站资料</legend>'+[['client','客户资料'],['brand','品牌与风格'],['pages','现有页面'],['media','素材目录']].map(([v,t])=>`<label><input name="selected" type="checkbox" value="${v}" checked>${t}</label>`).join('')+'</fieldset>';
  else if(name==='dns.verify')html=autoField('change_action','已完成的 DNS 操作 ID','text','',true);
  else if(name==='mail.status')html=autoField('send_action','已完成的邮件发送操作 ID','text','',true);
@@ -91,7 +92,7 @@ function showAutoReview(item){
 }
 async function autoHistory(){const d=await aiRequest('/api/automation/actions');$('#autoActions').innerHTML=(d.items||[]).map(x=>`<article class="dom-row"><div class="h"><strong>${esc(x.summary)}</strong><span>${esc(AUTO_STATES[x.state]||x.state)}</span><button type="button" data-auto-detail="${esc(x.id)}">查看</button></div><p class="hint">${esc(x.user)} · ${esc(x.slug)} · ${esc(new Date(x.created*1000).toLocaleString())}${x.elapsed_ms!=null?' · '+x.elapsed_ms+' ms':''}</p></article>`).join('')||'<p class="hint">暂无操作记录。</p>';}
 $('#autoActions').onclick=async e=>{const b=e.target.closest('[data-auto-detail]');if(!b)return;try{const d=await aiRequest('/api/automation/action/'+b.dataset.autoDetail);showAutoReview(d.item);}catch(err){aiMessage('#autoMsg',err.message,true);}};
-$('#autoDNSForm').onsubmit=async e=>{e.preventDefault();e.submitter.disabled=true;const slug=$('#autoSite').value,current=AUTO_CONFIG.dns_providers.find(x=>x.slug===slug);try{await aiRequest('/api/automation/dns-provider',{slug,version:current?.version,provider:$('#autoDNSProvider').value,zone_id:$('#autoDNSZone').value,token:$('#autoDNSToken').value,clear_token:$('#autoDNSClear').checked});$('#autoDNSToken').value='';await loadAutomation();aiMessage('#autoDNSMsg','DNS 执行配置已保存');}catch(err){aiMessage('#autoDNSMsg',err.message,true);}finally{e.submitter.disabled=false;}};
+$('#autoDNSForm').onsubmit=async e=>{e.preventDefault();e.submitter.disabled=true;const slug=$('#autoSite').value,current=AUTO_CONFIG.dns_providers.find(x=>x.slug===slug);try{await aiRequest('/api/automation/dns-provider',{slug,version:current?.version,provider:$('#autoDNSProvider').value,zone_id:$('#autoDNSZone').value,account_id:$('#autoDNSAccount').value,token:$('#autoDNSToken').value,clear_token:$('#autoDNSClear').checked});$('#autoDNSToken').value='';await loadAutomation();aiMessage('#autoDNSMsg','DNS 执行配置已保存');}catch(err){aiMessage('#autoDNSMsg',err.message,true);}finally{e.submitter.disabled=false;}};
 new MutationObserver(()=>{if($('#p-automation').classList.contains('hidden')){if($('#auto-code'))$('#auto-code').value='';$('#autoDNSToken').value='';}}).observe($('#p-automation'),{attributes:true,attributeFilter:['class']});
 let AUTO_WORKFLOWS=[],AUTO_POLL=null;
 async function autoWorkflows(){
@@ -129,3 +130,12 @@ function canAmendWorkflow(item){
  const step=workflow?.steps.find(s=>s.state!=='completed');
  return !!(step?.action_id===item.id&&['waiting','failed','paused'].includes(workflow.state));
 }
+
+function autoDNSAccounts(selected=''){
+ const p=$('#autoDNSProvider').value,slug=$('#autoSite').value;
+ $('#autoDNSAccount').innerHTML='<option value="">'+(p==='cloudflare'?'使用下方独立 Token':p==='local'||p==='disabled'?'无需账号':'请选择已保存的账号')+'</option>'+(AUTO_CONFIG.provider_accounts||[]).filter(a=>a.provider===p&&a.sites.includes(slug)&&a.capabilities.includes('dns')).map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');$('#autoDNSAccount').value=selected;
+ $('#autoDNSToken').disabled=p!=='cloudflare'||!!$('#autoDNSAccount').value;
+ if($('#autoDNSToken').disabled)$('#autoDNSToken').value='';
+}
+$('#autoDNSProvider').onchange=()=>autoDNSAccounts();$('#autoDNSAccount').onchange=()=>{const id=$('#autoDNSAccount').value;autoDNSAccounts(id);};
+$('#autoMailForm').onsubmit=async e=>{e.preventDefault();e.submitter.disabled=true;try{const slug=$('#autoSite').value;await aiRequest('/api/automation/mail-binding',{slug,account_id:$('#autoMailAccount').value,version:AUTO_CONFIG.mail_bindings?.[slug]?.version||0});await loadAutomation();aiMessage('#autoMailMsg','邮件账号绑定已保存');}catch(err){aiMessage('#autoMailMsg',err.message,true);}finally{e.submitter.disabled=false;}};

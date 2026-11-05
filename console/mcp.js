@@ -1,13 +1,14 @@
-/* Admin-only MCP connection management; no remote tool execution. */
-let MCP_ITEMS=[],MCP_EDIT=null,MCP_EPOCH=0,MCP_LAST_TEST=null;
-async function loadMCP(){MCP_EPOCH++;$('#mcpResult').classList.add('hidden');const data=await aiRequest('/api/mcp/servers');MCP_ITEMS=data.items||[];renderMCP();}
+/* Administrator-managed remote MCP connections and scoped policies. */
+let MCP_ITEMS=[],MCP_EDIT=null,MCP_EPOCH=0,MCP_LAST_TEST=null,MCP_ACCOUNTS=[];
+async function loadMCP(){MCP_EPOCH++;$('#mcpResult').classList.add('hidden');const data=await aiRequest('/api/mcp/servers');MCP_ITEMS=data.items||[];const cfg=await aiRequest('/api/automation/config');MCP_ACCOUNTS=(cfg.provider_accounts||[]).filter(a=>a.capabilities.includes('mcp'));renderMCP();}
 function renderMCP(){
  const q=$('#mcpSearch').value.trim().toLowerCase();
- $('#mcpList').innerHTML=MCP_ITEMS.filter(x=>[x.name,x.url,x.description].join(' ').toLowerCase().includes(q)).map(x=>`<article class="dom-row"><div class="h"><strong data-user-content>${esc(x.name)}</strong><span class="pill">${x.enabled?'已启用':'已停用'}</span><span class="hint">${x.has_token?'已保存凭据':'无认证'}</span></div><p data-user-content style="overflow-wrap:anywhere">${esc(x.url)}</p><p data-user-content style="overflow-wrap:anywhere">${esc(x.description)}</p><div class="h"><button type="button" data-mcp-edit="${esc(x.id)}">编辑</button><button type="button" data-mcp-toggle="${esc(x.id)}">${x.enabled?'停用':'启用'}</button><button type="button" data-mcp-test="${esc(x.id)}" ${x.enabled?'':'disabled'}>测试连接与能力</button><button type="button" class="ghost" data-mcp-delete="${esc(x.id)}">删除</button></div></article>`).join('')||'<p class="hint">没有匹配的 MCP 服务。</p>';
+ $('#mcpList').innerHTML=MCP_ITEMS.filter(x=>[x.name,x.url,x.description].join(' ').toLowerCase().includes(q)).map(x=>`<article class="dom-row"><div class="h"><strong data-user-content>${esc(x.name)}</strong><span class="pill">${x.enabled?'已启用':'已停用'}</span><span class="hint">${x.account_id?'供应商账号认证':x.has_token?'已保存凭据':'无认证'}</span></div><p data-user-content style="overflow-wrap:anywhere">${esc(x.url)}</p><p data-user-content style="overflow-wrap:anywhere">${esc(x.description)}</p><div class="h"><button type="button" data-mcp-edit="${esc(x.id)}">编辑</button><button type="button" data-mcp-toggle="${esc(x.id)}">${x.enabled?'停用':'启用'}</button><button type="button" data-mcp-test="${esc(x.id)}" ${x.enabled?'':'disabled'}>测试连接与能力</button><button type="button" class="ghost" data-mcp-delete="${esc(x.id)}">删除</button></div></article>`).join('')||'<p class="hint">没有匹配的 MCP 服务。</p>';
 }
 function editMCP(item){
  MCP_EDIT=item?{...item}:null;$('#mcpForm').reset();
  for(const [id,key] of Object.entries({mcpId:'id',mcpName:'name',mcpUrl:'url',mcpDescription:'description'}))$('#'+id).value=item?.[key]||'';
+ $('#mcpAccount').innerHTML='<option value="">使用 Bearer Token / 无认证</option>'+MCP_ACCOUNTS.map(a=>`<option value="${esc(a.id)}">${esc(a.name+' / '+a.provider)}</option>`).join('');$('#mcpAccount').value=item?.account_id||'';
  const policy=item?.policy||{};
  $('#mcpSites').innerHTML=(STATE.sites||[]).map(s=>`<option value="${esc(s.slug)}" ${(policy.sites||[]).includes(s.slug)?'selected':''}>${esc(s.company)} / ${esc(s.domain)}</option>`).join('');
  document.querySelectorAll('#mcpPurposes input').forEach(e=>e.checked=(policy.purposes||[]).includes(e.value));
@@ -20,7 +21,7 @@ $('#mcpCancel').onclick=()=>{$('#mcpForm').classList.add('hidden');$('#mcpToken'
 $('#mcpRefresh').onclick=()=>loadMCP().catch(e=>aiMessage('#mcpMsg',e.message,true));
 $('#mcpForm').onsubmit=async e=>{
  e.preventDefault();e.submitter.disabled=true;
- const body={action:'save',id:$('#mcpId').value,name:$('#mcpName').value,url:$('#mcpUrl').value,description:$('#mcpDescription').value,enabled:$('#mcpEnabled').checked,token:$('#mcpToken').value,clear_token:$('#mcpClear').checked};
+ const body={action:'save',id:$('#mcpId').value,name:$('#mcpName').value,url:$('#mcpUrl').value,description:$('#mcpDescription').value,enabled:$('#mcpEnabled').checked,account_id:$('#mcpAccount').value,token:$('#mcpToken').value,clear_token:$('#mcpClear').checked};
  if(MCP_EDIT)body.version=MCP_EDIT.version;
  try{body.policy={purposes:[...document.querySelectorAll('#mcpPurposes input:checked')].map(e=>e.value),sites:[...$('#mcpSites').selectedOptions].map(e=>e.value),tools:JSON.parse($('#mcpToolRules').value||'[]'),resources:$('#mcpResources').value.split('\n').map(s=>s.trim()).filter(Boolean),prompts:$('#mcpPrompts').value.split('\n').map(s=>s.trim()).filter(Boolean),calls_per_hour:Number($('#mcpLimit').value),timeout:Number($('#mcpTimeout').value)};await aiRequest('/api/mcp/servers',body);$('#mcpCancel').click();await loadMCP();aiMessage('#mcpMsg','MCP 配置已保存');}
  catch(err){aiMessage('#mcpFormMsg',err.message,true);}finally{body.token='';e.submitter.disabled=false;}
@@ -62,3 +63,15 @@ $('#mcpResult').onclick=e=>{
   $('#mcpForm details').open=true;$('#mcpForm').scrollIntoView({block:'start'});aiMessage('#mcpFormMsg','已加入待保存白名单，请设置用途、站点范围和执行规则后保存。');
  }catch(err){aiMessage('#mcpFormMsg','请先修正工具规则 JSON：'+err.message,true);}
 };
+
+$('#mcpUsePreset').onclick=()=>{
+ const presets={
+  'cloudflare-docs':{name:'Cloudflare 文档',url:'https://docs.mcp.cloudflare.com/mcp',tools:['search_cloudflare_documentation']},
+  'cloudflare-api':{name:'Cloudflare API',url:'https://mcp.cloudflare.com/mcp',tools:['docs','search']},
+  'aws-knowledge':{name:'AWS Knowledge',url:'https://knowledge-mcp.global.api.aws',tools:['aws___search_documentation','aws___read_documentation']},
+  'aws-api':{name:'AWS MCP（新加坡）',url:'https://aws-mcp.ap-southeast-1.api.aws/mcp',tools:['aws___search_documentation','aws___read_documentation']}
+ };
+ const id=$('#mcpPreset').value;if(!id)return;editMCP(null);const p=presets[id];if(p){$('#mcpId').value=id;$('#mcpName').value=p.name;$('#mcpUrl').value=p.url;$('#mcpToolRules').value=JSON.stringify(p.tools.map(name=>({name,mode:'read',bindings:{}})),null,2);}
+ aiMessage('#mcpFormMsg','预设尚未保存。请选择账号、用途和站点；通用脚本执行工具不会自动加入白名单。');
+};
+$('#mcpAccount').onchange=()=>{if($('#mcpAccount').value)$('#mcpToken').value='';};

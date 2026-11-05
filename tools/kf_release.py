@@ -116,7 +116,7 @@ def dependencies(stage):
         name, wanted = line.split('==', 1)
         if version(name) != wanted:
             raise ReleaseError('Runtime dependency mismatch: %s; prepare the tested virtualenv before deploying' % name)
-    import reportlab, PIL, dns, qrcode, cryptography, jsonschema  # noqa: F401: importing catches runtime/version incompatibilities
+    import reportlab, PIL, dns, qrcode, cryptography, jsonschema, boto3, botocore  # noqa: F401: importing catches runtime/version incompatibilities
 
 
 def health(base, console_port=18090, dns_port=5354, https_port=18444):

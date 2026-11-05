@@ -14,6 +14,9 @@ from kf_ai import AIError, atomic_json, read_json, text
 from kf_domain_vault import DomainVault, VaultConflict
 from kf_styles import public_url, public_addresses
 
+from kf_providers import ProviderStore
+from kf_cloud_api import MCPAuth
+
 VERSIONS = ('2025-06-18', '2025-03-26')
 _TEST_SLOTS = threading.BoundedSemaphore(2)
 
@@ -36,10 +39,12 @@ def rpc(url, token, message, session, version, deadline):
         conn.sock = socket.create_connection((addresses[0], 443), timeout=min(10, remaining))
         conn.sock = ssl.create_default_context().wrap_socket(conn.sock, server_hostname=p.hostname)
         headers = {'Content-Type':'application/json', 'Accept':'application/json, text/event-stream', 'Accept-Encoding':'identity'}
-        if token: headers['Authorization'] = 'Bearer ' + token
+        data=json.dumps(message).encode()
+        if isinstance(token,MCPAuth):headers=token.headers(url,data,headers)
+        elif token: headers['Authorization'] = 'Bearer ' + token
         if session: headers['Mcp-Session-Id'] = session
         if version: headers['MCP-Protocol-Version'] = version
-        conn.request('POST', p.path or '/', json.dumps(message).encode(), headers)
+        conn.request('POST', p.path or '/', data, headers)
         r = conn.getresponse()
         if r.status not in (200, 202): raise AIError('MCP 返回 HTTP %d，请检查地址、凭据和服务状态' % r.status)
         sid = r.getheader('Mcp-Session-Id', session)
@@ -146,9 +151,20 @@ class MCPStore(DomainVault):
             if old and old['url']!=url and secret and not token and not body.get('clear_token'):raise AIError('修改地址时请重新填写或清除 Token，避免将旧凭据发送到新服务')
             if body.get('clear_token'):secret=''
             if token:secret=self.cipher(items).encrypt(json.dumps({'id':ident,'url':url,'token':token}).encode()).decode()
-            item={'id':ident,'name':text(body.get('name',''),'名称',80,True),'url':url,
+            account_id=text(body.get('account_id',old.get('account_id','') if old else ''),'供应商账号',40)
+            policy=policy_config(body.get('policy',old.get('policy',{}) if old else {}))
+            if account_id:
+                accounts=ProviderStore(self.root.parent);account=next((a for a in accounts.public() if a['id']==account_id),None)
+                if not account or not account['enabled'] or 'mcp' not in account['capabilities']:raise AIError('账号未启用 MCP 能力')
+                if any(slug not in account['sites'] for slug in policy['sites']):raise AIError('MCP 站点范围超出供应商账号授权')
+                if account['provider']=='aws' and not re.fullmatch(r'https://aws-mcp\.[a-z0-9-]+\.api\.aws/mcp',url):raise AIError('AWS 账号只能绑定官方 AWS MCP 地址')
+                if account['provider']=='cloudflare' and url!='https://mcp.cloudflare.com/mcp':raise AIError('Cloudflare 账号只能绑定官方 API MCP 地址')
+                if account['provider'] not in ('aws','cloudflare'):raise AIError('此账号不支持托管 MCP 认证')
+                if token:raise AIError('账号认证不能同时填写 Bearer Token')
+                secret=''
+            item={'account_id':account_id,'id':ident,'name':text(body.get('name',''),'名称',80,True),'url':url,
                   'description':text(body.get('description',''),'说明',1000),'enabled':body.get('enabled') is True,
-                  'policy':policy_config(body.get('policy',old.get('policy',{}) if old else {})),
+                  'policy':policy,
                   'secret':secret,'version':old['version']+1 if old else 1,'updated':int(time.time()),'updated_by':user}
             atomic_json(self.path,[i for i in items if i['id']!=ident]+[item]);return self.public_item(item)
 
@@ -181,11 +197,15 @@ class MCPStore(DomainVault):
                     if payload['id']!=ident or payload['url']!=item['url']:raise ValueError()
                     token=payload['token']
                 except Exception:raise AIError('MCP 凭据无法解密，请检查密钥备份') from None
+            if item.get('account_id'):
+                account,credentials=ProviderStore(self.root.parent).resolve(item['account_id'],slug,'mcp')
+                token=MCPAuth(account['provider'],credentials,account['version'])
             return item,token,arguments,mode
 
     def call(self,request,context):
         item,token,args,mode=self.resolve_call(request['server'],request['slug'],request['purpose'],request['kind'],
             request['name'],request['arguments'],context,request['server_version'])
+        if isinstance(token,MCPAuth) and token.version!=request.get('account_version'):raise VaultConflict('供应商账号已改变，请重新确认')
         with self.locked():
             path=self.root/'mcp-usage.json';usage=read_json(path,{})
             now=time.time();recent=[v for v in usage.get(item['id'],[]) if v>now-3600]
@@ -195,7 +215,7 @@ class MCPStore(DomainVault):
         try:result=invoke(item,token,request['kind'],request['name'],args,request.get('schema'))
         finally:_TEST_SLOTS.release()
         def redact(v):
-            if isinstance(v,str):return v.replace(token,'[REDACTED]') if token else v
+            if isinstance(v,str):return token.redact(v) if isinstance(token,MCPAuth) else v.replace(token,'[REDACTED]') if token else v
             if isinstance(v,list):return [redact(x) for x in v]
             if isinstance(v,dict):return {k:redact(x) for k,x in v.items()}
             return v
@@ -214,12 +234,17 @@ class MCPStore(DomainVault):
                     if payload['id']!=item['id'] or payload['url']!=item['url']:raise ValueError()
                     token=payload['token']
                 except Exception:raise AIError('MCP 凭据无法解密，请检查密钥备份或重新保存 Token') from None
+        if item.get('account_id'):
+            accounts=ProviderStore(self.root.parent);account=next((a for a in accounts.public() if a['id']==item['account_id']),None)
+            if not account or not account['sites']:raise AIError('供应商账号不存在或没有站点范围')
+            account,credentials=accounts.resolve(item['account_id'],account['sites'][0],'mcp')
+            token=MCPAuth(account['provider'],credentials,account['version'])
         # Do not store server-provided data; it may echo secrets. Redact before returning.
         if not _TEST_SLOTS.acquire(blocking=False):raise AIError('已有两个 MCP 测试进行中，请稍后重试')
         try:result=discover(item,token)
         finally:_TEST_SLOTS.release()
         def redact(value):
-            if isinstance(value,str):return value.replace(token,'[REDACTED]') if token else value
+            if isinstance(value,str):return token.redact(value) if isinstance(token,MCPAuth) else value.replace(token,'[REDACTED]') if token else value
             if isinstance(value,list):return [redact(v) for v in value]
             if isinstance(value,dict):return {k:redact(v) for k,v in value.items()}
             return value
