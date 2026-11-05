@@ -3,3 +3,4 @@ reportlab>=4.0,<5       # 中文 PDF：账单、交接单
 Pillow>=10.0         # 图片转 WebP、生成 srcset
 dnspython>=2.4       # DNS 托管与解析检查
 qrcode>=7.4,<8      # 两步验证绑定二维码（本地生成）
+cryptography>=46.0.7,<47  # 域名管理密码的认证加密（Fernet）

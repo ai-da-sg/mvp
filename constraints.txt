@@ -6,3 +6,6 @@ qrcode==7.4.2
 charset-normalizer==3.5.2
 pypng==0.20220715.0
 typing_extensions==4.16.0
+cryptography==46.0.7
+cffi==2.0.0
+pycparser==2.23

@@ -24,6 +24,33 @@ KampongFlow 控制台|KampongFlow Console
 站点运营|Site operations
 站点总览|Site overview
 域名管理|Domains
+搜索域名、机构、用户名或配置|Search domains, providers, usernames or configuration
+添加管理机构|Add provider
+管理机构账号|Provider account
+添加管理机构账号|Add provider account
+编辑管理机构账号|Edit provider account
+所属域名|Domain
+机构类型|Provider type
+域名注册商|Domain registrar
+DNS 服务商|DNS provider
+托管服务商|Hosting provider
+其他机构|Other provider
+管理机构名称|Provider name
+管理后台地址|Management URL
+用户名 / 登录邮箱|Username / sign-in email
+设置新密码（留空保留已保存密码）|New password (leave blank to keep existing)
+清除已保存的密码|Clear saved password
+配置信息|Configuration
+保存管理账号|Save provider account
+TOTP 验证后显示|Verify TOTP to reveal
+验证 TOTP 后显示密码|Verify TOTP to reveal password
+当前 MVP 账号的 6 位 TOTP 验证码|Current MVP account's 6-digit TOTP code
+验证并显示|Verify and reveal
+已保存密码（30 秒后自动隐藏）|Saved password (hidden after 30 seconds)
+立即隐藏|Hide now
+恢复码不能用于显示密码。同一枚验证码只能成功使用一次。|Recovery codes cannot reveal passwords. Each TOTP code can be used successfully once.
+配置信息可直接查询，请勿在此填写密码、API 密钥或恢复码。|Configuration is directly searchable. Do not enter passwords, API keys or recovery codes here.
+查询域名、管理机构、后台地址、账号与配置信息。已保存密码只在 TOTP 验证成功后显示。|Search domains, providers, management URLs, accounts and configuration. Saved passwords are revealed only after TOTP verification.
 DNS 解析|DNS records
 运行维护|Maintenance
 内容建站|Website content

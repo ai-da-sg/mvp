@@ -28,6 +28,7 @@ import kf_ai
 import kf_prompts
 import kf_styles
 import kf_sso
+import kf_domain_vault
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -147,7 +148,7 @@ DEFAULT_ROLES = {
     "ops": {"label": "运营", "write": [
         "/api/spec", "/api/design", "/api/media/", "/api/dns/", "/api/domain/manage",
         "/api/clients/save", "/api/shares", "/api/publish", "/api/create", "/api/suspend",
-        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login",
+        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login", "/api/domain/accounts",
     ]},
     "finance": {"label": "财务", "write": [
         "/api/ledger", "/api/invoice", "/api/renew", "/api/clients/save",
@@ -2419,9 +2420,27 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-domain" class="hidden">
-<div class="callout">本地模拟：浏览器用 hosts 把域名指向本机，请求经隧道进入后台，再按 Host 头转发到对应站点。证书是自签的，浏览器会提示不安全，点继续即可。</div>
+<p class="hint">查询域名、管理机构、后台地址、账号与配置信息。已保存密码只在 TOTP 验证成功后显示。</p>
+<div class="formrow"><div class="field"><label for="domainSearch">搜索域名、机构、用户名或配置</label><input id="domainSearch" type="search"></div><button id="domainRefresh" type="button" class="ghost">刷新</button></div>
 <div id="dList" style="margin-top:14px"></div>
-<div class="msg" id="dMsg"></div>
+<div class="msg" id="dMsg" role="status"></div>
+<form id="domainAccountForm" class="hidden" style="margin-top:20px">
+<h3 id="domainAccountTitle">管理机构账号</h3>
+<div class="formrow"><div class="field"><label for="domainAccountSite">所属域名</label><select id="domainAccountSite" required></select></div><div class="field"><label for="domainAccountCategory">机构类型</label><select id="domainAccountCategory"><option value="registrar">域名注册商</option><option value="dns">DNS 服务商</option><option value="hosting">托管服务商</option><option value="other">其他机构</option></select></div></div>
+<div class="formrow"><div class="field"><label for="domainAccountProvider">管理机构名称</label><input id="domainAccountProvider" required maxlength="120" placeholder="例如 Cloudflare"></div><div class="field"><label for="domainAccountUrl">管理后台地址</label><input id="domainAccountUrl" type="url" maxlength="2000" placeholder="https://dash.cloudflare.com/"></div></div>
+<div class="formrow"><div class="field"><label for="domainAccountUsername">用户名 / 登录邮箱</label><input id="domainAccountUsername" maxlength="300" autocomplete="off"></div><div class="field"><label for="domainAccountPassword">设置新密码（留空保留已保存密码）</label><input id="domainAccountPassword" type="password" maxlength="4096" autocomplete="new-password"></div></div>
+<label><input id="domainAccountClear" type="checkbox">清除已保存的密码</label>
+<div class="fld"><label for="domainAccountConfig">配置信息</label><textarea id="domainAccountConfig" rows="6" maxlength="12000" placeholder="记录 DNS 地址、NS 服务器、解析配置、账号归属和操作说明"></textarea><p class="hint">配置信息可直接查询，请勿在此填写密码、API 密钥或恢复码。</p></div>
+<button type="submit">保存管理账号</button><button type="button" class="ghost" id="domainAccountCancel">取消</button><span id="domainAccountMsg" class="msg" role="status"></span>
+</form>
+<dialog id="domainRevealDialog" style="width:min(480px,calc(100vw - 32px));border:1px solid var(--line);border-radius:14px;padding:24px;background:var(--card);color:var(--fg)">
+<form id="domainRevealForm"><h3>验证 TOTP 后显示密码</h3><p id="domainRevealLabel"></p>
+<label for="domainRevealCode">当前 MVP 账号的 6 位 TOTP 验证码</label><input id="domainRevealCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required style="width:100%;margin:10px 0">
+<p class="hint">恢复码不能用于显示密码。同一枚验证码只能成功使用一次。</p>
+<button type="submit" id="domainRevealSubmit">验证并显示</button><button type="button" class="ghost" id="domainRevealClose">关闭</button>
+<div id="domainRevealMsg" class="msg" role="status" aria-live="polite"></div>
+<div id="domainSecretWrap" class="hidden" style="margin-top:16px"><label for="domainSecretValue">已保存密码（30 秒后自动隐藏）</label><input id="domainSecretValue" type="text" readonly autocomplete="off" style="width:100%;margin-top:8px"><button type="button" class="ghost" id="domainSecretHide">立即隐藏</button></div>
+</form></dialog>
 </div>
 
 <div id="p-leads" class="hidden">
@@ -3270,23 +3289,7 @@ function initLeads(){
 }
 
 // ---------------- 域名 ----------------
-async function initDomain(){
-  const r=await fetch('/api/domains');
-  const d=await r.json();
-  const items=d.items||[];
-  const box=$('#dList');
-  if(!items.length){ box.innerHTML='<div style="color:var(--dim);font-size:13px">没有配置域名的站点</div>'; return; }
-  box.innerHTML=items.map(x=>`
-    <div class="dom-row">
-      <div class="h"><span class="name">https://${esc(x.www)}:${x.https_port}/</span>
-        <button onclick="copyShare('https://${esc(x.www)}:${x.https_port}/')">复制网址</button>
-        <button onclick="copyShare('127.0.0.1 ${esc(x.www)}')">复制 hosts 行</button>
-        <a href="https://${esc(x.www)}:${x.https_port}/" target="_blank" style="font-size:12px">打开</a>
-      </div>
-      <div class="hint">在电脑上执行（一次性）：sudo sh -c 'echo "127.0.0.1 ${esc(x.domain)} ${esc(x.www)}" >> /etc/hosts'</div>
-      <div class="hint">Windows：C:\\Windows\\System32\\drivers\\etc\\hosts 里加一行  127.0.0.1 ${esc(x.domain)} ${esc(x.www)}</div>
-    </div>`).join('');
-}
+async function initDomain(){ return loadDomainRegistry(); }
 
 // ---------------- 分享 ----------------
 async function loadShares(slug){
@@ -3868,7 +3871,7 @@ siteDomain.addEventListener('input',()=>{if(siteSlug.dataset.manual)return;const
 async function refreshConsole(){try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/ai.js"></script><script src="/prompts.js"></script></body></html>"""
+<script src="/ai.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script></body></html>"""
 
 
 _AI = None
@@ -4036,6 +4039,50 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(data)
         return True
+
+    def _domain_account_post(self, path, body):
+        if self.user_role not in ("admin", "ops"):
+            return self._send(403, {"error": "当前角色无权访问管理机构账号"})
+        if not isinstance(body, dict) or self.headers.get_content_type() != "application/json":
+            return self._send(400, {"error": "请使用 JSON 请求"})
+        # Require the existing browser session; Basic Auth cannot reveal vault secrets.
+        if session_user(self.headers.get("Cookie")) != self.user:
+            return self._send(403, {"error": "请从 MVP 登录页登录后操作"})
+        vault = kf_domain_vault.DomainVault(BASE)
+        try:
+            if path == "/api/domain/accounts/reveal":
+                entry = load_users().get(self.user) or {}
+                secret = entry.get("mfa_secret")
+                if not secret:
+                    return self._send(403, {"error": "请先在团队与安全中绑定当前账号的 TOTP 两步验证"})
+                def verify(code):
+                    now = int(time.time() // 30)
+                    for counter in (now, now - 1, now + 1):
+                        if _h.compare_digest(_totp(secret, counter), code):
+                            return counter
+                    return None
+                password = vault.reveal(body.get("id"), self.user, body.get("code"), verify)
+                audit(self.user, "domain_password_view", str(body.get("id", ""))[:40], "TOTP 验证成功")
+                return self._send(200, {"password": password, "expires_in": 30}, extra={"Pragma": "no-cache"})
+            if path != "/api/domain/accounts":
+                return self._send(404, {"error": "not found"})
+            if body.get("action") != "delete":
+                slug = body.get("slug", "")
+                if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug) or not (SITES / slug / "meta.json").is_file():
+                    raise kf_ai.AIError("请选择有效站点域名")
+            item = vault.change(body, self.user)
+            audit(self.user, "domain_account_" + str(body.get("action", "save")), item["id"], item["slug"])
+            return self._send(200, {"item": item})
+        except kf_domain_vault.VaultLimited as exc:
+            audit(self.user, "domain_password_denied", "", "验证频率限制")
+            return self._send(429, {"error": str(exc)})
+        except kf_domain_vault.VaultDenied as exc:
+            audit(self.user, "domain_password_denied", "", "TOTP 验证失败")
+            return self._send(403, {"error": str(exc)})
+        except kf_domain_vault.VaultConflict as exc:
+            return self._send(409, {"error": str(exc)})
+        except kf_ai.AIError as exc:
+            return self._send(400, {"error": str(exc)})
 
     def _wordpress_callback(self):
         try:
@@ -4304,7 +4351,7 @@ class Handler(BaseHTTPRequestHandler):
         path = raw.rstrip("/") or "/"
         if path == "/":
             return self._send(200, PAGE, "text/html; charset=utf-8")
-        if path in ("/ai.js", "/prompts.js"):
+        if path in ("/ai.js", "/prompts.js", "/domains.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path.startswith("/api/ai/"):
             return self._ai_get(path)
@@ -4391,6 +4438,11 @@ class Handler(BaseHTTPRequestHandler):
                                                                       "application/octet-stream")
             return self._send(200, f.read_bytes(), ctype)
 
+        if path == "/api/domain/accounts":
+            if self.user_role not in ("admin", "ops") or not can_write(self.user_role, "/api/domain/accounts"):
+                return self._send(403, {"error": "当前角色无权访问管理机构账号"})
+            return self._send(200, {"items": kf_domain_vault.DomainVault(BASE).public(),
+                "mfa_enabled": bool((load_users().get(self.user) or {}).get("mfa_secret"))})
         if path == "/api/domains":
             hm = host_map()
             seen = {}
@@ -4399,7 +4451,9 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 seen[e["slug"]] = {"domain": host, "www": "www." + host,
                                    "port": e["port"], "slug": e["slug"],
-                                   "https_port": HTTPS_PORT, "http_port": PORT}
+                                   "https_port": HTTPS_PORT, "http_port": PORT,
+                                   "company": load_meta(e["slug"]).get("company", e["slug"]),
+                                   "url": "https://" + host, "manage": read_domain(e["slug"])}
             return self._send(200, {"items": list(seen.values())})
 
         m = re.match(r"^/api/dns/([a-z0-9-]+)$", path)
@@ -4633,16 +4687,18 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/upload":
             return self._upload()
 
-        if path.startswith("/api/ai/"):
+        if path.startswith("/api/ai/") or path.startswith("/api/domain/accounts"):
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
             except ValueError:
                 return self._send(400, {"error": "请求长度无效"})
             if not 0 <= content_length <= 65536:
                 self.close_connection = True
-                return self._send(413, {"error": "AI 请求超过 64KB 限制"})
+                return self._send(413, {"error": "请求超过 64KB 限制"})
         body = self._body()
 
+        if path.startswith("/api/domain/accounts"):
+            return self._domain_account_post(path, body)
         if path.startswith("/api/ai/"):
             return self._ai_post(path, body)
         if path == "/api/create":

@@ -126,7 +126,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('ai.js','prompts.js','appearance.js','locale.js'):
+        for filename in ('ai.js','prompts.js','appearance.js','locale.js','domains.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -247,6 +247,37 @@ class ConsoleTests(unittest.TestCase):
         for url in ['//evil.example','/\\evil.example','/ok\r\nLocation:evil','/\t/evil.example']:
             self.assertEqual(self.m.safe_next(url),'/')
         self.assertEqual(self.m.safe_next('/wordpress/authorize?site=demo'),'/wordpress/authorize?site=demo')
+
+    def test_domain_vault_requires_fresh_totp_and_never_lists_password(self):
+        import kf_domain_vault
+        self.assertEqual(self.request('/api/domain/accounts',user='finance-test')[0],403)
+        body={'slug':'demo','provider':'Example Registrar','category':'registrar','url':'https://registrar.example/dashboard',
+              'username':'operator@example.test','password':'vault-secret-not-for-logs','configuration':'NS: ns1.example.test'}
+        self.assertEqual(self.request('/api/domain/accounts',body,user='finance-test')[0],403)
+        status,data=self.request('/api/domain/accounts',body)
+        self.assertEqual(status,200,data);item=data['item'];ident=item['id']
+        for path in ['/api/domain/accounts','/api/domains','/api/state']:
+            status,listing=self.request(path)
+            self.assertEqual(status,200)
+            self.assertNotIn(body['password'],json.dumps(listing))
+            self.assertNotIn('gAAAA',json.dumps(listing))
+        self.assertTrue(item['has_password']);self.assertNotIn('password',item)
+        reveal={'id':ident,'code':'123456'}
+        self.assertEqual(self.request('/api/domain/accounts/reveal',reveal)[0],403)
+        users=self.m.load_users();users['admin']['mfa_secret']='JBSWY3DPEHPK3PXP';self.m._write(self.m.USERS_F,users)
+        self.assertEqual(self.request('/api/domain/accounts/reveal',dict(reveal,code='abcd-1234'))[0],403)
+        reveal['code']=self.m._totp(users['admin']['mfa_secret'],int(time.time()//30))
+        status,data=self.request('/api/domain/accounts/reveal',reveal)
+        self.assertEqual(status,200,data);self.assertEqual(data['password'],body['password']);self.assertEqual(data['expires_in'],30)
+        self.assertEqual(self.request('/api/domain/accounts/reveal',reveal)[0],403)
+        self.assertNotIn(body['password'],self.m.AUDIT_F.read_text())
+        self.assertNotIn(reveal['code'],self.m.AUDIT_F.read_text())
+        self.assertNotIn(body['password'],kf_domain_vault.DomainVault(self.base).path.read_text())
+        self.assertEqual(self.request('/api/domain/accounts',dict(body,id=ident,version=0,password=''))[0],409)
+        self.assertEqual(self.request('/api/domain/accounts',dict(body,id=ident,version=1,password='',username='edited'))[0],200)
+        self.assertTrue(self.request('/api/domain/accounts')[1]['items'][0]['has_password'])
+        self.assertEqual(self.request('/api/domain/accounts',{'action':'delete','id':ident,'version':2})[0],200)
+        self.assertEqual(self.request('/api/domain/accounts')[1]['items'],[])
 
     def test_pdf_font_fallback(self):
         inv = {'no':'TEST-001','company':'测试客户','domain':'example.test','plan_name':'Demo',
