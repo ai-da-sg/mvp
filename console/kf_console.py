@@ -29,6 +29,7 @@ import kf_prompts
 import kf_styles
 import kf_sso
 import kf_domain_vault
+import kf_mcp
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -2228,7 +2229,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <details class="nav-group" data-group="0" open><summary>站点运营</summary><div class="submenu"><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
 <details class="nav-group" data-group="1"><summary>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
 <details class="nav-group" data-group="2"><summary>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
-<details class="nav-group" data-group="3"><summary>系统管理</summary><div class="submenu"><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
+<details class="nav-group" data-group="3"><summary>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
 <div class="page-heading"><div><div class="breadcrumb" id="breadcrumb">站点运营 / 站点总览</div><h2 id="pageTitle" tabindex="-1">站点总览</h2></div><span id="editorGlobalState" role="status"></span></div>
 <div id="globalMsg" class="msg hidden" role="alert" tabindex="-1"></div>
@@ -2332,7 +2333,10 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </form><div id="styleManageMsg" class="msg" role="status"></div></details>
 <h3 style="margin-top:28px">建站任务</h3>
 <div id="aiJobs" aria-live="polite"></div>
-<details id="aiSettings" style="margin-top:28px"><summary style="cursor:pointer">服务商与模型配置（管理员）</summary>
+
+</div>
+
+<div id="p-llm" class="hidden"><details open id="aiSettings" style="margin-top:28px"><summary style="cursor:pointer">服务商与模型配置（管理员）</summary>
 <p class="hint">可保存多套模型。API 地址支持服务商 Base URL 或完整接口地址；模型 ID 按服务商提供的名称填写。密钥仅保存在服务器。</p>
 <div id="aiProfilesList"></div>
 <form id="aiConfigForm" style="margin-top:16px">
@@ -2355,9 +2359,22 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <label class="hint"><input id="aiJsonMode" type="checkbox"> 启用 JSON 输出模式（仅在服务商支持时勾选）</label>
 <label class="hint" style="margin-left:16px"><input id="aiClearKey" type="checkbox"> 清除已保存密钥</label>
 <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="submit">保存配置</button><button type="button" class="ghost" id="aiResetConfig">新建配置</button><span id="aiConfigMsg" class="msg" role="status"></span></div>
-</form></details>
+</form></details></div>
+<div id="p-mcp" class="hidden">
+<p class="hint">管理远程 MCP 服务，测试连接并查看工具、资源及提示词。当前仅用于连接管理与能力查询，尚未接入 AI 建站调用。</p>
+<p class="hint">支持公开 HTTPS（443 端口）的 Streamable HTTP，协议 2025-06-18 / 2025-03-26；认证支持无认证或 Bearer Token。暂不支持本地 stdio、旧 SSE 端点或 OAuth 登录。</p>
+<div class="formrow"><div class="field"><label for="mcpSearch">搜索 MCP 名称、地址或说明</label><input id="mcpSearch" type="search"></div><button id="mcpRefresh" type="button" class="ghost">刷新</button><button id="mcpNew" type="button">添加 MCP 服务</button></div>
+<div id="mcpList" style="margin-top:16px"></div><div id="mcpMsg" class="msg" role="status"></div>
+<form id="mcpForm" class="hidden"><h3 id="mcpFormTitle">MCP 服务配置</h3>
+<div class="formrow"><div class="field"><label for="mcpId">配置 ID</label><input id="mcpId" required pattern="[a-z][a-z0-9_-]{1,39}" maxlength="40"></div><div class="field"><label for="mcpName">服务名称</label><input id="mcpName" required maxlength="80"></div></div>
+<div class="fld"><label for="mcpUrl">MCP 服务地址</label><input id="mcpUrl" type="url" required maxlength="2000" placeholder="https://example.com/mcp"></div>
+<div class="fld"><label for="mcpToken">Bearer Token（留空保留原凭据）</label><input id="mcpToken" type="password" maxlength="4096" autocomplete="new-password"></div>
+<label><input id="mcpClear" type="checkbox">清除已保存凭据</label>
+<div class="fld"><label for="mcpDescription">服务说明</label><textarea id="mcpDescription" rows="3" maxlength="1000"></textarea></div>
+<label><input id="mcpEnabled" type="checkbox" checked>启用此服务</label>
+<div><button type="submit">保存 MCP 服务</button><button type="button" class="ghost" id="mcpCancel">取消</button></div><div id="mcpFormMsg" class="msg" role="status"></div></form>
+<section id="mcpResult" class="hidden" style="margin-top:20px" aria-live="polite"></section>
 </div>
-
 <div id="p-prompts" class="hidden">
 <p class="hint">模板定义场景，模块组织目标、结构、风格、文案与检查标准。运营可选择使用；管理员可编辑、复制、停用并恢复历史版本。</p>
 <div class="formrow"><div class="field"><label for="promptLibraryKind">查看</label><select id="promptLibraryKind"><option value="templates">场景模板</option><option value="modules">可复用模块</option></select></div><div class="field"><label for="promptLibrarySearch">搜索名称、分类或用途</label><input id="promptLibrarySearch" type="search"></div><button class="ghost" id="promptLibraryRefresh">刷新</button><button class="ghost" id="promptLibraryExport">导出提示词库</button><button id="promptLibraryNew">新建</button></div>
@@ -2590,8 +2607,8 @@ let STATE={sites:[],invoices:[],plans:[]};
 let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
-    ? ['ai','prompts','layout','design','media','share','dns','maint','team']
-    : (ROLE==='admin' ? [] : ['team']);
+    ? ['ai','prompts','layout','design','media','share','dns','maint','team','llm','mcp']
+    : (ROLE==='admin' ? [] : ['team','llm','mcp']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
   });
@@ -2617,7 +2634,7 @@ function navigateTo(key, updateHistory=true){
  $('#navGroups').classList.remove('expanded');$('#navToggle').setAttribute('aria-expanded','false');
  if(updateHistory && location.hash!=='#'+key) history.pushState(null,'','#'+key);
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
- const initializers={ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
+ const initializers={llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
  if(updateHistory)$('#pageTitle').focus({preventScroll:true});
  return true;
@@ -3871,7 +3888,7 @@ siteDomain.addEventListener('input',()=>{if(siteSlug.dataset.manual)return;const
 async function refreshConsole(){try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/ai.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script></body></html>"""
+<script src="/ai.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script></body></html>"""
 
 
 _AI = None
@@ -4039,6 +4056,28 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(data)
         return True
+
+    def _mcp_post(self, path, body):
+        if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
+        if not isinstance(body, dict) or self.headers.get_content_type() != "application/json":
+            return self._send(400, {"error":"请使用 JSON 请求"})
+        if session_user(self.headers.get("Cookie")) != self.user:
+            return self._send(403, {"error":"请从 MVP 登录页登录后操作"})
+        store = kf_mcp.MCPStore(BASE)
+        try:
+            if path == "/api/mcp/servers":
+                item = store.change(body, self.user)
+                audit(self.user, "mcp_" + str(body.get("action", "save")), item["id"])
+                return self._send(200, {"item":item})
+            if path == "/api/mcp/test":
+                result = store.test(body.get("id"), body.get("version"))
+                audit(self.user, "mcp_test", str(body.get("id", ""))[:40], "连接与能力查询成功")
+                return self._send(200, {"result":result})
+            return self._send(404, {"error":"not found"})
+        except kf_domain_vault.VaultConflict as exc:
+            return self._send(409, {"error":str(exc)})
+        except kf_ai.AIError as exc:
+            return self._send(400, {"error":str(exc)})
 
     def _domain_account_post(self, path, body):
         if self.user_role not in ("admin", "ops"):
@@ -4351,8 +4390,11 @@ class Handler(BaseHTTPRequestHandler):
         path = raw.rstrip("/") or "/"
         if path == "/":
             return self._send(200, PAGE, "text/html; charset=utf-8")
-        if path in ("/ai.js", "/prompts.js", "/domains.js"):
+        if path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
+        if path == "/api/mcp/servers":
+            if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
+            return self._send(200, {"items":kf_mcp.MCPStore(BASE).public()})
         if path.startswith("/api/ai/"):
             return self._ai_get(path)
         if path == "/health":
@@ -4687,7 +4729,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/upload":
             return self._upload()
 
-        if path.startswith("/api/ai/") or path.startswith("/api/domain/accounts"):
+        if path.startswith(("/api/ai/", "/api/domain/accounts", "/api/mcp/")):
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
             except ValueError:
@@ -4697,6 +4739,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(413, {"error": "请求超过 64KB 限制"})
         body = self._body()
 
+        if path.startswith("/api/mcp/"):
+            return self._mcp_post(path, body)
         if path.startswith("/api/domain/accounts"):
             return self._domain_account_post(path, body)
         if path.startswith("/api/ai/"):

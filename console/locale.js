@@ -95,6 +95,25 @@ AI 建站|AI builder
 账单收款|Invoices & payments
 套餐设置|Plans
 系统管理|Administration
+系统设置|System settings
+设置 LLM|LLM settings
+MCP 管理|MCP management
+搜索 MCP 名称、地址或说明|Search MCP names, URLs or descriptions
+添加 MCP 服务|Add MCP server
+MCP 服务配置|MCP server settings
+服务名称|Server name
+MCP 服务地址|MCP endpoint URL
+Bearer Token（留空保留原凭据）|Bearer token (leave blank to keep existing)
+清除已保存凭据|Clear saved credential
+服务说明|Server description
+启用此服务|Enable this server
+保存 MCP 服务|Save MCP server
+测试连接与能力|Test connection and capabilities
+已保存凭据|Credential saved
+无认证|No authentication
+没有匹配的 MCP 服务。|No matching MCP servers.
+管理远程 MCP 服务，测试连接并查看工具、资源及提示词。当前仅用于连接管理与能力查询，尚未接入 AI 建站调用。|Manage remote MCP servers, test connections and inspect tools, resources and prompts. Connections are not yet used by the AI builder.
+支持公开 HTTPS（443 端口）的 Streamable HTTP，协议 2025-06-18 / 2025-03-26；认证支持无认证或 Bearer Token。暂不支持本地 stdio、旧 SSE 端点或 OAuth 登录。|Supports public HTTPS on port 443 with Streamable HTTP, protocol 2025-06-18 or 2025-03-26, and optional bearer authentication. Local stdio, legacy SSE endpoints and OAuth sign-in are not supported.
 团队与安全|Team & security
 站点|Site
 客户 / 域名|Customer / domain

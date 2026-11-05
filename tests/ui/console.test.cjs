@@ -27,17 +27,22 @@ print(json.dumps(result))
  const context=await browser.newContext({viewport:{width:1440,height:1000}});
  const page=await context.newPage();page.setDefaultTimeout(8000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- let role='admin',failSave=false,failPublish=false;const calls=[];let domainAccounts=[],domainPassword='';
+ let role='admin',failSave=false,failPublish=false;const calls=[];let domainAccounts=[],domainPassword='',mcpItems=[];
  const state=()=>({role,me:'reviewer',sites:[{slug:'demo',company:'演示工作室',domain:'demo.example',state:'active',http:200,running:2,port:18080,owner:'reviewer',plan:'Starter',days_left:20}],plans:[{id:'starter',name:'Starter',price:1800}],industries:[['tech','科技']],invoices:[]});
  const spec={dirty:false,types:['hero'],schemas:{hero:{label:'首屏',fields:[{k:'title',label:'标题',type:'text'}]}},spec:{pages:[{slug:'home',title:'首页',sections:[{type:'hero',title:'A'},{type:'hero',title:'B'}]},{slug:'contact',title:'联系',sections:[{type:'hero',title:'Contact'}]}]}};
  await context.route('**/*',async route=>{
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
   assert.equal(u.hostname,'review.invalid','Unexpected external request');
   if(p==='/'||p==='/login')return route.fulfill({contentType:'text/html',body:pages[p==='/'?'console':'login']});
-  if(['/ai.js','/prompts.js','/locale.js','/appearance.js','/domains.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
+  if(['/ai.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
+  if(p==='/api/mcp/servers'){
+   if(req.method()==='POST'){const {token,clear_token,...b}=req.postDataJSON();mcpItems=b.action==='delete'?[]:[{...b,version:(b.version||0)+1,has_token:!!token||mcpItems[0]?.has_token}];}
+   data={items:mcpItems};
+  }
+  if(p==='/api/mcp/test')data={result:{server:'Fixture MCP',version:'1',protocol:'2025-06-18',tools:[{name:'search',description:'Search fixture data'}],resources:[],prompts:[]}};
   if(p==='/api/domains')data={items:[{slug:'demo',domain:'demo.example',company:'演示工作室',manage:{}}]};
   if(p==='/api/domain/accounts'){
    if(req.method()==='POST'){
@@ -186,6 +191,19 @@ print(json.dumps(result))
  assert.equal(await page.locator('#uiLanguage').inputValue(),'en');await page.selectOption('#uiLanguage','zh');await page.selectOption('#uiTheme','dark');
  await page.goto('http://review.invalid/');await page.waitForSelector('#rows',{state:'attached'});await nav('sites');
  console.log('PASS theme and bilingual preferences, system updates, login persistence and edit preservation');
+ await nav('llm');await page.waitForSelector('#aiConfigForm');
+ assert.equal(await page.locator('#p-ai #aiConfigForm').count(),0);assert.equal(await page.locator('[data-t=llm]').evaluate(e=>e.closest('.nav-group').dataset.group),'3');
+ await page.locator('#aiKey').fill('temporary-key');await nav('mcp');assert.equal(await page.locator('#aiKey').inputValue(),'');
+ await page.locator('#mcpNew').click();await page.locator('#mcpId').fill('fixture');await page.locator('#mcpName').fill('Fixture service');await page.locator('#mcpUrl').fill('https://example.com/mcp');await page.locator('#mcpToken').fill('fixture-bearer-token');
+ await page.locator('#mcpForm button[type=submit]').click();await page.waitForSelector('[data-mcp-edit]');assert.equal(await page.locator('#mcpToken').inputValue(),'');assert.ok(!(await page.locator('#mcpList').textContent()).includes('fixture-bearer-token'));
+ await page.locator('[data-mcp-edit]').click();assert.equal(await page.locator('#mcpToken').inputValue(),'');await page.locator('#mcpCancel').click();
+ await page.locator('#mcpSearch').fill('missing');assert.equal(await page.locator('[data-mcp-edit]').count(),0);await page.locator('#mcpSearch').fill('');
+ await page.locator('[data-mcp-test]').click();await page.waitForSelector('#mcpResult:not(.hidden)');assert.match(await page.locator('#mcpResult').textContent(),/search/);
+ await page.setViewportSize({width:375,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ if(out)await page.screenshot({path:path.join(out,'mcp-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});
+ await page.locator('[data-mcp-toggle]').click();await page.waitForFunction(()=>document.querySelector('[data-mcp-test]').disabled);
+ page.once('dialog',d=>d.accept());await page.locator('[data-mcp-delete]').click();await page.waitForFunction(()=>!document.querySelector('[data-mcp-edit]'));
+ console.log('PASS LLM settings navigation, credential clearing, MCP create/search/edit/test/disable/delete');
  await nav('domain');await page.locator('[data-domain-add]').click();
  await page.locator('#domainAccountProvider').fill('Registrar fixture');await page.locator('#domainAccountUrl').fill('https://registrar.example/');
  await page.locator('#domainAccountUsername').fill('operator@example.com');await page.locator('#domainAccountPassword').fill('fixture-password-only');await page.locator('#domainAccountConfig').fill('NS: ns1.example.com');

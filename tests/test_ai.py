@@ -126,7 +126,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('ai.js','prompts.js','appearance.js','locale.js','domains.js'):
+        for filename in ('ai.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -247,6 +247,23 @@ class ConsoleTests(unittest.TestCase):
         for url in ['//evil.example','/\\evil.example','/ok\r\nLocation:evil','/\t/evil.example']:
             self.assertEqual(self.m.safe_next(url),'/')
         self.assertEqual(self.m.safe_next('/wordpress/authorize?site=demo'),'/wordpress/authorize?site=demo')
+
+    def test_mcp_admin_permissions_and_credential_redaction(self):
+        import kf_mcp
+        body={'id':'fixture','name':'Fixture','url':'https://example.com/mcp','token':'test-mcp-token','enabled':True}
+        self.assertEqual(self.request('/api/mcp/servers',user=None)[0],401)
+        for user in ('ops-test','finance-test'):
+            self.assertEqual(self.request('/api/mcp/servers',user=user)[0],403)
+            self.assertEqual(self.request('/api/mcp/servers',body,user=user)[0],403)
+            self.assertEqual(self.request('/api/mcp/test',{'id':'fixture','version':1},user=user)[0],403)
+        status,data=self.request('/api/mcp/servers',body);self.assertEqual(status,200)
+        self.assertTrue(data['item']['has_token']);self.assertNotIn(body['token'],json.dumps(data))
+        status,data=self.request('/api/mcp/servers');self.assertEqual(status,200);self.assertNotIn('secret',data['items'][0])
+        with patch.object(kf_mcp,'discover',return_value={'tools':[],'resources':[],'prompts':[]}):
+            self.assertEqual(self.request('/api/mcp/test',{'id':'fixture','version':1})[0],200)
+        self.assertEqual(self.request('/api/mcp/servers',dict(body,version=0))[0],409)
+        self.assertEqual(self.request('/api/mcp/servers',{'action':'delete','id':'fixture','version':1})[0],200)
+        self.assertNotIn(body['token'],(self.base/'console/audit.log').read_text())
 
     def test_domain_vault_requires_fresh_totp_and_never_lists_password(self):
         import kf_domain_vault
