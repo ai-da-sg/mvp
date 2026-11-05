@@ -796,6 +796,10 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
     preview_design = draft.get("design") or site_design(slug)
     preset = preview_design.get('preset', '')
     body_class = 'wp-theme-kampong'
+    reference_css = ''
+    if preset == 'reference':
+        body_class += ' kf-style-reference'
+        reference_css = (BASE / 'theme' / 'kampong' / 'reference.css').read_text()
     if preset in ('nursery', 'robotics', 'wellness'):
         body_class += ' kf-showcase kf-style-' + preset
 
@@ -805,7 +809,7 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
         '<meta name="robots" content="noindex">',
         "<title>%s</title>" % title,
         '<link rel="stylesheet" href="%s/style.css">' % asset,
-        "<style>", design_vars(slug, preview_design),
+        "<style>", design_vars(slug, preview_design), reference_css,
         ".kf-pvbar{position:sticky;top:0;z-index:99;background:#161b22;color:#e6edf3;",
         "font:13px/1.5 -apple-system,Segoe UI,sans-serif;padding:7px 14px;",
         "display:flex;gap:14px;align-items:center;flex-wrap:wrap}",
@@ -1751,6 +1755,19 @@ def sanitize_design(body):
 def apply_design(slug, tokens):
     site = SITES / slug
     try:
+        if tokens.get("preset") == "reference":
+            # Install only our scoped support files; preserve the site's existing theme.
+            install = ("$dir=WP_CONTENT_DIR.'/mu-plugins'; "
+                       "if(!is_dir($dir)&&!mkdir($dir,0755,true)){throw new Exception('mkdir failed');} "
+                       "foreach(['reference-plugin.php'=>'kf-reference-style.php','reference.css'=>'kf-reference-style.css'] as $src=>$dst){"
+                       "if(!copy('/kf-reference/'.$src,$dir.'/'.$dst)){throw new Exception('copy failed');}}")
+            support = subprocess.run(
+                ["docker", "run", "--rm", "--env-file", str(site / "wp.env"),
+                 "--network", f"kf-{slug}_default", "-v", f"{site}/html:/var/www/html",
+                 "-v", f"{BASE}/theme/kampong:/kf-reference:ro", "--user", "33:33", WPCLI_IMG,
+                 "wp", "eval", install], capture_output=True, text=True, timeout=150)
+            if support.returncode != 0:
+                return False
         result = subprocess.run(
             ["docker", "run", "--rm", "--env-file", str(site / "wp.env"),
              "--network", f"kf-{slug}_default",

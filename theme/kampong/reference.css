@@ -1,0 +1,23 @@
+/* Reference design tokens govern visible components, including legacy theme decoration. */
+.kf-style-reference{background:var(--kf-bg);color:var(--kf-ink)}
+.kf-style-reference h1,.kf-style-reference h2,.kf-style-reference h3{font-family:var(--kf-font-head)!important}
+.kf-style-reference .kf-hero{background:var(--kf-bg);color:var(--kf-ink);border-radius:0;padding-block:var(--kf-pad)}
+.kf-style-reference .kf-hero::before,.kf-style-reference .kf-hero::after{display:none}
+.kf-style-reference .kf-hero h1{color:var(--kf-ink);font-weight:650;max-width:20ch}
+.kf-style-reference .kf-hero p{color:var(--kf-muted)}
+.kf-style-reference .kf-hero .kf-kicker{color:var(--kf-primary)}
+.kf-style-reference .kf-hero-grid{grid-template-columns:1fr}
+.kf-style-reference .kf-art{display:none}
+.kf-style-reference .kf-hero .wp-block-button__link{background:var(--kf-primary);color:#fff}
+.kf-style-reference .kf-card{background:var(--kf-surface);border:1px solid rgba(40,50,45,.12);border-radius:var(--kf-radius);box-shadow:none}
+.kf-style-reference .kf-card:hover{transform:none;box-shadow:none}
+.kf-style-reference .kf-card h3{color:var(--kf-ink)}
+.kf-style-reference .kf-card p,.kf-style-reference .kf-lead{color:var(--kf-muted)}
+.kf-style-reference .kf-cta{background:var(--kf-primary);border-radius:var(--kf-radius);box-shadow:none}
+.kf-style-reference .kf-footer{background:var(--kf-deep);color:#fff}
+.kf-style-reference .kf-footer::before{display:none}
+.kf-style-reference .kf-footer a,.kf-style-reference .kf-footer p,.kf-style-reference .kf-footer small{color:#fff}
+.kf-style-reference .kf-btn{box-shadow:none}
+.kf-style-reference .kf-btn:hover{transform:none}
+.kf-style-reference .kf-eyebrow{color:var(--kf-primary)}
+.kf-style-reference a:focus-visible,.kf-style-reference button:focus-visible{outline:3px solid var(--kf-primary);outline-offset:4px}

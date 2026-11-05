@@ -124,6 +124,7 @@ class ConsoleTests(unittest.TestCase):
         self.base = Path(self.tmp.name)
         (self.base/'console').mkdir(); (self.base/'sites'/'demo').mkdir(parents=True)
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
+        (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
         for filename in ('ai.js','prompts.js','appearance.js','locale.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
@@ -211,6 +212,19 @@ class ConsoleTests(unittest.TestCase):
             apply.assert_called_once_with('demo',item['tokens'])
         self.assertEqual(self.m.read_spec('demo')['design'],item['tokens'])
         self.assertFalse(self.m.is_dirty('demo'))
+
+    def test_reference_support_install_failure_does_not_save_design(self):
+        import kf_styles
+        from types import SimpleNamespace
+        tokens = kf_styles.normalize_tokens({})
+        with patch.object(self.m.subprocess, 'run', return_value=SimpleNamespace(returncode=1)) as run:
+            self.assertFalse(self.m.apply_design('demo', tokens))
+            self.assertEqual(run.call_count, 1)
+        self.assertFalse((self.base/'sites/demo/design.json').exists())
+        with patch.object(self.m.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
+            self.assertTrue(self.m.apply_design('demo', tokens))
+            self.assertEqual(run.call_count, 2)
+        self.assertEqual(json.loads((self.base/'sites/demo/design.json').read_text()), tokens)
 
     def test_pdf_font_fallback(self):
         inv = {'no':'TEST-001','company':'测试客户','domain':'example.test','plan_name':'Demo',
