@@ -78,10 +78,43 @@ API Key 单独保存于 `console/ai-secrets.json`（权限 600），读取接口
 
 任务状态：`queued` → `generating` → 新站点的 `provisioning` → `saving` → `completed`；异常状态为 `failed` 或 `interrupted`。HTTP 202 只表示已接收任务，应轮询任务状态。完成后发布请求为 `{"slug":"demo"}`；可以加 `page` 字段逐页发布。多页发布遇到错误时，响应会报告已发布的页数并同步这些页面的线上记录；其余页面仍保留草稿，检查错误后可重试。
 
-生成输出采用受限 JSON 区块协议（首屏、卡片、分栏、列表、行动区、联系表单），不执行模型返回的 HTML 或代码。真实模型的输出会检查页面完整性、字段、链接与渲染结果。模型调用只发送企业名称、用户填写的要求、语言与页面标识，不发送数据库密码、后台账号或账单。
+生成输出采用受限 JSON 区块协议（首屏、卡片、分栏、列表、行动区、联系表单），不执行模型返回的 HTML 或代码。真实模型的输出会检查页面完整性、字段、链接与渲染结果。模型调用只发送企业名称、用户填写的要求、选定的提示词模块与业务变量、语言与页面标识，不发送数据库密码、后台账号或账单。
 
 ## 验证与协议参考
 
 运行 `.venv/bin/python -m unittest discover -s tests -v`，覆盖四种真实协议的本地 HTTP 契约、模拟生成、权限、密钥脱敏、失败保护、并发冲突、新站点任务及发布交接。真实服务商能否调用仍取决于配置的 Key、模型权限和网络；无 Key 时不会声称已验证远端服务商。
 
 协议参考：[OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)、[OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/methods/create)、[Anthropic API](https://platform.claude.com/docs/en/api/overview)、[Gemini GenerateContent](https://ai.google.dev/api/generate-content)。
+
+
+## 模块化提示词库
+
+「内容建站 → 提示词库」提供 8 类初始方案：企业服务、SaaS、本地服务预约、设计作品集、教育课程、B2B 产品询价、活动落地页和专业咨询；由 12 个模块组合。它们是公开实践的应用起点，不是经过真实模型效果排名的万能提示词。
+
+在 AI 建站中选择场景与模板，填写目标客户、服务/产品、转化目标、语气和已核实资料；可勾选模块、上下调整顺序，预览最终组合。额外要求独立保留。选择模板后，服务、客户、目标为必填；自由输入模式仍可直接填写原有建站要求。
+
+管理员可新建、编辑、复制、启用/停用模板与模块，查看并恢复最近 10 个历史版本，导出 JSON 备份。停用被启用模板引用的模块会被拒绝，需先修改或停用依赖模板。运营可读取、组合和预览；财务无权访问。默认变量支持 `{{audience}}`、`{{services}}`、`{{goal}}`、`{{tone}}`、`{{facts}}`，不执行任意表达式或代码。
+
+- `GET /api/ai/prompts`：库、模块、变量定义、来源；管理员可见历史及停用条目。
+- `POST /api/ai/prompts/preview`：`{selection, brief}`，只组合与校验，不调用模型或修改数据。
+- `POST /api/ai/prompts`：管理员使用 `save`、`toggle`、`restore`，指定 `kind`（`templates` / `modules`）、`id`、库 `revision`。更新冲突返回 409，避免覆盖别人的修改。
+- `POST /api/ai/build`：可附加 `prompt_selection`，含 `revision`、`template_id`、有序 `module_ids`、`variables`。未提供 `module_ids` 时使用模板默认组合。
+
+示例：
+
+```json
+{
+  "mode": "existing", "slug": "demo", "profile_id": "mock", "language": "en",
+  "brief": "突出真实服务能力，不使用客户评价。",
+  "prompt_selection": {
+    "revision": 1, "template_id": "company",
+    "variables": {"services": "设计咨询与空间规划", "audience": "新加坡小型办公室业主", "goal": "提交项目咨询"}
+  }
+}
+```
+
+`revision` 应使用 GET 返回值。自定义配置存于 `console/ai-prompts.json`，每次更新使用文件锁和原子写入，发布包不覆盖此运行数据。任务和草稿 `ai.prompt` 会保存模板/模块版本及组合快照，之后编辑库不会改变已创建任务。提示词内容与业务资料会发送给选定模型，因此不要放入密钥或不应公开的资料。
+
+系统输出约束独立于可编辑提示词：仍仅生成平台支持的 JSON 区块，严格校验页面、字段和链接。模板不实现支付/购物车/库存/实际预约功能，也不直接修改 CSS、字体或配色；视觉设置仍由「视觉设计」管理。模拟模式验证流程，不验证模型遵循模板的效果；上线前仍需真实模型评估和人工预览。
+
+整理日期：2026-11-04。参考 [Vercel v0 的界面、场景和约束框架](https://vercel.com/blog/how-to-prompt-v0)、[Lovable 的组件化提示与真实内容建议](https://docs.lovable.dev/prompting/prompting-one)、[Anthropic 的成功标准与评估方法](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview)。

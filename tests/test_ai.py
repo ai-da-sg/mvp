@@ -125,7 +125,8 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'console').mkdir(); (self.base/'sites'/'demo').mkdir(parents=True)
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        (self.base/'console'/'ai.js').symlink_to(ROOT/'console'/'ai.js')
+        for filename in ('ai.js','prompts.js','appearance.js','locale.js'):
+            (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
         spec = importlib.util.spec_from_file_location('kf_console_test', ROOT/'console'/'kf_console.py')
@@ -164,6 +165,28 @@ class ConsoleTests(unittest.TestCase):
             if job['status'] not in ai.ACTIVE: return job
             time.sleep(.02)
         self.fail('Job did not terminate')
+
+    def test_prompt_permissions_preview_and_job_snapshot(self):
+        status, library = self.request('/api/ai/prompts', user='ops-test')
+        self.assertEqual(status, 200)
+        self.assertFalse(library['can_manage'])
+        self.assertEqual(self.request('/api/ai/prompts', user='finance-test')[0], 403)
+        self.assertEqual(self.request('/api/ai/prompts', {}, user='ops-test')[0], 403)
+        selection = {'revision':library['revision'], 'template_id':'company', 'variables':{'services':'Design consulting'}}
+        status, preview = self.request('/api/ai/prompts/preview', {'selection':selection}, user='ops-test')
+        self.assertEqual(status, 200, preview)
+        self.assertIn('Design consulting', preview['preview'])
+        status, data = self.request('/api/ai/build', dict(slug='demo',mode='existing',profile_id='mock',language='en',prompt_selection=selection), user='ops-test')
+        self.assertEqual(status, 202, data)
+        job = self.wait_job(data['job']['id'])
+        self.assertEqual(job['status'], 'completed', job)
+        self.assertEqual(job['prompt']['template']['version'], 1)
+        self.assertEqual(job['prompt']['preview'], preview['preview'])
+        self.assertEqual(self.m.read_draft('demo')['ai']['prompt']['template']['id'], 'company')
+        selection['revision'] = -1
+        self.assertEqual(self.request('/api/ai/prompts/preview', {'selection':selection})[0], 409)
+        for filename in ('appearance.js','locale.js'):
+            self.assertEqual(self.request('/'+filename, user=None)[0], 200)
 
     def test_recovery_login_consumes_code_once(self):
         import urllib.parse

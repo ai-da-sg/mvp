@@ -5,10 +5,15 @@ const path=require('node:path');
 const {execFileSync}=require('node:child_process');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(__dirname,'../..');
+const promptBase=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'kf-prompt-ui-'));
+function promptAPI(action,body={}){return JSON.parse(execFileSync('python3',['-c',`import sys,json;sys.path.insert(0,'core');import kf_prompts;s=kf_prompts.PromptStore(sys.argv[1]);b=json.load(sys.stdin);action=sys.argv[2];r=s.compose(b['selection'],b.get('brief','')) if action=='preview' else (s.change(b) if action=='save' else s.public(True));print(json.dumps(r,ensure_ascii=False))`,promptBase,action],{cwd:root,input:JSON.stringify(body),encoding:'utf8'}));}
 const pages=JSON.parse(execFileSync('python3',['-c',`
 import ast,json,pathlib
+import sys
+sys.path.insert(0,'core')
+import kf_prompts
 m=ast.parse(pathlib.Path('console/kf_console.py').read_text())
-result={}
+result={'library':dict(kf_prompts.defaults(),variables=kf_prompts.VARIABLES,categories=kf_prompts.CATEGORIES,sources=kf_prompts.SOURCES,can_manage=True)}
 for n in m.body:
  if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='PAGE' for t in n.targets): result['console']=ast.literal_eval(n.value)
  if isinstance(n,ast.FunctionDef) and n.name=='login_page':
@@ -28,7 +33,7 @@ print(json.dumps(result))
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
   assert.equal(u.hostname,'review.invalid','Unexpected external request');
   if(p==='/'||p==='/login')return route.fulfill({contentType:'text/html',body:pages[p==='/'?'console':'login']});
-  if(p==='/ai.js')return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console/ai.js'),'utf8')});
+  if(['/ai.js','/prompts.js','/locale.js','/appearance.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
@@ -39,6 +44,9 @@ print(json.dumps(result))
    else{spec.spec.pages.find(p=>p.slug===body.page).sections=body.sections;spec.dirty=true;data={ok:true};}
   }
   if(p==='/api/publish'){calls.push({path:p,body:req.postDataJSON()});status=failPublish?500:200;data=failPublish?{error:'模拟发布失败'}:{pages:1,dirty:false};}
+  if(p==='/api/ai/prompts'){if(req.method()==='POST')promptAPI('save',req.postDataJSON());data={...promptAPI('read'),can_manage:role==='admin'};}
+  if(p==='/api/ai/prompts/preview')data=promptAPI('preview',req.postDataJSON());
+  if(p==='/api/ai/build'){calls.push({path:p,body:req.postDataJSON()});status=202;data={job:{id:'fixture'}};}
   if(p==='/api/ai/config')data={can_configure:role==='admin',profiles:[{id:'mock',name:'模拟',model:'mock',protocol:'mock'}],presets:[],default_profile:'mock'};
   if(p==='/api/ai/jobs')data={jobs:[]};
   if(p.startsWith('/api/diff/'))data={changes:[]};
@@ -101,10 +109,54 @@ print(json.dumps(result))
   await page.locator('#navToggle').click();await page.keyboard.press('Escape');assert.equal(await page.locator('#navToggle').getAttribute('aria-expanded'),'false');
   if(out)await page.screenshot({path:path.join(out,'mobile-'+width+'.png'),fullPage:true});
  }
+ await page.setViewportSize({width:1440,height:1000});
+ await nav('ai');await page.waitForFunction(()=>document.querySelector('#aiPromptTemplate').options.length>1);
+ await page.selectOption('#aiPromptTemplate','company');await page.locator('#promptServices').fill('真实设计服务');
+ await page.locator('#aiPromptPreviewBtn').click();await page.waitForFunction(()=>document.querySelector('#aiPromptPreview').value.includes('真实设计服务'));
+ assert.equal(await page.locator('#aiBrief').getAttribute('required'),null);
+ await page.selectOption('#uiTheme','light');await page.selectOption('#uiLanguage','en');
+ await page.waitForFunction(()=>document.documentElement.lang==='en'&&document.querySelector('#pageTitle').textContent==='AI builder');
+ assert.equal(await page.evaluate(()=>getComputedStyle(document.body).backgroundColor),'rgb(244, 246, 249)');
+ assert.equal(await page.locator('#promptServices').inputValue(),'真实设计服务');assert.equal(await page.locator('#aiPromptTemplate').inputValue(),'company');
+ assert.equal(await page.locator('#aiLanguage').inputValue(),'zh','Interface language must not change generated content language');
+ if(out)await page.screenshot({path:path.join(out,'ai-light-en.png'),fullPage:true});
+ await page.setViewportSize({width:375,height:812});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'AI composer must fit mobile');
+ if(out)await page.screenshot({path:path.join(out,'ai-mobile-en.png'),fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});
+ calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
+ assert.equal(calls.find(c=>c.path==='/api/ai/build').body.prompt_selection.template_id,'company');
+ assert.equal(await page.locator('#promptServices').inputValue(),'真实设计服务');
+ await nav('prompts');await page.waitForSelector('#promptLibraryList .dom-row');
+ page.once('dialog',d=>d.accept());await page.locator('[data-toggle-prompt="company"]').click();
+ await page.waitForFunction(()=>document.querySelector('#aiPromptTemplate').value==='');
+ assert.equal(await page.locator('#aiBrief').getAttribute('required'),'');
+ assert.equal(await page.locator('#promptServices').getAttribute('required'),null);
+ assert.equal(await page.locator('#promptServices').inputValue(),'真实设计服务');
+ if(out)await page.screenshot({path:path.join(out,'prompts-light-en.png'),fullPage:true});
+ await page.selectOption('#promptLibraryKind','modules');await page.locator('#promptLibraryNew').click();
+ await page.locator('#promptEditId').fill('ui-custom');await page.locator('#promptEditName').fill('UI Custom');await page.locator('#promptEditCategory').fill('copy');await page.locator('#promptEditBody').fill('Write clear copy for {{audience}}.');
+ await page.locator('#promptEditForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#promptEditForm').classList.contains('hidden'));
+ assert.equal(promptAPI('read').modules.find(m=>m.id==='ui-custom').version,1);
+ await page.locator('[data-edit-prompt="ui-custom"]').click();await page.locator('#promptEditBody').fill('Revised {{audience}} guidance');await page.locator('#promptEditForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#promptEditForm').classList.contains('hidden'));
+ await page.locator('[data-edit-prompt="ui-custom"]').click();page.once('dialog',d=>d.accept());await page.locator('[data-restore-prompt="1"]').click();await page.waitForFunction(()=>document.querySelector('#promptEditForm').classList.contains('hidden'));
+ assert.equal(promptAPI('read').modules.find(m=>m.id==='ui-custom').body,'Write clear copy for {{audience}}.');
+ console.log('PASS prompt composition, generation selection, versioned editing and restore');
+ await nav('layout');await page.locator('.section-select').first().click();await page.locator('#lForm input').fill('不要翻译我的正文');
+ await page.selectOption('#uiLanguage','zh');assert.equal(await page.locator('#lForm input').inputValue(),'不要翻译我的正文');
+ await page.selectOption('#uiLanguage','en');assert.equal(await page.locator('#lForm input').inputValue(),'不要翻译我的正文');
+ await page.locator('#lSave').click();await page.waitForFunction(()=>!document.querySelector('#lSave').disabled);
+ await page.emulateMedia({colorScheme:'dark'});await page.selectOption('#uiTheme','system');await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+ await page.emulateMedia({colorScheme:'light'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+ await page.reload();await page.waitForSelector('#uiLanguage');assert.equal(await page.locator('#uiLanguage').inputValue(),'en');assert.equal(await page.locator('#uiTheme').inputValue(),'system');
+ await page.goto('http://review.invalid/login');await page.waitForFunction(()=>document.querySelector('button[type=submit]').textContent==='Sign in');
+ assert.equal(await page.locator('#uiLanguage').inputValue(),'en');await page.selectOption('#uiLanguage','zh');await page.selectOption('#uiTheme','dark');
+ await page.goto('http://review.invalid/');await page.waitForSelector('#rows',{state:'attached'});await nav('sites');
+ console.log('PASS theme and bilingual preferences, system updates, login persistence and edit preservation');
  role='finance';await page.reload();await page.waitForSelector('#rows');await page.waitForFunction(()=>document.querySelector('[data-t=layout]').style.display==='none');
  assert.equal(await page.locator('.nav-group').last().isVisible(),false);
  assert.equal(await page.locator('#f').isVisible(),false);
  assert.deepEqual(errors,[]);
  console.log('PASS responsive menus, saved navigation, role filtering and no JavaScript errors');
- }finally{await browser.close();}
+ }finally{await browser.close();fs.rmSync(promptBase,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exit(1)});

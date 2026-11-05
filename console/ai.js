@@ -84,7 +84,7 @@ async function aiJobs() {
       <div class="h"><b>${esc(j.slug)}</b><span class="pill">${esc(labels[j.status]||j.status)}</span>
       <span>${esc(j.provider)} / ${esc(j.model)}</span>${j.simulated?'<span class="pill">模拟</span>':''}
       <span class="hint">${esc(new Date(j.created*1000).toLocaleString())}</span></div>
-      <p style="margin:8px 0">${esc(j.message)}</p>
+      <p style="margin:8px 0">${esc(j.message)}</p>${j.prompt?`<details><summary>提示词：${esc(j.prompt.template.name)} · v${j.prompt.template.version}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(j.prompt.preview)}</pre></details>`:''}
       ${j.status==='completed'?`<a href="/preview/${encodeURIComponent(j.slug)}/home" target="_blank" rel="noopener">预览草稿</a>
       <button type="button" data-ai-editor="${esc(j.slug)}">编辑页面</button>
       <button type="button" data-ai-publish="${esc(j.slug)}">发布当前草稿</button>
@@ -96,6 +96,7 @@ async function aiJobs() {
 async function initAI() {
   try {
     await aiLoadConfig();
+    await initPromptComposer();
     aiOptions('#aiSite',(STATE.sites||[]).map(s=>({...s,id:s.slug})),s=>s.company+' / '+s.slug);
     aiOptions('#aiPlan',STATE.plans||[],p=>p.name+' — '+money(p.price));
     aiOptions('#aiIndustry',(STATE.industries||[]).map(([id,name])=>({id,name})),p=>p.name);
@@ -124,6 +125,8 @@ $('#aiBuildForm').onsubmit=async e=>{
       company:$('#aiCompany').value.trim(),domain:$('#aiDomain').value.trim(),plan_id:$('#aiPlan').value,
       industry:$('#aiIndustry').value,profile_id:$('#aiProfile').value,language:$('#aiLanguage').value,
       brief:$('#aiBrief').value.trim(),replace_draft:$('#aiReplace').checked};
+    const selection=promptSelection();
+    if(selection){await previewPrompt();body.prompt_selection=selection;}
     await aiRequest('/api/ai/build',body);
     aiMessage('#aiBuildMsg','任务已提交，进度显示在下方。可以离开本页，任务会继续执行。');
     await aiJobs();

@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 import kf_ai
+import kf_prompts
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -1491,6 +1492,7 @@ def login_page(err="", next_url="/"):
     return """<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>登录 · KampongFlow</title>
+<script src="/locale.js"></script><script src="/appearance.js"></script>
 <style>
 *{box-sizing:border-box}
 html,body{min-height:100%%}
@@ -1975,6 +1977,7 @@ def invoice_pdf(inv):
 PAGE = r"""<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KampongFlow 控制台</title>
+<script src="/locale.js"></script><script src="/appearance.js"></script>
 <style>
 :root{--bg:#0d1117;--card:#161b22;--line:#30363d;--fg:#e6edf3;--dim:#8b949e;
 --ok:#3fb950;--warn:#d29922;--bad:#f85149;--acc:#58a6ff}
@@ -2003,12 +2006,12 @@ a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
 form{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:20px}
 .formrow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
-input,select{background:#0d1117;border:1px solid var(--line);border-radius:6px;color:var(--fg);
+input,select{background:var(--input,#0d1117);border:1px solid var(--line);border-radius:6px;color:var(--fg);
 padding:8px 10px;font-size:14px;width:100%}
 .field{flex:1;min-width:130px}
 button{background:#238636;color:#fff;border:0;border-radius:6px;padding:9px 16px;font-size:14px;
 cursor:pointer;font-weight:500}
-button.ghost{background:#21262d;border:1px solid var(--line);color:var(--fg);padding:5px 10px;font-size:12.5px}
+button.ghost{background:var(--surface,#21262d);border:1px solid var(--line);color:var(--fg);padding:5px 10px;font-size:12.5px}
 button:disabled{opacity:.5;cursor:default}
 .msg{margin-top:12px;font-size:13px}
 .msg.bad{color:var(--bad);background:transparent}.msg.ok{color:var(--ok);background:transparent}
@@ -2018,10 +2021,10 @@ footer{margin-top:26px;color:var(--dim);font-size:12px}
 .sec-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);
   background:var(--card);font-size:13px;cursor:pointer}
 .sec-row:last-child{border-bottom:none}
-.sec-row.on{background:#1c2530;box-shadow:inset 3px 0 0 var(--acc)}
+.sec-row.on{background:var(--callout,#1c2530);box-shadow:inset 3px 0 0 var(--acc)}
 .sec-row .t{font-family:ui-monospace,Menlo,monospace;color:var(--acc);min-width:74px}
 .sec-row .s{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sec-row button{background:#21262d;border:1px solid var(--line);color:var(--fg);border-radius:5px;
+.sec-row button{background:var(--surface,#21262d);border:1px solid var(--line);color:var(--fg);border-radius:5px;
   padding:2px 7px;font-size:12px;cursor:pointer}
 .lead-card{background:var(--card);border:1px solid var(--line);border-radius:10px;
   padding:13px 15px;margin-bottom:9px}
@@ -2031,20 +2034,20 @@ footer{margin-top:26px;color:var(--dim);font-size:12px}
 .lead-msg{margin-top:7px;font-size:13px;color:var(--fg);white-space:pre-wrap;line-height:1.6}
 .lead-meta{margin-top:6px;font-size:12px;color:var(--dim);font-family:ui-monospace,Menlo,monospace}
 .badge-warn{background:#d2992222;color:#d29922;border-radius:4px;padding:1px 6px;font-size:11px}
-.callout{background:#1c2530;border:1px solid var(--line);border-left:3px solid var(--acc);
+.callout{background:var(--callout,#1c2530);border:1px solid var(--line);border-left:3px solid var(--acc);
   border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--dim);line-height:1.7}
 .dom-row{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:8px}
 .dom-row .h{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .dom-row .name{font-family:ui-monospace,Menlo,monospace;color:var(--acc);font-size:13px}
 .dom-row .hint{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--dim);
   margin-top:6px;word-break:break-all}
-.dom-row button{background:#21262d;border:1px solid var(--line);color:var(--fg);
+.dom-row button{background:var(--surface,#21262d);border:1px solid var(--line);color:var(--fg);
   border-radius:5px;padding:3px 9px;font-size:12px;cursor:pointer}
 .share-row{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--card);
   border:1px solid var(--line);border-radius:8px;margin-bottom:8px;font-size:12.5px;flex-wrap:wrap}
 .share-row .u{font-family:ui-monospace,Menlo,monospace;color:var(--acc);flex:1;word-break:break-all}
 .share-row .dead{color:var(--dim);text-decoration:line-through}
-.share-row button{background:#21262d;border:1px solid var(--line);color:var(--fg);
+.share-row button{background:var(--surface,#21262d);border:1px solid var(--line);color:var(--fg);
   border-radius:5px;padding:3px 9px;font-size:12px;cursor:pointer}
 @media(max-width:760px){
   .sm-hide{display:none}
@@ -2075,25 +2078,25 @@ footer{margin-top:26px;color:var(--dim);font-size:12px}
 .diff-row .arrow{color:var(--dim)}
 .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:16px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.tile img{width:100%;height:120px;object-fit:cover;display:block;background:#0d1117}
+.tile img{width:100%;height:120px;object-fit:cover;display:block;background:var(--input,#0d1117)}
 .tile .meta{padding:8px 10px;font-size:11.5px;color:var(--dim);line-height:1.5}
 .tile .meta b{display:block;color:var(--fg);font-size:12px;font-weight:500;word-break:break-all}
 .tile .ops{display:flex;gap:6px;padding:0 10px 10px}
-.tile .ops button{flex:1;background:#21262d;border:1px solid var(--line);color:var(--fg);
+.tile .ops button{flex:1;background:var(--surface,#21262d);border:1px solid var(--line);color:var(--fg);
   border-radius:5px;padding:4px 0;font-size:11.5px;cursor:pointer}
 .tile .ops button.del{color:#f85149;border-color:#5c2b2b}
 .used{display:inline-block;background:#1f6feb22;color:#58a6ff;border-radius:4px;padding:1px 5px;font-size:10.5px}
 .form-area{margin-top:12px}
 .fld{margin-bottom:10px}
 .fld label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
-.fld input[type=text],.fld textarea,.fld select{width:100%;background:#0d1117;border:1px solid var(--line);
+.fld input[type=text],.fld textarea,.fld select{width:100%;background:var(--input,#0d1117);border:1px solid var(--line);
   border-radius:6px;color:var(--fg);padding:8px 10px;font-size:13.5px}
 .fld textarea{min-height:64px;resize:vertical}
 .fld .row2{display:flex;gap:8px}
 .fld .row2 input{flex:1}
 .fld .sub{display:flex;gap:6px;margin-bottom:6px;align-items:flex-start}
 .fld .sub .grow{flex:1;display:flex;flex-direction:column;gap:6px}
-.fld .sub button{background:#21262d;border:1px solid var(--line);color:var(--fg);border-radius:5px;
+.fld .sub button{background:var(--surface,#21262d);border:1px solid var(--line);color:var(--fg);border-radius:5px;
   padding:3px 8px;font-size:12px;cursor:pointer;height:30px}
 .fld .add{background:#1f6feb22;border:1px dashed #388bfd;color:var(--acc);border-radius:6px;
   padding:6px 10px;font-size:12.5px;cursor:pointer;width:100%;margin-top:2px}
@@ -2102,7 +2105,7 @@ footer{margin-top:26px;color:var(--dim);font-size:12px}
 .fld .chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg)}
 .adv{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .adv summary{cursor:pointer;font-size:12.5px;color:var(--dim)}
-.json-edit{width:100%;min-height:160px;background:#0d1117;border:1px solid var(--line);border-radius:8px;
+.json-edit{width:100%;min-height:160px;background:var(--input,#0d1117);border:1px solid var(--line);border-radius:8px;
   color:var(--fg);font-family:ui-monospace,Menlo,monospace;font-size:12.5px;padding:10px;margin-top:6px}
 .design-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
 @media(max-width:820px){.design-grid{grid-template-columns:1fr}}
@@ -2125,7 +2128,7 @@ input[type=color]{height:38px;padding:2px;cursor:pointer}
 .nav-group summary{cursor:pointer;padding:12px 8px;font-size:13px;font-weight:650;color:var(--dim)}
 .submenu{display:flex;flex-direction:column;gap:4px;padding:2px 0 10px}
 .tab{display:block;text-align:left;width:100%;border:0;border-radius:7px;min-height:42px;padding:10px 14px;background:transparent;color:var(--dim);font:inherit;font-size:14px}
-.tab:hover{background:#21262d;color:var(--fg)}.tab.on{background:#1c2d42;color:#9acbff;box-shadow:inset 3px 0 var(--acc)}
+.tab:hover{background:var(--surface,#21262d);color:var(--fg)}.tab.on{background:#1c2d42;color:#9acbff;box-shadow:inset 3px 0 var(--acc)}
 .workspace{min-width:0}.page-heading{display:flex;justify-content:space-between;gap:12px;margin-bottom:20px;align-items:center}
 .breadcrumb{font-size:12px;color:var(--dim);margin-bottom:4px}.page-heading h2{font-size:24px;margin:0}
 .nav-toggle{display:none}.skip-link{position:fixed;left:12px;top:-80px;z-index:100;background:var(--card);padding:12px}.skip-link:focus{top:12px}
@@ -2165,7 +2168,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <button type="button" id="navToggle" class="ghost nav-toggle" aria-expanded="false" aria-controls="navGroups">导航菜单 · 站点总览</button>
 <nav id="navGroups" class="nav-groups" aria-label="主导航与二级菜单">
 <details class="nav-group" data-group="0" open><summary>站点运营</summary><div class="submenu"><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
-<details class="nav-group" data-group="1"><summary>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
+<details class="nav-group" data-group="1"><summary>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
 <details class="nav-group" data-group="2"><summary>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
 <details class="nav-group" data-group="3"><summary>系统管理</summary><div class="submenu"><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
@@ -2227,7 +2230,22 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="field"><label for="aiPlan">套餐</label><select id="aiPlan"></select></div>
 <div class="field"><label for="aiIndustry">行业与视觉模板</label><select id="aiIndustry"></select></div>
 </div><p class="hint">新站点会开通 WordPress 和数据库，并生成套餐账单。生成的 AI 内容先保存为草稿；域名解析可在交付前配置。</p></div>
-<div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍企业和主营服务、目标客户、网站风格、要突出的信息，以及真实的联系方式。例：新加坡室内设计工作室，服务住宅与小型办公室。风格简洁温暖，突出设计咨询、空间规划、施工跟进，希望访客通过联系表单预约。"></textarea></div>
+<fieldset class="prompt-composer" style="margin-top:20px;border:1px solid var(--line);border-radius:10px;padding:16px">
+<legend>提示词方案</legend>
+<div class="formrow"><div class="field"><label for="aiPromptCategory">场景分类</label><select id="aiPromptCategory"><option value="">全部场景</option></select></div><div class="field"><label for="aiPromptTemplate">选择模板</label><select id="aiPromptTemplate"><option value="">自由输入（不使用模板）</option></select></div></div>
+<p id="aiPromptDescription" class="hint">选择场景模板后，填写真实业务资料并调整模块组合。</p>
+<div id="aiPromptFields" class="hidden"><div class="formrow">
+<div class="field"><label for="promptAudience">目标客户</label><input id="promptAudience" maxlength="1500"></div><div class="field"><label for="promptGoal">主要转化目标</label><input id="promptGoal" maxlength="1500"></div></div>
+<div class="fld"><label for="promptServices">主营服务 / 产品（必填）</label><textarea id="promptServices" rows="3" maxlength="1500" placeholder="填写真实提供的服务或产品"></textarea></div>
+<div class="field"><label for="promptTone">品牌语气</label><input id="promptTone" maxlength="1500"></div>
+<div class="fld"><label for="promptFacts">已核实资料与联系方式（选填）</label><textarea id="promptFacts" rows="3" maxlength="1500" placeholder="仅填写可公开且已核实的案例、地址、时间、价格或联系方式"></textarea></div>
+<details><summary>调整模块与顺序</summary><div id="aiPromptModules"></div></details>
+<button type="button" class="ghost" id="aiPromptPreviewBtn" style="margin-top:12px">预览组合后的提示词</button>
+<details id="aiPromptPreviewBox"><summary>最终提示词预览</summary><textarea id="aiPromptPreview" class="json-edit" readonly aria-label="组合后的提示词"></textarea></details>
+<div id="aiPromptMsg" class="msg" role="status"></div></div>
+<p class="hint">模板影响内容结构与语气；配色、字体仍由视觉模板负责。模拟模式用于流程验证，不代表真实模型效果。</p>
+</fieldset>
+<div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求 / 额外补充</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍企业和主营服务、目标客户、网站风格、要突出的信息，以及真实的联系方式。例：新加坡室内设计工作室，服务住宅与小型办公室。风格简洁温暖，突出设计咨询、空间规划、施工跟进，希望访客通过联系表单预约。"></textarea></div>
 <label id="aiReplaceWrap" class="hint" style="display:block;margin:12px 0"><input id="aiReplace" type="checkbox"> 如果已有未发布草稿，我确认用本次结果替换（系统会备份原草稿）</label>
 <button id="aiGenerate" type="submit">生成整站草稿</button><span id="aiBuildMsg" class="msg" role="status" aria-live="polite"></span>
 </form>
@@ -2257,6 +2275,22 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <label class="hint" style="margin-left:16px"><input id="aiClearKey" type="checkbox"> 清除已保存密钥</label>
 <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="submit">保存配置</button><button type="button" class="ghost" id="aiResetConfig">新建配置</button><span id="aiConfigMsg" class="msg" role="status"></span></div>
 </form></details>
+</div>
+
+<div id="p-prompts" class="hidden">
+<p class="hint">模板定义场景，模块组织目标、结构、风格、文案与检查标准。运营可选择使用；管理员可编辑、复制、停用并恢复历史版本。</p>
+<div class="formrow"><div class="field"><label for="promptLibraryKind">查看</label><select id="promptLibraryKind"><option value="templates">场景模板</option><option value="modules">可复用模块</option></select></div><div class="field"><label for="promptLibrarySearch">搜索名称、分类或用途</label><input id="promptLibrarySearch" type="search"></div><button class="ghost" id="promptLibraryRefresh">刷新</button><button class="ghost" id="promptLibraryExport">导出提示词库</button><button id="promptLibraryNew">新建</button></div>
+<div id="promptLibraryList" style="margin-top:16px"></div><div id="promptLibraryMsg" class="msg" role="status"></div>
+<form id="promptEditForm" class="hidden">
+<h3 id="promptEditTitle">编辑条目</h3>
+<div class="formrow"><div class="field"><label for="promptEditId">ID</label><input id="promptEditId" required pattern="[a-z][a-z0-9_-]{1,39}" maxlength="40"></div><div class="field"><label for="promptEditName">名称</label><input id="promptEditName" required maxlength="80"></div><div class="field"><label for="promptEditCategory">分类</label><input id="promptEditCategory" required maxlength="40" list="promptCategories"><datalist id="promptCategories"></datalist></div></div>
+<div class="fld"><label for="promptEditDescription">用途说明</label><input id="promptEditDescription" maxlength="300"></div>
+<div class="fld"><label for="promptEditBody">提示词内容</label><textarea id="promptEditBody" rows="6" required maxlength="2400"></textarea><p class="hint">可用变量：{{audience}}、{{services}}、{{goal}}、{{tone}}、{{facts}}。不在提示词中保存密钥或私人资料。</p></div>
+<div id="promptEditTemplateFields"><label>默认模块（按下列顺序组合）</label><div id="promptEditModules"></div><div class="fld"><label for="promptEditDefaults">默认业务变量（JSON，可留空）</label><textarea id="promptEditDefaults" rows="3" placeholder='{"audience":"企业客户","goal":"提交咨询","tone":"专业清晰"}'></textarea></div></div>
+<label><input type="checkbox" id="promptEditEnabled" checked> 启用</label>
+<button type="submit">保存新版本</button><button type="button" class="ghost" id="promptEditCancel">取消编辑</button><span id="promptEditMsg" class="msg" role="status"></span>
+<div id="promptEditHistory" style="margin-top:12px"></div></form>
+<details style="margin-top:24px"><summary>设计依据与使用边界</summary><div id="promptSources"></div><p class="hint">这些模板是根据公开实践整理的起点，并非经过模型效果排名的“最佳提示词”。请用真实业务资料生成草稿，核对事实和页面后再发布。模板只生成当前平台支持的内容，不实现支付、库存或预约系统。</p></details>
 </div>
 
 <div id="p-layout" class="hidden">
@@ -2427,14 +2461,14 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 <div style="margin-top:14px"><button id="dSave">应用设计</button> <span id="dmsg" class="msg"></span></div>
 <div class="design-grid">
-  <div class="preview" id="pv">
+  <div data-user-content class="preview" id="pv">
     <div class="pv-hero" id="pvHero"><div class="pv-kicker">PRESCHOOL · SINGAPORE</div>
       <div class="pv-h1">Little Gems</div>
       <div class="pv-p">A play-based bilingual preschool.</div>
       <div class="pv-btn" id="pvBtn">Book a Visit</div></div>
     <div class="pv-card" id="pvCard"><b>Character</b><div class="pv-small">Grounded in solid character.</div></div>
   </div>
-  <div class="preview" style="font-size:12.5px;color:#8b949e">
+  <div data-user-content class="preview" style="font-size:12.5px;color:#8b949e">
     <b style="color:#e6edf3">令牌说明</b>
     <div style="margin-top:8px;line-height:1.7">
     主色决定首屏、页脚、按钮与卡片色条；<br>
@@ -2457,7 +2491,7 @@ let STATE={sites:[],invoices:[],plans:[]};
 let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
-    ? ['ai','layout','design','media','share','dns','maint','team']
+    ? ['ai','prompts','layout','design','media','share','dns','maint','team']
     : (ROLE==='admin' ? [] : ['team']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
@@ -2478,13 +2512,13 @@ function navigateTo(key, updateHistory=true){
  document.querySelectorAll('.tab').forEach(x=>{x.classList.toggle('on',x===t);if(x===t)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
  document.querySelectorAll('.tab').forEach(x=>$('#p-'+x.dataset.t).classList.toggle('hidden',x!==t));
  t.closest('details').open=true;
- $('#pageTitle').textContent=t.textContent;
- $('#breadcrumb').textContent=t.closest('details').querySelector('summary').textContent+' / '+t.textContent;
- $('#navToggle').textContent='导航菜单 · '+t.textContent;
+ $('#pageTitle').textContent=t.dataset.label||t.textContent;
+ $('#breadcrumb').textContent=(t.closest('details').dataset.label||t.closest('details').querySelector('summary').textContent)+' / '+(t.dataset.label||t.textContent);
+ $('#navToggle').textContent='导航菜单 · '+(t.dataset.label||t.textContent);
  $('#navGroups').classList.remove('expanded');$('#navToggle').setAttribute('aria-expanded','false');
  if(updateHistory && location.hash!=='#'+key) history.pushState(null,'','#'+key);
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
- const initializers={ai:()=>initAI(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
+ const initializers={ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
  if(updateHistory)$('#pageTitle').focus({preventScroll:true});
  return true;
@@ -2497,7 +2531,8 @@ function syncNavigation(){
  }else if(document.querySelector('.tab.on')?.style.display==='none')navigateTo('sites');
 }
 function showGlobalError(message){const e=$('#globalMsg');e.textContent=message;e.classList.remove('hidden');}
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>navigateTo(t.dataset.t));
+document.querySelectorAll('.tab').forEach(t=>{t.dataset.label=t.textContent;t.onclick=()=>navigateTo(t.dataset.t);});
+document.querySelectorAll('.nav-group').forEach(g=>g.dataset.label=g.querySelector('summary').textContent);
 $('#navToggle').onclick=()=>{const open=$('#navGroups').classList.toggle('expanded');$('#navToggle').setAttribute('aria-expanded',String(open));};
 $('.sidebar').addEventListener('keydown',e=>{if(e.key==='Escape'){$('#navGroups').classList.remove('expanded');$('#navToggle').setAttribute('aria-expanded','false');$('#navToggle').focus();}});
 window.addEventListener('popstate',()=>{if(NAV_READY && !navigateTo(location.hash.slice(1)||'sites',false))history.replaceState(null,'','#'+CURRENT_TAB);});
@@ -2512,7 +2547,7 @@ function renderSites(){
   }
   const html=s.length? s.map(x=>`<tr>
   <td class="mono">${esc(x.slug)}</td>
-  <td><b>${esc(x.company)}</b><div class="mono" style="color:var(--dim)">${esc(x.domain)}</div></td>
+  <td><b data-user-content>${esc(x.company)}</b><div class="mono" style="color:var(--dim)">${esc(x.domain)}</div></td>
   <td class="sm-hide" style="font-size:12.5px;color:var(--dim)">${esc(x.owner)||'—'}</td>
   <td class="sm-hide">${esc(x.plan)||'-'}</td>
   <td>${badge(x.state)}<details class="hint"><summary>运行详情</summary><div class="mono">HTTP ${x.http||'-'} · ${x.running}/2</div></details>
@@ -2553,7 +2588,7 @@ async function load(){
   <div class="stat"><b>${money(unpaid.reduce((a,b)=>a+b.total,0))}</b><span>待收款</span></div>
   <div class="stat"><b>${iv.length}</b><span>账单数</span></div>`;
  const billHtml=iv.length?iv.map(i=>`<tr>
-  <td class="mono">${esc(i.no)}</td><td>${esc(i.company)}</td><td>${esc(i.plan_name)}</td>
+  <td class="mono">${esc(i.no)}</td><td data-user-content>${esc(i.company)}</td><td>${esc(i.plan_name)}</td>
   <td class="mono">${money(i.total)}</td>
   <td><span class="pill" style="color:${i.status==='paid'?'var(--ok)':'var(--warn)'}">${i.status==='paid'?'已付款':'待付款'}</span></td>
   <td class="mono" style="color:var(--dim)">${esc(i.issued_at)}</td>
@@ -3512,7 +3547,7 @@ function renderSecList(){
   box.innerHTML=page.sections.map((s,i)=>
     `<div class="sec-row ${i===LIDX?'on':''}" data-i="${i}">
       <button class="section-select" type="button" data-act="select" aria-pressed="${i===LIDX}" aria-label="编辑区块 ${i+1}：${esc(secSummary(s))}"><span class="t">${esc((LSCHEMAS[s.type]||{}).label||s.type)}</span>
-      <span class="s">${esc(secSummary(s))}</span></button>
+      <span class="s" data-user-content>${esc(secSummary(s))}</span></button>
       <button type="button" data-act="up" aria-label="上移区块 ${i+1}" ${i===0?'disabled':''}>↑</button><button type="button" data-act="down" aria-label="下移区块 ${i+1}" ${i===page.sections.length-1?'disabled':''}>↓</button><button type="button" class="danger" data-act="del" aria-label="删除区块 ${i+1}">×</button>
     </div>`).join('') || '<div class="sec-row"><span class="s">这一页还没有区块</span></div>';
   box.querySelectorAll('.sec-row[data-i]').forEach(row=>{
@@ -3747,9 +3782,9 @@ const siteSlug=$('#f input[name=slug]'),siteDomain=$('#f input[name=domain]');
 siteSlug.addEventListener('input',()=>siteSlug.dataset.manual=siteSlug.value?'yes':'');
 siteDomain.addEventListener('input',()=>{if(siteSlug.dataset.manual)return;const candidate=siteDomain.value.toLowerCase().replace(/^https?:\/\//,'').split('.')[0].replace(/[^a-z0-9-]/g,'').slice(0,20);if(/^[a-z][a-z0-9-]+$/.test(candidate))siteSlug.value=candidate;});
 async function refreshConsole(){try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}}
-refreshConsole();setInterval(refreshConsole,5000);
+window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/ai.js"></script></body></html>"""
+<script src="/ai.js"></script><script src="/prompts.js"></script></body></html>"""
 
 
 _AI = None
@@ -3922,6 +3957,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.user_role not in ("admin", "ops"):
             return self._send(403, {"error": "当前角色无权使用自动建站"})
         store = ai_store()
+        if path == "/api/ai/prompts":
+            return self._send(200, kf_prompts.PromptStore(BASE).public(self.user_role == "admin"))
         if path == "/api/ai/config":
             result = store.profiles()
             if self.user_role != "admin":
@@ -3940,6 +3977,15 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._send(400, {"error": "请求必须是 JSON 对象"})
         try:
+            if path == "/api/ai/prompts/preview":
+                result = kf_prompts.PromptStore(BASE).compose(body.get("selection"), body.get("brief", ""))
+                return self._send(200, result)
+            if path == "/api/ai/prompts":
+                if self.user_role != "admin":
+                    return self._send(403, {"error": "只有管理员可以管理提示词库"})
+                item = kf_prompts.PromptStore(BASE).change(body)
+                audit(self.user, "ai_prompt", item["id"], "%s v%d" % (body.get("action", "save"), item["version"]))
+                return self._send(200, kf_prompts.PromptStore(BASE).public(True))
             if path == "/api/ai/config":
                 if self.user_role != "admin":
                     return self._send(403, {"error": "只有管理员可以配置模型服务商"})
@@ -3958,6 +4004,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/ai/build":
                 return self._ai_build(body)
             return self._send(404, {"error": "not found"})
+        except kf_prompts.PromptConflict as e:
+            return self._send(409, {"error": str(e)})
         except kf_ai.AIError as e:
             return self._send(400, {"error": str(e)})
 
@@ -3968,7 +4016,11 @@ class Handler(BaseHTTPRequestHandler):
         mode = body.get("mode", "existing")
         if mode not in ("new", "existing"):
             raise kf_ai.AIError("请选择新站点或已有站点")
-        brief = kf_ai.text(body.get("brief", ""), "建站要求", 6000, True)
+        selection = body.get("prompt_selection")
+        brief = kf_ai.text(body.get("brief", ""), "建站要求", 6000, selection is None)
+        prompt_snapshot = kf_prompts.PromptStore(BASE).compose(selection, brief) if selection is not None else None
+        if prompt_snapshot:
+            brief = prompt_snapshot["brief"]
         language = body.get("language", "zh")
         if language not in ("zh", "en"):
             raise kf_ai.AIError("请选择中文或英文")
@@ -4006,7 +4058,7 @@ class Handler(BaseHTTPRequestHandler):
             if mode == "new":
                 port = reserve_site(slug)
             try:
-                job = ai_store().create_job(slug, profile, self.user, mode)
+                job = ai_store().create_job(slug, profile, self.user, mode, prompt_snapshot)
                 args = (job, profile, key, company, domain, brief, language, pages,
                         original, port, plan, industry)
                 threading.Thread(target=self._ai_worker, args=args, daemon=True).start()
@@ -4022,7 +4074,10 @@ class Handler(BaseHTTPRequestHandler):
         store, slug, jid = ai_store(), job["slug"], job["id"]
         try:
             store.update_job(jid, status="generating", message="正在模拟生成页面" if job["simulated"] else "正在调用模型生成页面")
-            result = kf_ai.generate(profile, key, company, brief, pages, language)
+            if job.get("prompt"):
+                result = kf_ai.generate(profile, key, company, brief, pages, language, guidance=job["prompt"]["instructions"])
+            else:
+                result = kf_ai.generate(profile, key, company, brief, pages, language)
             # Validate rendered content too, before provisioning or changing the draft.
             for page in result["pages"]:
                 rendered = ks().render_sections(page["sections"])
@@ -4050,7 +4105,8 @@ class Handler(BaseHTTPRequestHandler):
                 backup = SITES / slug / ".backups" / ("ai-" + jid + ".json")
                 kf_ai.atomic_json(backup, current)
                 result["ai"] = {"job_id": jid, "simulated": job["simulated"], "model": profile["model"],
-                                "language": language, "generated_at": int(time.time())}
+                                "language": language, "generated_at": int(time.time()),
+                                "prompt": job.get("prompt")}
                 kf_ai.atomic_json(draft_path(slug), result)
             store.update_job(jid, status="completed", message="模拟草稿已生成，请预览、编辑后发布" if job["simulated"] else "草稿已生成，请预览、编辑后发布",
                              pages=len(result["pages"]), preview="/preview/" + slug + "/home")
@@ -4069,6 +4125,8 @@ class Handler(BaseHTTPRequestHandler):
         if self._maybe_site():
             return
         raw = self.path.split("?")[0]
+        if raw in ("/appearance.js", "/locale.js"):
+            return self._send(200, (CONSOLE / raw.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if raw == "/login":
             return self._send(200, login_page(), "text/html; charset=utf-8")
         if raw == "/logout":
@@ -4091,8 +4149,8 @@ class Handler(BaseHTTPRequestHandler):
         path = raw.rstrip("/") or "/"
         if path == "/":
             return self._send(200, PAGE, "text/html; charset=utf-8")
-        if path == "/ai.js":
-            return self._send(200, (CONSOLE / "ai.js").read_text(), "application/javascript; charset=utf-8")
+        if path in ("/ai.js", "/prompts.js"):
+            return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path.startswith("/api/ai/"):
             return self._ai_get(path)
         if path == "/health":
@@ -4404,7 +4462,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard():
             return
         path = self.path.split("?")[0]
-        if not can_write(getattr(self, "user_role", "ops"), path):
+        is_prompt_preview = path == "/api/ai/prompts/preview" and self.user_role in ("admin", "ops")
+        if not is_prompt_preview and not can_write(getattr(self, "user_role", "ops"), path):
             audit(getattr(self, "user", "-"), "denied", path)
             return self._send(403, {"error": "当前角色无权执行此操作"})
         audit(getattr(self, "user", "-"), "POST " + path, "")
