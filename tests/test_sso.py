@@ -72,6 +72,29 @@ class SSOTests(unittest.TestCase):
             try:return self.call(ticket=ticket,verifier=self.verifier)['ok']
             except AIError:return False
         with ThreadPoolExecutor(max_workers=4) as pool:self.assertEqual(sum(pool.map(consume,range(4))),1)
+    def test_installer_handles_owned_plugin_directories_and_disables_failed_entry(self):
+        import importlib.util
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        root=Path(__file__).resolve().parents[1]
+        spec=importlib.util.spec_from_file_location('sso_installer_test',root/'tools/kf_sso_install.py')
+        installer=importlib.util.module_from_spec(spec);spec.loader.exec_module(installer)
+        site=Path(self.tmp.name)/'sites/demo';site.mkdir(parents=True)
+        (site/'meta.json').write_text('{}');(site/'wp.env').write_text('')
+        (site/'handover.md').write_text('# Demo\n- 账号：admin\n- 密码：obsolete\n')
+        with patch.object(installer.subprocess,'run',return_value=SimpleNamespace(returncode=1,stdout='')):
+            with self.assertRaises(AIError):installer.install(self.tmp.name,'demo','https://mvp.example.com','https://site.example.com')
+        self.assertFalse(self.store.config()['sites']['demo']['enabled'])
+        with patch.object(installer.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='MVP_SSO_INSTALLED')) as run:
+            for _ in range(2):installer.install(self.tmp.name,'demo','https://mvp.example.com','https://site.example.com')
+            cmd=run.call_args.args[0]
+            self.assertEqual(cmd[cmd.index('--user')+1],'0:0')
+            self.assertNotIn(self.site['secret'],str(cmd))
+        self.assertTrue(self.store.config()['sites']['demo']['enabled'])
+        handover=(site/'handover.md').read_text()
+        self.assertNotIn('obsolete',handover)
+        self.assertEqual(handover.count('## 统一管理入口'),1)
+
     def test_cross_site_and_url_restrictions(self):
         for url in ['http://example.com','https://user:pass@example.com','https://example.com?x=1','https://example.com:8443','https://example.com/\n']:
             with self.assertRaises((AIError,ValueError)):sso.public_origin(url)

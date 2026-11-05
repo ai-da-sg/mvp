@@ -50,7 +50,7 @@ class SSOStore:
     def config(self):
         return read_json(self.config_path, {'console_url':'','sites':{}})
 
-    def configure(self, console_url, slug, site_url):
+    def configure(self, console_url, slug, site_url, enabled=True):
         console_url,site_url=public_origin(console_url),public_origin(site_url)
         if not re.fullmatch('[a-z][a-z0-9-]{1,19}',slug): raise AIError('站点标识无效')
         with self.locked():
@@ -58,9 +58,15 @@ class SSOStore:
             if cfg['console_url'] and cfg['console_url']!=console_url: raise AIError('统一入口地址已配置，不能在添加站点时更换')
             cfg['console_url']=console_url
             old=cfg['sites'].get(slug,{})
-            site={'url':site_url,'secret':old.get('secret') or secrets.token_hex(32),'enabled':True}
+            site={'url':site_url,'secret':old.get('secret') or secrets.token_hex(32),'enabled':old.get('enabled', enabled)}
             cfg['sites'][slug]=site;atomic_json(self.config_path,cfg)
             return dict(site,slug=slug,console_url=console_url)
+
+    def set_enabled(self, slug, enabled):
+        with self.locked():
+            cfg=self.config()
+            cfg['sites'][slug]['enabled']=bool(enabled)
+            atomic_json(self.config_path,cfg)
 
     def site(self,slug):
         cfg=self.config();site=cfg['sites'].get(slug)
