@@ -84,7 +84,7 @@ async function aiJobs() {
       <div class="h"><b>${esc(j.slug)}</b><span class="pill">${esc(labels[j.status]||j.status)}</span>
       <span>${esc(j.provider)} / ${esc(j.model)}</span>${j.simulated?'<span class="pill">模拟</span>':''}
       <span class="hint">${esc(new Date(j.created*1000).toLocaleString())}</span></div>
-      <p style="margin:8px 0">${esc(j.message)}</p>${j.prompt?`<details><summary>提示词：${esc(j.prompt.template.name)} · v${j.prompt.template.version}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(j.prompt.preview)}</pre></details>`:''}
+      <p style="margin:8px 0">${esc(j.message)}</p>${j.style?`<p>参考风格：${esc(j.style.name)}${j.style.version?` · v${Number(j.style.version)}`:""}（随草稿发布）</p>`:""}${j.prompt?`<details><summary>提示词：${esc(j.prompt.template.name)} · v${j.prompt.template.version}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(j.prompt.preview)}</pre></details>`:''}
       ${j.status==='completed'?`<a href="/preview/${encodeURIComponent(j.slug)}/home" target="_blank" rel="noopener">预览草稿</a>
       <button type="button" data-ai-editor="${esc(j.slug)}">编辑页面</button>
       <button type="button" data-ai-publish="${esc(j.slug)}">发布当前草稿</button>
@@ -97,6 +97,7 @@ async function initAI() {
   try {
     await aiLoadConfig();
     await initPromptComposer();
+    await styleLoad();
     aiOptions('#aiSite',(STATE.sites||[]).map(s=>({...s,id:s.slug})),s=>s.company+' / '+s.slug);
     aiOptions('#aiPlan',STATE.plans||[],p=>p.name+' — '+money(p.price));
     aiOptions('#aiIndustry',(STATE.industries||[]).map(([id,name])=>({id,name})),p=>p.name);
@@ -125,6 +126,7 @@ $('#aiBuildForm').onsubmit=async e=>{
       company:$('#aiCompany').value.trim(),domain:$('#aiDomain').value.trim(),plan_id:$('#aiPlan').value,
       industry:$('#aiIndustry').value,profile_id:$('#aiProfile').value,language:$('#aiLanguage').value,
       brief:$('#aiBrief').value.trim(),replace_draft:$('#aiReplace').checked};
+    Object.assign(body, styleSelection());
     const selection=promptSelection();
     if(selection){await previewPrompt();body.prompt_selection=selection;}
     await aiRequest('/api/ai/build',body);
@@ -177,4 +179,91 @@ $('#aiJobs').onclick=async e=>{
     }
   } catch(e) { aiMessage('#aiBuildMsg',e.message,true); }
   finally { button.disabled=false; AI_PUBLISHING=false; }
+};
+
+// Reference analyses are explicit selections; saved templates are immutable job snapshots.
+let STYLE_LIBRARY={templates:[],can_manage:false}, STYLE_ANALYSIS=null, STYLE_EDIT=null;
+const STYLE_LABELS={primary:'主色',primaryDark:'深主色',accent:'强调色',bg:'页面背景',surface:'卡片背景',ink:'正文',muted:'次要文字',deep:'深色背景'};
+async function styleLoad(){
+ const previous=$('#aiStyleTemplate').value;
+ STYLE_LIBRARY=await aiRequest('/api/ai/styles');
+ STYLE_LIBRARY.templates=STYLE_LIBRARY.templates||[];
+ $('#aiStyleTemplate').innerHTML='<option value="">保持站点当前风格</option>'+(STYLE_ANALYSIS?'<option value="@analysis">刚分析的参考风格</option>':'')+STYLE_LIBRARY.templates.filter(t=>t.enabled).map(t=>`<option value="${esc(t.id)}">${esc(t.name)} · v${Number(t.version)}</option>`).join('');
+ if([...$('#aiStyleTemplate').options].some(o=>o.value===previous))$('#aiStyleTemplate').value=previous;
+ $('#aiStyleSaveAnalysis').classList.toggle('hidden',!STYLE_LIBRARY.can_manage);
+ styleRender();
+}
+function styleRender(){
+ const q=$('#styleSearch').value.trim().toLowerCase();
+ const items=STYLE_LIBRARY.templates.filter(t=>(t.name+' '+t.category).toLowerCase().includes(q));
+ $('#styleLibrary').innerHTML=items.length?items.map(t=>`<div class="share-row"><span class="u">${esc(t.name)} · ${esc(t.category)} · v${Number(t.version)}${t.enabled?'':' · 已停用'}</span><button type="button" data-style-use="${esc(t.id)}" ${t.enabled?'':'disabled'}>使用</button>${STYLE_LIBRARY.can_manage?`<button type="button" data-style-edit="${esc(t.id)}">编辑</button><button type="button" data-style-copy="${esc(t.id)}">复制</button><button type="button" data-style-delete="${esc(t.id)}">删除</button>`:''}</div>`).join(''):'<p class="hint">尚无匹配模板。分析参考网站后可保存为模板。</p>';
+}
+function styleShow(item){
+ $('#aiStyleResult').classList.toggle('hidden',!item);
+ if(!item)return;
+ $('#aiStyleSummary').textContent=item.summary;
+ $('#aiStyleWarnings').textContent=(item.warnings||[]).join(' ');
+ $('#aiStyleEvidence').textContent=item.evidence?JSON.stringify(item.evidence,null,2):'已保存模板 · '+(item.source_url||'自定义');
+ $('#aiStyleSwatches').innerHTML=Object.entries(item.tokens.palette).map(([k,v])=>`<span><span style="display:inline-block;width:20px;height:20px;border:1px solid #777;background:${/^#[0-9a-f]{6}$/i.test(v)?v:'#ffffff'}"></span> ${esc(STYLE_LABELS[k]||k)} ${esc(v)}</span>`).join('');
+ $('#aiStyleSaveAnalysis').classList.toggle('hidden',!STYLE_LIBRARY.can_manage||$('#aiStyleTemplate').value!=='@analysis');
+}
+function styleSelection(){
+ if($('#aiAnalyzeStyle').disabled)throw new Error('请等待参考风格分析完成');
+ const id=$('#aiStyleTemplate').value;
+ if(id==='@analysis'){
+  if(!STYLE_ANALYSIS)throw new Error('请先分析参考网站');
+  if($('#aiReferenceUrl').value.trim()!==STYLE_ANALYSIS.requested_url)throw new Error('参考网址已修改，请重新分析后生成');
+  return {reference_style:STYLE_ANALYSIS};
+ }
+ return id?{style_template_id:id}:{};
+}
+$('#aiAnalyzeStyle').onclick=async()=>{
+ const button=$('#aiAnalyzeStyle');button.disabled=true;
+ const url=$('#aiReferenceUrl').value.trim();
+ aiMessage('#aiStyleMsg','正在读取参考网站和样式…');
+ try{
+  const result=await aiRequest('/api/ai/styles/analyze',{url});
+  STYLE_ANALYSIS={...result,requested_url:url};
+  await styleLoad();$('#aiStyleTemplate').value='@analysis';styleShow(STYLE_ANALYSIS);
+  aiMessage('#aiStyleMsg','分析完成，已选择本次参考风格。可直接生成，也可先编辑保存为模板。');
+ }catch(e){aiMessage('#aiStyleMsg',e.message,true);}
+ finally{button.disabled=false;}
+};
+$('#aiStyleTemplate').onchange=()=>styleShow($('#aiStyleTemplate').value==='@analysis'?STYLE_ANALYSIS:STYLE_LIBRARY.templates.find(t=>t.id===$('#aiStyleTemplate').value));
+$('#aiStyleManage').onclick=()=>{$('#styleManager').open=true;$('#styleManager').scrollIntoView({block:'start'});};
+function styleEdit(item){
+ STYLE_EDIT=JSON.parse(JSON.stringify(item));
+ for(const [id,key] of Object.entries({styleName:'name',styleCategory:'category',styleSource:'source_url',styleSummary:'summary',styleGuidance:'guidance'}))$('#'+id).value=item[key]||'';
+ $('#styleEnabled').checked=item.enabled!==false;
+ $('#styleHeading').value=item.tokens.type.heading;$('#styleRadius').value=parseInt(item.tokens.shape.radius);$('#stylePad').value=parseInt(item.tokens.layout.pad);
+ $('#styleColors').innerHTML=Object.entries(STYLE_LABELS).map(([key,label])=>`<div class="field"><label for="styleColor-${key}">${label}</label><input type="color" id="styleColor-${key}" value="${esc(item.tokens.palette[key])}"></div>`).join('');
+ $('#styleEditForm').classList.remove('hidden');$('#styleManager').open=true;$('#styleEditForm').scrollIntoView({block:'start'});
+}
+$('#aiStyleSaveAnalysis').onclick=()=>{if(STYLE_ANALYSIS)styleEdit({...STYLE_ANALYSIS,name:(STYLE_ANALYSIS.title||'参考网站').slice(0,70)+' 风格'});};
+$('#styleCancel').onclick=()=>{$('#styleEditForm').classList.add('hidden');STYLE_EDIT=null;};
+$('#styleSearch').oninput=styleRender;
+$('#styleRefresh').onclick=async()=>{try{await styleLoad();aiMessage('#styleManageMsg','模板已刷新');}catch(e){aiMessage('#styleManageMsg',e.message,true);}};
+$('#styleLibrary').onclick=async e=>{
+ const button=e.target.closest('button');if(!button)return;
+ const id=button.dataset.styleUse||button.dataset.styleEdit||button.dataset.styleCopy||button.dataset.styleDelete;
+ const item=STYLE_LIBRARY.templates.find(t=>t.id===id);if(!item)return;
+ if(button.dataset.styleUse){$('#aiStyleTemplate').value=id;styleShow(item);aiMessage('#aiStyleMsg','已选择 '+item.name);$('#aiStyleTemplate').scrollIntoView({block:'center'});return;}
+ if(button.dataset.styleEdit){styleEdit(item);return;}
+ if(button.dataset.styleDelete&&!confirm('删除此风格模板？已生成的网站和任务快照会保留。'))return;
+ button.disabled=true;
+ try{await aiRequest('/api/ai/styles',{action:button.dataset.styleCopy?'duplicate':'delete',id,version:item.version});await styleLoad();styleShow(null);aiMessage('#styleManageMsg','模板已更新');}
+ catch(e){aiMessage('#styleManageMsg',e.message,true);}finally{button.disabled=false;}
+};
+$('#styleEditForm').onsubmit=async e=>{
+ e.preventDefault();const button=e.submitter;button.disabled=true;
+ try{
+  const body=JSON.parse(JSON.stringify(STYLE_EDIT));
+  for(const [id,key] of Object.entries({styleName:'name',styleCategory:'category',styleSource:'source_url',styleSummary:'summary',styleGuidance:'guidance'}))body[key]=$('#'+id).value.trim();
+  body.enabled=$('#styleEnabled').checked;body.action='save';
+  for(const key of Object.keys(STYLE_LABELS))body.tokens.palette[key]=$('#styleColor-'+key).value;
+  body.tokens.type.heading=$('#styleHeading').value;body.tokens.shape.radius=$('#styleRadius').value+'px';body.tokens.layout.pad=$('#stylePad').value+'px';
+  const data=await aiRequest('/api/ai/styles',body);await styleLoad();
+  $('#aiStyleTemplate').value=data.item.enabled?data.item.id:'';styleShow(data.item.enabled?data.item:null);
+  $('#styleEditForm').classList.add('hidden');STYLE_EDIT=null;aiMessage('#styleManageMsg','风格模板已保存，可用于后续建站');
+ }catch(e){aiMessage('#styleManageMsg',e.message,true);}finally{button.disabled=false;}
 };

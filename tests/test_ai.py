@@ -179,6 +179,39 @@ class ConsoleTests(unittest.TestCase):
         self.assertIn('Form preview only', page)
         self.assertNotIn('127.0.0.1:18085', page)
 
+    def test_reference_styles_permissions_generation_preview_and_publish(self):
+        import kf_styles
+        analysis = kf_styles.extract('<title>Reference</title><style>body{color:#345678}</style>', [], 'https://example.com/', [])
+        with patch.object(kf_styles, 'analyze', return_value=analysis):
+            self.assertEqual(self.request('/api/ai/styles/analyze', {'url':'https://example.com'}, user='ops-test')[0], 200)
+            self.assertEqual(self.request('/api/ai/styles/analyze', {'url':'https://example.com'}, user='finance-test')[0], 403)
+        body = dict(analysis, name='Reference style')
+        self.assertEqual(self.request('/api/ai/styles', body, user='ops-test')[0], 403)
+        status, saved = self.request('/api/ai/styles', body)
+        self.assertEqual(status, 200, saved)
+        item = saved['item']
+        self.assertEqual(self.request('/api/ai/styles', dict(item, version=0))[0], 409)
+        status, data = self.request('/api/ai/build', dict(slug='demo', brief='Consulting', style_template_id=item['id']))
+        self.assertEqual(status, 202, data)
+        job = self.wait_job(data['job']['id'])
+        self.assertEqual(job['status'], 'completed', job)
+        self.assertEqual(job['style']['version'], 1)
+        self.assertEqual(self.m.read_draft('demo')['design'], item['tokens'])
+        self.assertFalse((self.base/'sites/demo/design.json').exists())
+        status, preview = self.request('/preview/demo/home')
+        self.assertEqual(status,200)
+        self.assertIn('--kf-primary:#345678',preview.replace(' ',''))
+        self.assertEqual(self.request('/api/ai/styles', dict(item, action='delete'))[0],200)
+        self.assertEqual(self.m.read_draft('demo')['ai']['style']['name'], item['name'])
+        with patch.object(self.m,'apply_design',return_value=False), patch.object(self.m.Handler,'_render_check') as render:
+            self.assertEqual(self.request('/api/publish',{'slug':'demo'})[0],500)
+            render.assert_not_called()
+        with patch.object(self.m,'apply_design',return_value=True) as apply, patch.object(self.m.Handler,'_render_check',return_value={'ok':True}):
+            self.assertEqual(self.request('/api/publish',{'slug':'demo'})[0],200)
+            apply.assert_called_once_with('demo',item['tokens'])
+        self.assertEqual(self.m.read_spec('demo')['design'],item['tokens'])
+        self.assertFalse(self.m.is_dirty('demo'))
+
     def test_pdf_font_fallback(self):
         inv = {'no':'TEST-001','company':'测试客户','domain':'example.test','plan_name':'Demo',
                'plan_specs':'测试服务','subtotal':100,'gst':0,'total':100,'status':'unpaid',

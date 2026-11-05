@@ -7,6 +7,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(__dirname,'../..');
 const promptBase=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'kf-prompt-ui-'));
 function promptAPI(action,body={}){return JSON.parse(execFileSync('python3',['-c',`import sys,json;sys.path.insert(0,'core');import kf_prompts;s=kf_prompts.PromptStore(sys.argv[1]);b=json.load(sys.stdin);action=sys.argv[2];r=s.compose(b['selection'],b.get('brief','')) if action=='preview' else (s.change(b) if action=='save' else s.public(True));print(json.dumps(r,ensure_ascii=False))`,promptBase,action],{cwd:root,input:JSON.stringify(body),encoding:'utf8'}));}
+function styleAPI(action,body={}){return JSON.parse(execFileSync('python3',['-c',`import sys,json;sys.path.insert(0,'core');import kf_styles;s=kf_styles.StyleStore(sys.argv[1]);b=json.load(sys.stdin);action=sys.argv[2];r=kf_styles.extract('<title>Reference</title><style>body{color:#345678;font-family:Georgia,serif}</style>',[],'https://example.com/',[]) if action=='analyze' else ({'item':s.change(b),**s.public(True)} if action=='save' else s.public(True));print(json.dumps(r,ensure_ascii=False))`,promptBase,action],{cwd:root,input:JSON.stringify(body),encoding:'utf8'}));}
 const pages=JSON.parse(execFileSync('python3',['-c',`
 import ast,json,pathlib
 import sys
@@ -46,6 +47,8 @@ print(json.dumps(result))
   if(p==='/api/publish'){calls.push({path:p,body:req.postDataJSON()});status=failPublish?500:200;data=failPublish?{error:'模拟发布失败'}:{pages:1,dirty:false};}
   if(p==='/api/ai/prompts'){if(req.method()==='POST')promptAPI('save',req.postDataJSON());data={...promptAPI('read'),can_manage:role==='admin'};}
   if(p==='/api/ai/prompts/preview')data=promptAPI('preview',req.postDataJSON());
+  if(p==='/api/ai/styles')data={...styleAPI(req.method()==='POST'?'save':'read',req.method()==='POST'?req.postDataJSON():{}),can_manage:role==='admin'};
+  if(p==='/api/ai/styles/analyze')data=styleAPI('analyze');
   if(p==='/api/ai/build'){calls.push({path:p,body:req.postDataJSON()});status=202;data={job:{id:'fixture'}};}
   if(p==='/api/ai/config')data={can_configure:role==='admin',profiles:[{id:'mock',name:'模拟',model:'mock',protocol:'mock'}],presets:[],default_profile:'mock'};
   if(p==='/api/ai/jobs')data={jobs:[]};
@@ -127,6 +130,21 @@ print(json.dumps(result))
  calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
  assert.equal(calls.find(c=>c.path==='/api/ai/build').body.prompt_selection.template_id,'company');
  assert.equal(await page.locator('#promptServices').inputValue(),'真实设计服务');
+ await page.locator('#aiReferenceUrl').fill('https://example.com/');await page.locator('#aiAnalyzeStyle').click();
+ await page.waitForFunction(()=>document.querySelector('#aiStyleTemplate').value==='@analysis');
+ assert.ok((await page.locator('#aiStyleSummary').textContent()).includes('serif'));
+ await page.locator('#aiStyleSaveAnalysis').click();await page.locator('#styleName').fill('参考风格测试');
+ await page.locator('#styleEditForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#styleEditForm').classList.contains('hidden'));
+ let style=styleAPI('read').templates[0];assert.equal(style.name,'参考风格测试');
+ calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
+ assert.equal(calls.find(c=>c.path==='/api/ai/build').body.style_template_id,style.id);
+ await page.locator('[data-style-edit]').click();await page.locator('#styleName').fill('已修改风格');await page.locator('#styleEnabled').uncheck();
+ await page.locator('#styleEditForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#styleEditForm').classList.contains('hidden'));
+ assert.equal(styleAPI('read').templates[0].version,2);assert.equal(await page.locator('#aiStyleTemplate').inputValue(),'');
+ await page.locator('[data-style-copy]').click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===2);
+ page.once('dialog',d=>d.accept());await page.locator('[data-style-delete]').first().click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===1);
+ assert.equal(styleAPI('read').templates.length,1);
+ console.log('PASS reference analysis, save, selection, edit, disable, copy and delete');
  await nav('prompts');await page.waitForSelector('#promptLibraryList .dom-row');
  page.once('dialog',d=>d.accept());await page.locator('[data-toggle-prompt="company"]').click();
  await page.waitForFunction(()=>document.querySelector('#aiPromptTemplate').value==='');

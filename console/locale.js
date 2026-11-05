@@ -27,6 +27,34 @@ KampongFlow 控制台|KampongFlow Console
 DNS 解析|DNS records
 运行维护|Maintenance
 内容建站|Website content
+参考网站与风格模板|Reference website and style templates
+参考网站地址|Reference website URL
+分析参考风格|Analyze reference style
+本次生成使用的风格|Style for this generation
+保持站点当前风格|Keep current site style
+刚分析的参考风格|Latest reference analysis
+管理风格模板|Manage style templates
+分析依据|Analysis evidence
+编辑并保存为模板|Edit and save as template
+风格模板管理|Style template library
+搜索模板名称或分类|Search template names or categories
+刷新模板|Refresh templates
+编辑风格模板|Edit style template
+模板名称|Template name
+参考来源|Reference source
+风格说明|Style description
+内容生成指导|Content generation guidance
+标题字体|Heading font
+无衬线|Sans serif
+衬线|Serif
+圆润|Rounded
+等宽|Monospace
+卡片圆角（px）|Card radius (px)
+区块间距（px）|Section spacing (px)
+启用此模板|Enable template
+保存风格模板|Save style template
+读取公开页面与样式，提取颜色、字体和布局线索。不复制原站品牌或图片；动态页面可能无法完整分析。|Read public HTML and CSS for colors, fonts and layout clues. Original branding and images are not copied. Dynamic pages may yield incomplete results.
+风格随生成内容一起保存到草稿，预览确认后发布；模板更新不会改变已经生成的网站。|The style is saved with the draft and applied when published. Updating a template does not change existing generated sites.
 AI 建站|AI builder
 提示词库|Prompt library
 页面编辑|Page editor

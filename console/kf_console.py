@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 import kf_ai
 import kf_prompts
+import kf_styles
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -726,8 +727,8 @@ def ks():
     return _KS
 
 
-def design_vars(slug):
-    d = _read(SITES / slug / "design.json", {})
+def design_vars(slug, tokens=None):
+    d = tokens if tokens is not None else _read(SITES / slug / "design.json", {})
     pal = d.get("palette") or {}
     shape = d.get("shape") or {}
     typ = d.get("type") or {}
@@ -792,7 +793,8 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
     extra = ""  # Local container ports are not public URLs.
     company = esc(meta.get("company", ""))
     title = "%s · %s · %s" % (label, esc(page.get("title", "")), company)
-    preset = site_design(slug).get('preset', '')
+    preview_design = draft.get("design") or site_design(slug)
+    preset = preview_design.get('preset', '')
     body_class = 'wp-theme-kampong'
     if preset in ('nursery', 'robotics', 'wellness'):
         body_class += ' kf-showcase kf-style-' + preset
@@ -803,7 +805,7 @@ def preview_html(slug, page_slug, base=None, asset=None, public=False):
         '<meta name="robots" content="noindex">',
         "<title>%s</title>" % title,
         '<link rel="stylesheet" href="%s/style.css">' % asset,
-        "<style>", design_vars(slug),
+        "<style>", design_vars(slug, preview_design),
         ".kf-pvbar{position:sticky;top:0;z-index:99;background:#161b22;color:#e6edf3;",
         "font:13px/1.5 -apple-system,Segoe UI,sans-serif;padding:7px 14px;",
         "display:flex;gap:14px;align-items:center;flex-wrap:wrap}",
@@ -1748,14 +1750,16 @@ def sanitize_design(body):
 
 def apply_design(slug, tokens):
     site = SITES / slug
-    (site / "design.json").write_text(json.dumps(tokens, ensure_ascii=False, indent=1))
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["docker", "run", "--rm", "--env-file", str(site / "wp.env"),
              "--network", f"kf-{slug}_default",
              "-v", f"{site}/html:/var/www/html", "--user", "33:33", WPCLI_IMG,
              "wp", "option", "update", "kf_design", json.dumps(tokens, ensure_ascii=False)],
             capture_output=True, text=True, timeout=150)
+        if result.returncode != 0:
+            return False
+        kf_ai.atomic_json(site / "design.json", tokens)
         return True
     except Exception:
         return False
@@ -2268,10 +2272,33 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div id="aiPromptMsg" class="msg" role="status"></div></div>
 <p class="hint">模板影响内容结构与语气；配色、字体仍由视觉模板负责。模拟模式用于流程验证，不代表真实模型效果。</p>
 </fieldset>
+<fieldset style="margin-top:20px;border:1px solid var(--line);border-radius:10px;padding:16px">
+<legend>参考网站与风格模板</legend>
+<div class="formrow"><div class="field"><label for="aiReferenceUrl">参考网站地址</label><input id="aiReferenceUrl" type="url" maxlength="2000" placeholder="https://example.com"></div><button type="button" id="aiAnalyzeStyle">分析参考风格</button></div>
+<p class="hint">读取公开页面与样式，提取颜色、字体和布局线索。不复制原站品牌或图片；动态页面可能无法完整分析。</p>
+<div class="formrow"><div class="field"><label for="aiStyleTemplate">本次生成使用的风格</label><select id="aiStyleTemplate"><option value="">保持站点当前风格</option></select></div><button type="button" class="ghost" id="aiStyleManage">管理风格模板</button></div>
+<div id="aiStyleResult" class="hidden"><p id="aiStyleSummary"></p><div id="aiStyleSwatches" style="display:flex;gap:8px;flex-wrap:wrap"></div><p id="aiStyleWarnings" class="hint"></p><details><summary>分析依据</summary><pre id="aiStyleEvidence" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details><button type="button" class="ghost" id="aiStyleSaveAnalysis">编辑并保存为模板</button></div>
+<p class="hint">风格随生成内容一起保存到草稿，预览确认后发布；模板更新不会改变已经生成的网站。</p>
+<div id="aiStyleMsg" class="msg" role="status" aria-live="polite"></div>
+</fieldset>
 <div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求 / 额外补充</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍企业和主营服务、目标客户、网站风格、要突出的信息，以及真实的联系方式。例：新加坡室内设计工作室，服务住宅与小型办公室。风格简洁温暖，突出设计咨询、空间规划、施工跟进，希望访客通过联系表单预约。"></textarea></div>
 <label id="aiReplaceWrap" class="hint" style="display:block;margin:12px 0"><input id="aiReplace" type="checkbox"> 如果已有未发布草稿，我确认用本次结果替换（系统会备份原草稿）</label>
 <button id="aiGenerate" type="submit">生成整站草稿</button><span id="aiBuildMsg" class="msg" role="status" aria-live="polite"></span>
 </form>
+<details id="styleManager" style="margin-top:24px"><summary>风格模板管理</summary>
+<div class="formrow"><div class="field"><label for="styleSearch">搜索模板名称或分类</label><input id="styleSearch" type="search"></div><button type="button" class="ghost" id="styleRefresh">刷新模板</button></div>
+<div id="styleLibrary"></div>
+<form id="styleEditForm" class="hidden" style="margin-top:16px">
+<h3>编辑风格模板</h3>
+<div class="formrow"><div class="field"><label for="styleName">模板名称</label><input id="styleName" required maxlength="80"></div><div class="field"><label for="styleCategory">分类</label><input id="styleCategory" maxlength="40" placeholder="例如：教育、科技、医疗"></div></div>
+<div class="fld"><label for="styleSource">参考来源</label><input id="styleSource" type="url" maxlength="2000"></div>
+<div class="fld"><label for="styleSummary">风格说明</label><textarea id="styleSummary" maxlength="1500" rows="2"></textarea></div>
+<div class="fld"><label for="styleGuidance">内容生成指导</label><textarea id="styleGuidance" maxlength="2400" rows="3"></textarea></div>
+<div id="styleColors" class="formrow"></div>
+<div class="formrow"><div class="field"><label for="styleHeading">标题字体</label><select id="styleHeading"><option value="sans">无衬线</option><option value="serif">衬线</option><option value="rounded">圆润</option><option value="mono">等宽</option></select></div><div class="field"><label for="styleRadius">卡片圆角（px）</label><input id="styleRadius" type="number" min="0" max="999" required></div><div class="field"><label for="stylePad">区块间距（px）</label><input id="stylePad" type="number" min="24" max="120" required></div></div>
+<label><input id="styleEnabled" type="checkbox" checked>启用此模板</label>
+<button type="submit">保存风格模板</button><button type="button" class="ghost" id="styleCancel">取消</button>
+</form><div id="styleManageMsg" class="msg" role="status"></div></details>
 <h3 style="margin-top:28px">建站任务</h3>
 <div id="aiJobs" aria-live="polite"></div>
 <details id="aiSettings" style="margin-top:28px"><summary style="cursor:pointer">服务商与模型配置（管理员）</summary>
@@ -3982,6 +4009,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.user_role not in ("admin", "ops"):
             return self._send(403, {"error": "当前角色无权使用自动建站"})
         store = ai_store()
+        if path == "/api/ai/styles":
+            return self._send(200, kf_styles.StyleStore(BASE).public(self.user_role == "admin"))
         if path == "/api/ai/prompts":
             return self._send(200, kf_prompts.PromptStore(BASE).public(self.user_role == "admin"))
         if path == "/api/ai/config":
@@ -4002,6 +4031,14 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._send(400, {"error": "请求必须是 JSON 对象"})
         try:
+            if path == "/api/ai/styles/analyze":
+                return self._send(200, kf_styles.analyze(body.get("url")))
+            if path == "/api/ai/styles":
+                if self.user_role != "admin":
+                    return self._send(403, {"error": "只有管理员可以管理风格模板"})
+                item = kf_styles.StyleStore(BASE).change(body)
+                audit(self.user, "ai_style", item["id"], str(body.get("action", "save")))
+                return self._send(200, {"item": item, **kf_styles.StyleStore(BASE).public(True)})
             if path == "/api/ai/prompts/preview":
                 result = kf_prompts.PromptStore(BASE).compose(body.get("selection"), body.get("brief", ""))
                 return self._send(200, result)
@@ -4029,7 +4066,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/ai/build":
                 return self._ai_build(body)
             return self._send(404, {"error": "not found"})
-        except kf_prompts.PromptConflict as e:
+        except (kf_prompts.PromptConflict, kf_styles.StyleConflict) as e:
             return self._send(409, {"error": str(e)})
         except kf_ai.AIError as e:
             return self._send(400, {"error": str(e)})
@@ -4041,6 +4078,17 @@ class Handler(BaseHTTPRequestHandler):
         mode = body.get("mode", "existing")
         if mode not in ("new", "existing"):
             raise kf_ai.AIError("请选择新站点或已有站点")
+        style = None
+        if body.get("style_template_id"):
+            style = kf_styles.StyleStore(BASE).resolve(body["style_template_id"])
+        elif body.get("reference_style") is not None:
+            supplied = body["reference_style"]
+            if not isinstance(supplied, dict):
+                raise kf_ai.AIError("参考风格必须是对象")
+            style = {"tokens": kf_styles.normalize_tokens(supplied.get("tokens")),
+                     "summary": kf_ai.text(supplied.get("summary", ""), "风格说明", 1500),
+                     "guidance": kf_ai.text(supplied.get("guidance", ""), "风格指导", 2400),
+                     "source_url": kf_styles.public_url(supplied.get("source_url")), "name": "本次参考风格"}
         selection = body.get("prompt_selection")
         brief = kf_ai.text(body.get("brief", ""), "建站要求", 6000, selection is None)
         prompt_snapshot = kf_prompts.PromptStore(BASE).compose(selection, brief) if selection is not None else None
@@ -4084,6 +4132,9 @@ class Handler(BaseHTTPRequestHandler):
                 port = reserve_site(slug)
             try:
                 job = ai_store().create_job(slug, profile, self.user, mode, prompt_snapshot)
+                if style:
+                    job["style"] = style
+                    ai_store().update_job(job["id"], style=style)
                 args = (job, profile, key, company, domain, brief, language, pages,
                         original, port, plan, industry)
                 threading.Thread(target=self._ai_worker, args=args, daemon=True).start()
@@ -4099,8 +4150,11 @@ class Handler(BaseHTTPRequestHandler):
         store, slug, jid = ai_store(), job["slug"], job["id"]
         try:
             store.update_job(jid, status="generating", message="正在模拟生成页面" if job["simulated"] else "正在调用模型生成页面")
-            if job.get("prompt"):
-                result = kf_ai.generate(profile, key, company, brief, pages, language, guidance=job["prompt"]["instructions"])
+            if job.get("prompt") or job.get("style"):
+                guidance = (job.get("prompt") or {}).get("instructions", "")
+                if job.get("style"):
+                    guidance += kf_styles.guidance(job["style"])
+                result = kf_ai.generate(profile, key, company, brief, pages, language, guidance=guidance)
             else:
                 result = kf_ai.generate(profile, key, company, brief, pages, language)
             # Validate rendered content too, before provisioning or changing the draft.
@@ -4129,9 +4183,13 @@ class Handler(BaseHTTPRequestHandler):
                     raise kf_ai.AIError("生成期间草稿已改变，本次内容未覆盖；请重新生成")
                 backup = SITES / slug / ".backups" / ("ai-" + jid + ".json")
                 kf_ai.atomic_json(backup, current)
+                if job.get("style"):
+                    result["design"] = job["style"]["tokens"]
+                elif current.get("design"):
+                    result["design"] = current["design"]
                 result["ai"] = {"job_id": jid, "simulated": job["simulated"], "model": profile["model"],
                                 "language": language, "generated_at": int(time.time()),
-                                "prompt": job.get("prompt")}
+                                "prompt": job.get("prompt"), "style": job.get("style")}
                 kf_ai.atomic_json(draft_path(slug), result)
             store.update_job(jid, status="completed", message="模拟草稿已生成，请预览、编辑后发布" if job["simulated"] else "草稿已生成，请预览、编辑后发布",
                              pages=len(result["pages"]), preview="/preview/" + slug + "/home")
@@ -4487,7 +4545,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard():
             return
         path = self.path.split("?")[0]
-        is_prompt_preview = path == "/api/ai/prompts/preview" and self.user_role in ("admin", "ops")
+        is_prompt_preview = path in ("/api/ai/prompts/preview", "/api/ai/styles/analyze") and self.user_role in ("admin", "ops")
         if not is_prompt_preview and not can_write(getattr(self, "user_role", "ops"), path):
             audit(getattr(self, "user", "-"), "denied", path)
             return self._send(403, {"error": "当前角色无权执行此操作"})
@@ -5535,6 +5593,10 @@ class Handler(BaseHTTPRequestHandler):
         if not targets:
             return self._send(404, {"ok": False, "error": "草稿里没有这一页"})
 
+        if draft.get("design"):
+            tokens = sanitize_design(draft["design"])
+            if not apply_design(slug, tokens):
+                return self._send(500, {"ok": False, "error": "风格同步失败，页面尚未发布，请重试"})
         failed = []
         published = []
         for page in targets:
@@ -5556,6 +5618,8 @@ class Handler(BaseHTTPRequestHandler):
                 cur["sections"] = json.loads(json.dumps(page.get("sections", [])))
                 cur["title"] = page.get("title", cur.get("title", page["slug"]))
         live["pages"] = live_pages
+        if draft.get("design"):
+            live["design"] = draft["design"]
         if "ai" in draft:
             live["ai"] = draft["ai"]
         if published:
@@ -5566,6 +5630,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "failed": failed, "pages": len(published), "dirty": is_dirty(slug)})
         return self._send(200, {"ok": True, "pages": len(published), "dirty": is_dirty(slug)})
 
+    @draft_operation
     def _design_save(self, body):
         slug = str(body.get("slug", "")).strip().lower()
         if not SLUG_RE.match(slug) or not (SITES / slug).exists():
@@ -5573,11 +5638,18 @@ class Handler(BaseHTTPRequestHandler):
         tokens = sanitize_design(body)
         before = _read(SITES / slug / "design.json", {})
         ok = apply_design(slug, tokens)
+        if ok:
+            # A later manual design edit supersedes an AI style snapshot.
+            for path in (spec_path(slug), draft_path(slug)):
+                spec = _read(path, {})
+                if "design" in spec:
+                    spec["design"] = tokens
+                    kf_ai.atomic_json(path, spec)
         audit(getattr(self, "user", "-"), "design_save", slug,
               diff_summary((before or {}).get("palette", {}), (tokens or {}).get("palette", {})))
         return self._send(200 if ok else 500,
                           {"ok": ok, "tokens": tokens,
-                           "error": "" if ok else "已写入文件，但同步到 WordPress 失败"})
+                           "error": "" if ok else "同步到 WordPress 失败，设计未保存"})
 
     def _plan_save(self, body):
         pid = re.sub(r"[^a-z0-9-]", "", str(body.get("id", "")).lower())[:20]
