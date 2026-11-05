@@ -8,6 +8,9 @@
 PowerDNS / Knot / BIND，本文件只需替换成「写库 + reload」。
 """
 import argparse
+import copy
+import fcntl
+from kf_ai import atomic_json,read_json
 import json
 import os
 import socket
@@ -30,6 +33,7 @@ SERIAL = 2026110201
 
 _cache = {"mtime": 0, "data": {}}
 _lock = threading.Lock()
+_write_lock=threading.RLock()
 
 
 def load_zones():
@@ -44,16 +48,24 @@ def load_zones():
             except Exception:
                 _cache["data"] = {}
             _cache["mtime"] = m
-        return _cache["data"]
+        return copy.deepcopy(_cache["data"])
 
 
 def save_zones(data):
-    ZONES_F.parent.mkdir(parents=True, exist_ok=True)
-    tmp = ZONES_F.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1))
-    tmp.replace(ZONES_F)
-    with _lock:
-        _cache["mtime"] = 0
+    atomic_json(ZONES_F,data)
+    with _lock:_cache['mtime']=0
+
+
+def update_zones(change):
+    ZONES_F.parent.mkdir(parents=True,exist_ok=True)
+    with _write_lock,(ZONES_F.parent/'.write.lock').open('a') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX)
+        try:
+            data=read_json(ZONES_F,{})
+            result=change(data)
+            save_zones(data)
+            return result
+        finally:fcntl.flock(lock,fcntl.LOCK_UN)
 
 
 def new_zone(domain, ip):
@@ -176,8 +188,14 @@ def answer(query):
     for r in matched:
         rdtype = dns.rdatatype.from_text(r["type"])
         try:
-            rr = dns.rrset.from_text(absolute(r["name"], domain), r["ttl"], "IN", r["type"],
-                                     normalize_value(r["type"], r["value"], domain))
+            value=normalize_value(r["type"],r["value"],domain)
+            if r['type']=='TXT' and not (value.startswith('"') and value.endswith('"')):
+                raw=value.encode('utf-8');chunks=[raw[i:i+255] for i in range(0,len(raw),255)] or [b'']
+                wire=b''.join(bytes([len(chunk)])+chunk for chunk in chunks)
+                data=dns.rdata.from_wire(1,16,wire,0,len(wire))
+                rr=dns.rrset.from_rdata(absolute(r['name'],domain),r['ttl'],data)
+            else:
+                rr = dns.rrset.from_text(absolute(r["name"], domain), r["ttl"], "IN", r["type"],value)
         except Exception as e:
             import traceback
             traceback.print_exc()

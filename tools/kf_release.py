@@ -116,7 +116,7 @@ def dependencies(stage):
         name, wanted = line.split('==', 1)
         if version(name) != wanted:
             raise ReleaseError('Runtime dependency mismatch: %s; prepare the tested virtualenv before deploying' % name)
-    import reportlab, PIL, dns, qrcode, cryptography  # noqa: F401: importing catches runtime/version incompatibilities
+    import reportlab, PIL, dns, qrcode, cryptography, jsonschema  # noqa: F401: importing catches runtime/version incompatibilities
 
 
 def health(base, console_port=18090, dns_port=5354, https_port=18444):
@@ -195,6 +195,10 @@ def apply(stage, base, manifest, control=service, check=None):
         jobs = json.loads(jobs_file.read_text()) if jobs_file.exists() else []
         if any(j.get('status') in ('queued', 'generating', 'provisioning', 'saving') for j in jobs):
             raise ReleaseError('Wait for active AI builds to finish before deploying')
+        for folder in ('actions','workflows'):
+            for path in (base/'console'/folder).glob('*.json'):
+                if json.loads(path.read_text()).get('state')=='running':
+                    raise ReleaseError('Wait for active automation operations/workflows to finish or pause before deploying')
         names = list(manifest['files']) + ['.release.json']
         targets = {name: target_path(base, name) for name in names}
         backup = base / '.code-backups' / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '-' + manifest['revision'][:12])

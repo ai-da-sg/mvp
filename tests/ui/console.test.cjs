@@ -34,10 +34,15 @@ print(json.dumps(result))
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
   assert.equal(u.hostname,'review.invalid','Unexpected external request');
   if(p==='/'||p==='/login')return route.fulfill({contentType:'text/html',body:pages[p==='/'?'console':'login']});
-  if(['/ai.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
+  if(['/ai.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
+  if(p==='/api/automation/config')data={tools:[{name:'site.context',purpose:'build'},{name:'site.publish',purpose:'build'}],dns_providers:[],can_configure:role==='admin'};
+  if(p==='/api/automation/available')data={items:[]};
+  if(p==='/api/automation/actions'||p==='/api/automation/workflows')data={items:[]};
+  if(p==='/api/automation/prepare'){const b=req.postDataJSON();data={item:{id:'fixture-action',slug:b.slug,tool:b.tool,user:'reviewer',mode:b.tool==='site.publish'?'confirm':'read',state:'prepared',summary:'Fixture operation',digest:'fixture-digest',arguments:{purpose:'build',...b.arguments}}};}
+  if(p==='/api/automation/execute')data={item:{id:'fixture-action',slug:'demo',tool:'site.context',user:'reviewer',mode:'read',state:'succeeded',summary:'Fixture context',digest:'fixture-digest',arguments:{purpose:'build'},result:{company:'Demo'}}};
   if(p==='/api/mcp/servers'){
    if(req.method()==='POST'){const {token,clear_token,...b}=req.postDataJSON();mcpItems=b.action==='delete'?[]:[{...b,version:(b.version||0)+1,has_token:!!token||mcpItems[0]?.has_token}];}
    data={items:mcpItems};
@@ -203,6 +208,13 @@ print(json.dumps(result))
  if(out)await page.screenshot({path:path.join(out,'mcp-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});
  await page.locator('[data-mcp-toggle]').click();await page.waitForFunction(()=>document.querySelector('[data-mcp-test]').disabled);
  page.once('dialog',d=>d.accept());await page.locator('[data-mcp-delete]').click();await page.waitForFunction(()=>!document.querySelector('[data-mcp-edit]'));
+ await nav('automation');await page.locator('#autoPrepare').click();await page.waitForSelector('#autoConfirmForm');
+ await page.locator('#autoConfirmForm button[type=submit]').click();await page.waitForSelector('#autoUseContext');
+ await page.locator('#autoUseContext').click();await page.waitForSelector('#p-ai:not(.hidden)');assert.match(await page.locator('#aiContextList').textContent(),/Fixture context/);await page.locator('[data-context-remove]').click();
+ await nav('automation');await page.selectOption('#autoTool','site.publish');await page.locator('#autoPrepare').click();await page.waitForSelector('#autoConfirmed');assert.equal(await page.locator('#autoConfirmed').isChecked(),false);
+ await page.setViewportSize({width:375,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Operations assistant must fit mobile');
+ if(out)await page.screenshot({path:path.join(out,'automation-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});
+ console.log('PASS scoped automation preview, confirmation and AI context selection');
  console.log('PASS LLM settings navigation, credential clearing, MCP create/search/edit/test/disable/delete');
  await nav('domain');await page.locator('[data-domain-add]').click();
  await page.locator('#domainAccountProvider').fill('Registrar fixture');await page.locator('#domainAccountUrl').fill('https://registrar.example/');

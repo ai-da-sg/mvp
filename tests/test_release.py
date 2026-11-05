@@ -98,6 +98,23 @@ class ReleaseTests(unittest.TestCase):
         self.assertFalse((base / 'core/new.py').exists())
         self.assertEqual((base / 'console/users.json').read_text(), 'updated while deploying')
 
+    def test_automation_guard_and_active_workflows_block_release(self):
+        import sys
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'core'))
+        from kf_tool_runtime import release_guard
+        from kf_ai import AIError
+        base,stage,manifest=self.fixture()
+        self.write(base,'console/workflows/fixture.json','{"state":"running"}')
+        with self.assertRaisesRegex(r.ReleaseError,'automation'):
+            r.apply(stage,base,manifest)
+        self.write(base,'console/workflows/fixture.json','{"state":"paused"}')
+        with release_guard(base):
+            with self.assertRaises(r.ReleaseError):
+                with r.deployment_lock(base):pass
+        with r.deployment_lock(base):
+            with self.assertRaises(AIError):
+                with release_guard(base):pass
+
     def test_active_jobs_and_lock_block_deployment(self):
         base, stage, manifest = self.fixture()
         self.write(base, 'console/ai-jobs.json', '[{"status":"generating"}]')

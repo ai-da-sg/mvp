@@ -24,3 +24,8 @@ node_modules/
 .idea/
 .vscode/
 deploy.env
+
+# Automation credentials and operation data
+console/*.key
+console/actions/
+console/workflows/

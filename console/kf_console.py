@@ -30,6 +30,12 @@ import kf_styles
 import kf_sso
 import kf_domain_vault
 import kf_mcp
+import kf_automation
+import kf_tool_runtime
+import kf_builtin_tools
+import kf_dns_provider
+import kf_stepup
+import kf_workflows
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -149,7 +155,7 @@ DEFAULT_ROLES = {
     "ops": {"label": "运营", "write": [
         "/api/spec", "/api/design", "/api/media/", "/api/dns/", "/api/domain/manage",
         "/api/clients/save", "/api/shares", "/api/publish", "/api/create", "/api/suspend",
-        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login", "/api/domain/accounts",
+        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login", "/api/domain/accounts", "/api/automation/",
     ]},
     "finance": {"label": "财务", "write": [
         "/api/ledger", "/api/invoice", "/api/renew", "/api/clients/save",
@@ -2183,6 +2189,13 @@ input[type=color]{height:38px;padding:2px;cursor:pointer}
 .wrap{max-width:1440px;padding:24px 24px 64px}
 .console-shell{display:grid;grid-template-columns:216px minmax(0,1fr);gap:28px;align-items:start}
 .sidebar{position:sticky;top:20px;max-height:calc(100dvh - 40px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+#aiContextOptions,#mcpForm fieldset{min-inline-size:0;border:1px solid var(--line);border-radius:10px;padding:16px;margin:16px 0}
+#aiContextOptions label,#mcpPurposes label{display:inline-block;margin:6px 14px 6px 0}
+#mcpForm textarea,#workflowDNS{width:100%;max-width:100%;padding:10px;background:var(--input,#0d1117);color:var(--fg);border:1px solid var(--line);border-radius:6px;resize:vertical}
+#p-automation pre,#mcpResult pre{max-height:360px;overflow:auto}
+#p-automation .field{min-width:min(180px,100%)}
+#p-automation summary,#mcpForm summary{padding:10px 0;cursor:pointer}
+#p-automation .dom-row{overflow-wrap:anywhere}
 .nav-group{border-bottom:1px solid var(--line);padding:6px 0}.nav-group:last-child{border:0}
 .nav-group summary{cursor:pointer;padding:12px 8px;font-size:13px;font-weight:650;color:var(--dim)}
 .submenu{display:flex;flex-direction:column;gap:4px;padding:2px 0 10px}
@@ -2226,7 +2239,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <aside class="sidebar" aria-label="控制台导航">
 <button type="button" id="navToggle" class="ghost nav-toggle" aria-expanded="false" aria-controls="navGroups">导航菜单 · 站点总览</button>
 <nav id="navGroups" class="nav-groups" aria-label="主导航与二级菜单">
-<details class="nav-group" data-group="0" open><summary>站点运营</summary><div class="submenu"><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
+<details class="nav-group" data-group="0" open><summary>站点运营</summary><div class="submenu"><button type="button" class="tab" data-t="automation" aria-controls="p-automation">运营助手</button><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
 <details class="nav-group" data-group="1"><summary>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
 <details class="nav-group" data-group="2"><summary>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
 <details class="nav-group" data-group="3"><summary>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
@@ -2313,6 +2326,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <p class="hint">风格随生成内容一起保存到草稿，预览确认后发布；模板更新不会改变已经生成的网站。</p>
 <div id="aiStyleMsg" class="msg" role="status" aria-live="polite"></div>
 </fieldset>
+<fieldset id="aiContextOptions"><legend>建站参考资料（已有站点，可选）</legend><label><input type="checkbox" value="client">客户资料</label><label><input type="checkbox" value="brand">品牌与风格</label><label><input type="checkbox" value="pages">现有页面</label><label><input type="checkbox" value="media">素材目录</label><p class="hint">所选资料会发送至当前模型服务商，并随任务记录来源。外部资料仅作为参考，不能覆盖基本原则与美学标准。</p><label><input id="aiAutoResearch" type="checkbox">允许 AI 自动查询已授权的 MCP 只读资料（最多 4 次）</label><div id="aiContextList"></div><button type="button" class="ghost" id="aiChooseContext">从运营助手选择 MCP 资料</button></fieldset>
 <div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求 / 额外补充</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍企业和主营服务、目标客户、网站风格、要突出的信息，以及真实的联系方式。例：新加坡室内设计工作室，服务住宅与小型办公室。风格简洁温暖，突出设计咨询、空间规划、施工跟进，希望访客通过联系表单预约。"></textarea></div>
 <label id="aiReplaceWrap" class="hint" style="display:block;margin:12px 0"><input id="aiReplace" type="checkbox"> 如果已有未发布草稿，我确认用本次结果替换（系统会备份原草稿）</label>
 <button id="aiGenerate" type="submit">生成整站草稿</button><span id="aiBuildMsg" class="msg" role="status" aria-live="polite"></span>
@@ -2360,8 +2374,23 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <label class="hint" style="margin-left:16px"><input id="aiClearKey" type="checkbox"> 清除已保存密钥</label>
 <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="submit">保存配置</button><button type="button" class="ghost" id="aiResetConfig">新建配置</button><span id="aiConfigMsg" class="msg" role="status"></span></div>
 </form></details></div>
+<div id="p-automation" class="hidden">
+<p class="hint">查询资料与健康状态、生成草稿，或先预览再确认发布、DNS 修改和邮件发送。执行记录用于核对结果与恢复流程。</p>
+<div class="formrow"><div class="field"><label for="autoSite">站点</label><select id="autoSite"></select></div><div class="field"><label for="autoPurpose">功能</label><select id="autoPurpose"><option value="build">AI 建站</option><option value="dns">DNS</option><option value="mail">邮件</option><option value="maintenance">运营巡检</option></select></div><button id="autoRefresh" type="button" class="ghost">刷新记录</button></div>
+<form id="autoForm"><div class="formrow"><div class="field"><label for="autoSource">工具来源</label><select id="autoSource"><option value="builtin">MVP 内置业务</option></select></div><div class="field"><label for="autoTool">操作</label><select id="autoTool"></select></div></div>
+<div id="autoFields"></div><button type="submit" id="autoPrepare">生成操作预览</button><div id="autoMsg" class="msg" role="status"></div></form>
+<section id="autoReview" class="hidden" style="margin-top:20px" aria-live="polite"></section>
+<details id="autoDNSConfig" style="margin-top:24px"><summary>DNS 执行服务商（管理员）</summary><p class="hint">仅为当前站点配置。Cloudflare 请使用仅授权对应 Zone 的 DNS API Token。保存配置不会修改解析。</p>
+<form id="autoDNSForm"><div class="formrow"><div class="field"><label for="autoDNSProvider">服务商</label><select id="autoDNSProvider"><option value="disabled">未启用</option><option value="local">本机权威 DNS</option><option value="cloudflare">Cloudflare</option></select></div><div class="field"><label for="autoDNSZone">Cloudflare Zone ID</label><input id="autoDNSZone" maxlength="32"></div><div class="field"><label for="autoDNSToken">API Token（留空保留）</label><input id="autoDNSToken" type="password" autocomplete="new-password"></div></div><label><input id="autoDNSClear" type="checkbox">清除凭据</label><button type="submit">保存 DNS 执行配置</button><div id="autoDNSMsg" class="msg" role="status"></div></form></details>
+<details style="margin-top:24px"><summary>创建网站交付流程</summary><p class="hint">为当前站点生成草稿，预览确认后发布，再执行所选 DNS 变更、检查 HTTPS，最后预览确认交付邮件。已完成步骤不会重复执行。</p>
+<form id="workflowForm"><div class="fld"><label for="workflowBrief">建站要求</label><textarea id="workflowBrief" rows="4" maxlength="6000" required></textarea></div><div class="formrow"><div class="field"><label for="workflowProfile">模型配置 ID（留空使用默认）</label><input id="workflowProfile"></div><div class="field"><label for="workflowRecipient">交付邮件收件人（留空跳过发送）</label><input id="workflowRecipient" type="email"></div></div><label><input id="workflowInherit" type="checkbox">沿用 AI 建站页当前选择的提示词、风格和参考资料（须为同一站点）</label><label><input id="workflowReplace" type="checkbox">允许替换当前未发布草稿（旧草稿会备份）</label>
+<details><summary>可选 DNS 变更</summary><label for="workflowDNS">变更数组（JSON，最多 5 条）</label><textarea id="workflowDNS" rows="4" spellcheck="false">[]</textarea><p class="hint">每条包含 operation（add/update/delete）、record_id（修改/删除）和 record（新增/修改）。留空数组保持现有解析。每项变更会在执行前单独预览确认。</p></details>
+<button type="submit">创建交付流程</button><div id="workflowMsg" class="msg" role="status"></div></form></details>
+<h3>交付流程</h3><div id="autoWorkflows"></div>
+<h3>操作记录</h3><div id="autoActions"></div>
+</div>
 <div id="p-mcp" class="hidden">
-<p class="hint">管理远程 MCP 服务，测试连接并查看工具、资源及提示词。当前仅用于连接管理与能力查询，尚未接入 AI 建站调用。</p>
+<p class="hint">管理远程 MCP 服务，测试连接并查看工具、资源及提示词。配置用途、站点范围与白名单后，可在运营助手调用，并将只读结果用于 AI 建站。</p>
 <p class="hint">支持公开 HTTPS（443 端口）的 Streamable HTTP，协议 2025-06-18 / 2025-03-26；认证支持无认证或 Bearer Token。暂不支持本地 stdio、旧 SSE 端点或 OAuth 登录。</p>
 <div class="formrow"><div class="field"><label for="mcpSearch">搜索 MCP 名称、地址或说明</label><input id="mcpSearch" type="search"></div><button id="mcpRefresh" type="button" class="ghost">刷新</button><button id="mcpNew" type="button">添加 MCP 服务</button></div>
 <div id="mcpList" style="margin-top:16px"></div><div id="mcpMsg" class="msg" role="status"></div>
@@ -2372,6 +2401,14 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <label><input id="mcpClear" type="checkbox">清除已保存凭据</label>
 <div class="fld"><label for="mcpDescription">服务说明</label><textarea id="mcpDescription" rows="3" maxlength="1000"></textarea></div>
 <label><input id="mcpEnabled" type="checkbox" checked>启用此服务</label>
+<fieldset><legend>允许使用范围</legend><div id="mcpPurposes"><label><input type="checkbox" value="build">AI 建站</label><label><input type="checkbox" value="dns">DNS</label><label><input type="checkbox" value="mail">邮件</label><label><input type="checkbox" value="maintenance">运营巡检</label></div>
+<label for="mcpSites">允许访问的站点（可多选）</label><select id="mcpSites" multiple size="4" style="width:100%"></select>
+<p class="hint">未选择用途和站点时仅可测试连接。工具权限由管理员配置，外部服务的描述不会自动授予执行权限。</p>
+<div class="formrow"><div class="field"><label for="mcpLimit">每小时调用上限</label><input id="mcpLimit" type="number" min="1" max="120" value="30"></div><div class="field"><label for="mcpTimeout">调用超时（秒）</label><input id="mcpTimeout" type="number" min="5" max="45" value="30"></div></div>
+<details><summary>工具与资料白名单</summary><p class="hint">工具规则包含 name、mode 和 bindings。mode 为 read（自动只读）、confirm（确认执行）或 totp（确认并验证）。bindings 可将 domain 绑定为 $domain、站点参数绑定为 $site。仅将已确认无副作用的工具设为 read。</p>
+<label for="mcpToolRules">工具规则（JSON 数组）</label><textarea id="mcpToolRules" rows="6" spellcheck="false" placeholder='[{"name":"search","mode":"read","bindings":{"domain":"$domain"}}]'></textarea>
+<label for="mcpResources">允许读取的资源 URI（每行一项）</label><textarea id="mcpResources" rows="3"></textarea>
+<label for="mcpPrompts">允许获取的提示词名称（每行一项）</label><textarea id="mcpPrompts" rows="3"></textarea></details></fieldset>
 <div><button type="submit">保存 MCP 服务</button><button type="button" class="ghost" id="mcpCancel">取消</button></div><div id="mcpFormMsg" class="msg" role="status"></div></form>
 <section id="mcpResult" class="hidden" style="margin-top:20px" aria-live="polite"></section>
 </div>
@@ -2607,7 +2644,7 @@ let STATE={sites:[],invoices:[],plans:[]};
 let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
-    ? ['ai','prompts','layout','design','media','share','dns','maint','team','llm','mcp']
+    ? ['automation','ai','prompts','layout','design','media','share','dns','maint','team','llm','mcp']
     : (ROLE==='admin' ? [] : ['team','llm','mcp']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
@@ -2634,7 +2671,7 @@ function navigateTo(key, updateHistory=true){
  $('#navGroups').classList.remove('expanded');$('#navToggle').setAttribute('aria-expanded','false');
  if(updateHistory && location.hash!=='#'+key) history.pushState(null,'','#'+key);
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
- const initializers={llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
+ const initializers={automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
  if(updateHistory)$('#pageTitle').focus({preventScroll:true});
  return true;
@@ -2836,7 +2873,7 @@ async function loadDns(slug){
       <div class="field"><label>&nbsp;</label><span style="font-size:12px;color:var(--dim)">DNSSEC：未启用（演示解析器不支持签名，生产接 PowerDNS 后可开）</span></div>
     </div>
     <div id="dnCheck"></div>
-    <div style="font-size:12px;color:var(--dim);margin:14px 0 6px">记录（${(d.zone.records||[]).length}）</div>
+    <div style="font-size:12px;color:var(--dim);margin:14px 0 6px">本机参考记录（${(d.zone.records||[]).length}）；公网变更将在运营助手核验真实服务商并确认</div>
     ${recs}
     <div class="formrow" style="margin-top:14px">
       <div class="field" style="flex:0 0 130px"><label>名称</label><input id="dnName" placeholder="@ 或 www"></div>
@@ -2863,17 +2900,16 @@ async function addDns(){
     body:JSON.stringify(body)});
   const d=await r.json();
   $('#dnMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#dnMsg').textContent=r.ok?'记录已添加':('失败：'+(d.error||''));
-  if(r.ok) loadDns($('#dnSlug').value);
+  $('#dnMsg').textContent=r.ok?'变更方案已生成，等待确认':('失败：'+(d.error||''));
+  if(d.action)openAutoAction(d.action);
 }
 async function delDns(i){
-  if(!confirm('删除这条记录？')) return;
   const r=await fetch('/api/dns/delete',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({slug:$('#dnSlug').value,index:i})});
   const d=await r.json();
   $('#dnMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#dnMsg').textContent=r.ok?'已删除':('失败：'+(d.error||''));
-  if(r.ok) loadDns($('#dnSlug').value);
+  $('#dnMsg').textContent=r.ok?'删除方案已生成，等待确认':('失败：'+(d.error||''));
+  if(d.action)openAutoAction(d.action);
 }
 async function saveDomain(){
   const r=await fetch('/api/domain/manage',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -3888,7 +3924,7 @@ siteDomain.addEventListener('input',()=>{if(siteSlug.dataset.manual)return;const
 async function refreshConsole(){try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/ai.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script></body></html>"""
+<script src="/ai.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script></body></html>"""
 
 
 _AI = None
@@ -3936,6 +3972,360 @@ def reserve_site(slug):
 def release_site(slug):
     with _SITE_RESERVATION_LOCK:
         _SITE_RESERVATIONS.pop(slug, None)
+
+
+def make_invoice( slug, company, domain, plan, kind="new", years=0):
+    s = settings()
+    with _file_lock:
+        invs = invoices()
+        no = next_invoice_no()
+        subtotal = float(plan["price"])
+        gst = round(subtotal * s["gst_rate"], 2) if s.get("gst_enabled") else 0.0
+        inv = {
+            "no": no, "slug": slug, "company": company, "domain": domain,
+            "plan_id": plan["id"], "plan_name": plan["name"],
+            "plan_specs": plan.get("specs", ""),
+            "subtotal": subtotal, "gst": gst, "total": round(subtotal + gst, 2),
+            "status": "unpaid",
+            "issued_at": datetime.now(SGT).strftime("%Y-%m-%d %H:%M"),
+            "paid_at": "",
+            "kind": kind,
+            "years": years,
+        }
+        invs.append(inv)
+        _write(INVOICES_F, invs)
+    return inv
+
+
+class BuildService:
+    def __init__(self,user):
+        self.user=user
+        self.user_role=(load_users().get(user) or {}).get("role", "")
+    def _send(self,code,data): return code,data
+    _make_invoice=staticmethod(make_invoice)
+
+    def start(self,body):
+        with kf_tool_runtime.release_guard(BASE):return self._start(body)
+
+    def _start(self, body):
+        slug = kf_ai.text(body.get("slug", ""), "站点标识", 20, True).lower()
+        if not SLUG_RE.fullmatch(slug):
+            raise kf_ai.AIError("站点标识必须是小写字母开头的 2–20 位字母、数字或短横线")
+        mode = body.get("mode", "existing")
+        if mode not in ("new", "existing"):
+            raise kf_ai.AIError("请选择新站点或已有站点")
+        style = None
+        if body.get("style_template_id"):
+            style = kf_styles.StyleStore(BASE).resolve(body["style_template_id"])
+        elif body.get("reference_style") is not None:
+            supplied = body["reference_style"]
+            if not isinstance(supplied, dict):
+                raise kf_ai.AIError("参考风格必须是对象")
+            style = {"tokens": kf_styles.normalize_tokens(supplied.get("tokens")),
+                     "summary": kf_ai.text(supplied.get("summary", ""), "风格说明", 1500),
+                     "guidance": kf_ai.text(supplied.get("guidance", ""), "风格指导", 2400),
+                     "source_url": kf_styles.public_url(supplied.get("source_url")), "name": "本次参考风格"}
+        selection = body.get("prompt_selection")
+        brief = kf_ai.text(body.get("brief", ""), "建站要求", 6000, selection is None)
+        prompt_snapshot = kf_prompts.PromptStore(BASE).compose(selection, brief) if selection is not None else None
+        if prompt_snapshot:
+            brief = prompt_snapshot["brief"]
+        language = body.get("language", "zh")
+        if language not in ("zh", "en"):
+            raise kf_ai.AIError("请选择中文或英文")
+        auto_research=body.get('auto_research') is True
+        if auto_research and mode!='existing':raise kf_ai.AIError('自动资料查询需先选择已授权的现有站点')
+        context_sources=[]
+        selected=body.get('context_options',[])
+        if not isinstance(selected,list) or any(x not in ('client','brand','pages','media') for x in selected):
+            raise kf_ai.AIError('建站资料选择无效')
+        action_ids=body.get('context_actions',[])
+        if (selected or action_ids) and mode!='existing':raise kf_ai.AIError('已保存资料需选择已有站点；新站点请在建站要求中填写资料')
+        if selected:
+            facts=selected_site_context(slug,selected)
+            context_sources.append({'source':'MVP/'+','.join(selected),'digest':kf_tool_runtime.fingerprint(facts),'data':json.dumps(facts,ensure_ascii=False)})
+        if action_ids:context_sources.extend(automation_store().context_results(self.user,slug,action_ids))
+        if len(json.dumps(context_sources,ensure_ascii=False))>48000:raise kf_ai.AIError('所选资料超过上下文限制，请减少资料或选择更小的资源')
+        profile, key = ai_store().resolve(body.get("profile_id"))
+        plan, port, industry = None, None, body.get("industry", "tech")
+        with draft_lock(slug):
+            if mode == "existing":
+                if not (SITES / slug / "meta.json").is_file():
+                    raise kf_ai.AIError("站点不存在，请先开通或选择新建站点")
+                meta = load_meta(slug)
+                company, domain = meta.get("company", slug), meta.get("domain", "")
+                original = read_draft(slug)
+                pages = original.get("pages", [])
+                if is_dirty(slug) and body.get("replace_draft") is not True:
+                    return self._send(409, {"error": "该站点已有未发布草稿；确认替换后再生成（旧草稿会备份）"})
+            else:
+                if not can_write(self.user_role, "/api/create"):
+                    return self._send(403, {"error": "当前角色没有新建站点权限"})
+                company = kf_ai.text(body.get("company", ""), "企业名称", 60, True)
+                domain = kf_ai.text(body.get("domain", ""), "域名", 80, True).lower()
+                if not DOMAIN_RE.fullmatch(domain) or industry not in INDUSTRIES:
+                    raise kf_ai.AIError("域名或行业模板不合法")
+                if domain in host_map():
+                    raise kf_ai.AIError("该域名已有站点，请选择已有站点或使用其他域名")
+                plan = next((p for p in plans() if p["id"] == body.get("plan_id")), None)
+                if plan is None:
+                    raise kf_ai.AIError("请选择套餐")
+                import kf_template
+                pages = kf_template.build_spec(industry, company, domain)
+                original = None
+            if not isinstance(pages, list) or not 1 <= len(pages) <= 12:
+                raise kf_ai.AIError("站点需要有 1–12 个可编辑页面")
+            if any(not SLUG_RE.fullmatch(p.get("slug", "")) for p in pages):
+                raise kf_ai.AIError("站点页面标识不符合建站规范")
+            if mode == "new":
+                port = reserve_site(slug)
+            try:
+                job = ai_store().create_job(slug, profile, self.user, mode, prompt_snapshot)
+                if auto_research:
+                    job["auto_research"]=True
+                    ai_store().update_job(job["id"],auto_research=True)
+                if context_sources:
+                    job["context"]=context_sources
+                    ai_store().update_job(job["id"],context=context_sources)
+                if style:
+                    job["style"] = style
+                    ai_store().update_job(job["id"], style=style)
+                args = (job, profile, key, company, domain, brief, language, pages,
+                        original, port, plan, industry)
+                threading.Thread(target=self._ai_worker, args=args, daemon=True).start()
+            except Exception:
+                if mode == "new":
+                    release_site(slug)
+                raise
+        audit(self.user, "ai_build", slug, "任务 %s；%s；%s" % (job["id"], profile["name"], profile["model"]))
+        return self._send(202, {"job": job})
+
+
+    def _ai_worker(self, job, profile, key, company, domain, brief, language,
+                   pages, original, port, plan, industry):
+        store, slug, jid = ai_store(), job["slug"], job["id"]
+        try:
+            store.update_job(jid, status="generating", message="正在模拟生成页面" if job["simulated"] else "正在调用模型生成页面")
+            if job.get('auto_research'):
+                store.update_job(jid,message='正在查询已授权 MCP 只读资料（最多 4 次）')
+                sources=automation_store().research(job['user'],slug,brief,profile,key,jid)
+                job['context']=job.get('context',[])+sources
+                if len(json.dumps(job['context'],ensure_ascii=False))>48000:raise kf_ai.AIError('查询结果超过上下文限制，请缩小资料范围')
+                store.update_job(jid,context=job['context'])
+            if job.get("prompt") or job.get("style") or job.get("context"):
+                guidance = (job.get("prompt") or {}).get("instructions", "")
+                if job.get("style"):
+                    guidance += kf_styles.guidance(job["style"])
+                result = kf_ai.generate(profile, key, company, brief, pages, language, guidance=guidance,
+                                        **({"context":job["context"]} if job.get("context") else {}))
+            else:
+                result = kf_ai.generate(profile, key, company, brief, pages, language)
+            # Validate rendered content too, before provisioning or changing the draft.
+            for page in result["pages"]:
+                rendered = ks().render_sections(page["sections"])
+                if len(rendered) < ks().MIN_HTML:
+                    raise kf_ai.AIError("生成页面内容不足，草稿未更改")
+            if job["mode"] == "new":
+                store.update_job(jid, status="provisioning", message="页面已生成，正在开通 WordPress 与数据库（首次拉取镜像可能需要数分钟）")
+                provision(company, domain, slug, port, plan["name"], plan["price"], industry, plan["id"])
+                with _lock:
+                    failed = _live.get(slug, {}).get("state") == "failed"
+                if failed or not (SITES / slug / "site-spec.json").is_file():
+                    raise kf_ai.AIError("站点开通失败；请查看站点状态。已有目录会保留，请修复后选择已有站点重试")
+                if {p["slug"] for p in read_spec(slug).get("pages", [])} != {p["slug"] for p in pages}:
+                    raise kf_ai.AIError("站点模板初始化未完成，请修复后重试")
+                meta = load_meta(slug)
+                meta["plan_id"] = plan["id"]
+                kf_ai.atomic_json(SITES / slug / "meta.json", meta)
+                inv = self._make_invoice(slug, company, domain, plan)
+                store.update_job(jid, invoice=inv["no"])
+            store.update_job(jid, status="saving", message="正在校验并保存草稿")
+            automation_access(job['user'],slug,'build')
+            with draft_lock(slug):
+                current = read_draft(slug)
+                if original is not None and current != original:
+                    raise kf_ai.AIError("生成期间草稿已改变，本次内容未覆盖；请重新生成")
+                backup = SITES / slug / ".backups" / ("ai-" + jid + ".json")
+                kf_ai.atomic_json(backup, current)
+                if job.get("style"):
+                    result["design"] = job["style"]["tokens"]
+                elif current.get("design"):
+                    result["design"] = current["design"]
+                result["ai"] = {"job_id": jid, "simulated": job["simulated"], "model": profile["model"],
+                                "language": language, "generated_at": int(time.time()),
+                                "prompt": job.get("prompt"), "style": job.get("style"),
+                                "context_sources":[{k:v for k,v in src.items() if k!='data'} for src in job.get("context",[])]}
+                kf_ai.atomic_json(draft_path(slug), result)
+            store.update_job(jid, status="completed", message="模拟草稿已生成，请预览、编辑后发布" if job["simulated"] else "草稿已生成，请预览、编辑后发布",
+                             pages=len(result["pages"]), preview="/preview/" + slug + "/home")
+            audit(job["user"], "ai_complete", slug, jid)
+        except kf_ai.AIError as e:
+            store.update_job(jid, status="failed", message=str(e))
+            audit(job["user"], "ai_failed", slug, str(e))
+        except Exception as e:
+            store.update_job(jid, status="failed", message="建站任务失败（%s），请检查服务日志或站点状态后重试" % type(e).__name__)
+            audit(job["user"], "ai_failed", slug, type(e).__name__)
+        finally:
+            if job["mode"] == "new":
+                release_site(slug)
+
+
+def render_check( slug, page, title, sections, write=False):
+    import tempfile
+    fd, tmp_name = tempfile.mkstemp(prefix=".tmp-page-", suffix=".json", dir=str(CONSOLE))
+    os.close(fd)
+    tmp = Path(tmp_name)
+    tmp.write_text(json.dumps({"title": title, "sections": sections}, ensure_ascii=False))
+    try:
+        args = [sys.executable, str(BASE / "core" / "kf_sections.py"),
+                "--site", str(SITES / slug), "--page-slug", page, "--save", str(tmp)]
+        if not write:
+            args.append("--dry-run")
+        r = subprocess.run(args, capture_output=True, text=True, timeout=300)
+        out = (r.stdout or "").strip().splitlines()
+        return json.loads(out[-1]) if out else {"ok": False, "errors": [(r.stderr or "")[-200:]]}
+    except Exception as e:
+        return {"ok": False, "stage": "exception", "errors": [str(e)]}
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def publish_site(body,render):
+    with kf_tool_runtime.release_guard(BASE):return _publish_site(body,render)
+
+def _publish_site(body, render):
+    slug = str(body.get('slug', '')).strip().lower()
+    page_slug = str(body.get('page', '')).strip()
+    if not SLUG_RE.match(slug) or not (SITES / slug).exists():
+        return (400, {'ok': False, 'error': '站点不存在'})
+    draft = read_draft(slug)
+    pages = draft.get('pages', [])
+    targets = [p for p in pages if p['slug'] == page_slug] if page_slug else pages
+    if not targets:
+        return (404, {'ok': False, 'error': '草稿里没有这一页'})
+    if draft.get('design'):
+        tokens = sanitize_design(draft['design'])
+        if not apply_design(slug, tokens):
+            return (500, {'ok': False, 'error': '风格同步失败，页面尚未发布，请重试'})
+    failed = []
+    published = []
+    for page in targets:
+        res = render(slug, page['slug'], page.get('title', page['slug']), page.get('sections', []), write=True)
+        if not res.get('ok'):
+            failed.append({'page': page['slug'], 'error': '；'.join(res.get('errors', ['失败']))})
+            break
+        published.append(page)
+    live = read_spec(slug)
+    live_pages = live.get('pages', [])
+    for page in published:
+        cur = next((p for p in live_pages if p['slug'] == page['slug']), None)
+        if cur is None:
+            live_pages.append(json.loads(json.dumps(page)))
+        else:
+            cur['sections'] = json.loads(json.dumps(page.get('sections', [])))
+            cur['title'] = page.get('title', cur.get('title', page['slug']))
+    live['pages'] = live_pages
+    if draft.get('design'):
+        live['design'] = draft['design']
+    if 'ai' in draft:
+        live['ai'] = draft['ai']
+    if published:
+        kf_ai.atomic_json(spec_path(slug), live)
+    if failed:
+        return (400, {'ok': False, 'error': '发布中断，已发布 %d 页；请检查失败页面后重试' % len(published), 'failed': failed, 'pages': len(published), 'dirty': is_dirty(slug)})
+    return (200, {'ok': True, 'pages': len(published), 'dirty': is_dirty(slug)})
+
+
+_AUTOMATION = None
+_WORKFLOWS = None
+_AUTOMATION_LOCK = threading.RLock()
+
+
+def automation_context(slug):
+    if not isinstance(slug,str) or not SLUG_RE.fullmatch(slug) or not (SITES/slug/'meta.json').is_file():
+        raise kf_ai.AIError('请选择有效站点')
+    meta=load_meta(slug)
+    return {'slug':slug,'domain':kf_dns_provider.domain_name(meta.get('domain','')),'company':meta.get('company',slug)}
+
+
+def automation_access(user,slug,purpose):
+    entry=load_users().get(user) or {}
+    if not entry.get('active') or entry.get('role') not in ('admin','ops'):
+        raise kf_tool_runtime.ActionDenied('当前账号无权使用运营自动化')
+    paths={'build':'/api/ai/build','dns':'/api/dns/record','mail':'/api/automation/','maintenance':'/api/automation/'}
+    if not isinstance(purpose,str) or purpose not in paths or not can_write(entry['role'],paths[purpose]):
+        raise kf_tool_runtime.ActionDenied('当前角色未获此功能的执行权限')
+    automation_context(slug)
+
+
+def automation_totp(user,code):
+    secret=(load_users().get(user) or {}).get('mfa_secret')
+    if not secret:raise kf_tool_runtime.ActionDenied('请先在团队与安全启用当前账号的 TOTP')
+    def counter(value):
+        now=int(time.time()//30)
+        for n in (now,now-1,now+1):
+            if _h.compare_digest(_totp(secret,n),value):return n
+        return None
+    kf_stepup.StepUp(BASE).verify(user,code,counter)
+
+
+def selected_site_context(slug,selected):
+    result={'site':automation_context(slug)}
+    if 'client' in selected:
+        client=client_of(slug);result['client']={k:client.get(k,'') for k in ('contact','email','phone','address','notes','scope')}
+    if 'brand' in selected:result['brand']=site_design(slug)
+    if 'pages' in selected:result['pages']=read_draft(slug).get('pages',[])
+    if 'media' in selected:
+        root=SITES/slug/'html'/'wp-content'/'uploads'
+        result['media']=[{'filename':p.name,'path':str(p.relative_to(root))} for p in sorted(root.rglob('*')) if p.is_file() and p.suffix.lower() in ('.jpg','.png','.webp','.svg')][:100] if root.exists() else []
+    return result
+
+
+def automation_generate(item,context):
+    slug=context['slug']
+    with draft_lock(slug):
+        if kf_tool_runtime.fingerprint(read_draft(slug))!=item['snapshot']['draft']:
+            raise kf_tool_runtime.ActionConflict('草稿已改变，请重新生成操作')
+        code,data=BuildService(item['user']).start(item['arguments'])
+        if code>=400:raise kf_ai.AIError(data.get('error','建站任务创建失败'))
+        return data
+
+
+def automation_publish(item,context):
+    slug=context['slug']
+    with draft_lock(slug):
+        if ai_store().busy(slug):raise kf_ai.AIError('建站任务正在运行，请完成后再发布')
+        if kf_tool_runtime.fingerprint(read_draft(slug))!=item['snapshot']['draft']:
+            raise kf_tool_runtime.ActionConflict('草稿已改变，请重新预览并确认发布')
+        code,data=publish_site({'slug':slug,'page':item['arguments'].get('page','')},render_check)
+        if code>=400:raise kf_ai.AIError(data.get('error','发布失败，请核实各页面状态'))
+        return data
+
+
+def automation_maintenance(slug):
+    root=SITES/slug/'.backups'
+    backups=sorted((p for p in root.glob('*') if p.is_file()),key=lambda p:p.stat().st_mtime,reverse=True) if root.exists() else []
+    return {'service_days_left':days_left(slug),'latest_draft_backup':{'name':backups[0].name,'modified':int(backups[0].stat().st_mtime)} if backups else None,
+            'backup_note':'仅核对草稿备份；数据库与服务器备份需按运维流程验证'}
+
+
+def automation_store():
+    global _AUTOMATION
+    with _AUTOMATION_LOCK:
+        if _AUTOMATION is None:
+            providers=kf_dns_provider.DNSProviders(BASE,dnsmod())
+            callbacks={'action':lambda ident,user:automation_store().actions.get(ident,user),'draft':read_draft,'context':selected_site_context,'smtp':lambda:settings().get('smtp',{}),
+                       'generate':automation_generate,'publish':automation_publish,'maintenance':automation_maintenance,'model':lambda pid:ai_store().resolve(pid)}
+            builtins=kf_builtin_tools.BusinessTools(BASE,callbacks,providers).registry()
+            _AUTOMATION=kf_automation.Automation(BASE,automation_context,automation_access,automation_totp,builtins)
+        return _AUTOMATION
+
+
+def workflow_store():
+    global _WORKFLOWS
+    with _AUTOMATION_LOCK:
+        if _WORKFLOWS is None:_WORKFLOWS=kf_workflows.Workflows(BASE,automation_store(),lambda:ai_store().jobs())
+        return _WORKFLOWS
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -4056,6 +4446,62 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(data)
         return True
+
+    def _automation_get(self,path):
+        if self.user_role not in ('admin','ops'):return self._send(403,{'error':'无权使用运营自动化'})
+        store=automation_store()
+        try:
+            if path=='/api/automation/workflows':return self._send(200,{'items':workflow_store().list(self.user,self.user_role=='admin')})
+            if path=='/api/automation/actions':return self._send(200,{'items':store.actions.list(self.user,self.user_role=='admin')})
+            if path.startswith('/api/automation/action/'):
+                item=store.actions.get(path.rsplit('/',1)[-1],None if self.user_role=='admin' else self.user)
+                return self._send(200,{'item':item})
+            if path=='/api/automation/config':
+                providers=kf_dns_provider.DNSProviders(BASE,dnsmod()).public() if self.user_role=='admin' else []
+                return self._send(200,{'tools':[{'name':n,'purpose':v['purpose']} for n,v in store.builtins.items()],
+                                       'dns_providers':providers,'can_configure':self.user_role=='admin'})
+            return self._send(404,{'error':'not found'})
+        except kf_tool_runtime.ActionDenied as exc:return self._send(403,{'error':str(exc)})
+        except kf_ai.AIError as exc:return self._send(400,{'error':str(exc)})
+
+    def _automation_post(self,path,body):
+        if self.user_role not in ('admin','ops'):return self._send(403,{'error':'无权使用运营自动化'})
+        if not isinstance(body,dict) or self.headers.get_content_type()!='application/json':return self._send(400,{'error':'请使用 JSON 请求'})
+        if session_user(self.headers.get('Cookie'))!=self.user:return self._send(403,{'error':'请从 MVP 登录页登录后操作'})
+        store=automation_store()
+        try:
+            if path=='/api/automation/workflow/create':
+                item=workflow_store().create(self.user,body)
+                audit(self.user,'workflow_create',item['id'],item['slug'])
+                return self._send(200,{'item':item})
+            if path=='/api/automation/workflow/control':
+                return self._send(200,{'item':workflow_store().control(body.get('id'),self.user,body.get('action'))})
+            if path=='/api/automation/workflow/amend':
+                return self._send(200,{'item':workflow_store().amend(body.get('id'),self.user,body.get('arguments'))})
+            if path=='/api/automation/available':return self._send(200,{'items':store.available(self.user,body.get('slug'),body.get('purpose','build'))})
+            if path=='/api/automation/prepare':
+                body.pop('workflow_id',None)
+                item=store.prepare_mcp(self.user,body) if body.get('server') else store.prepare_builtin(self.user,body)
+            elif path=='/api/automation/execute':
+                item=store.execute(self.user,body)
+                if item.get('workflow_id') and item['state']=='succeeded':
+                    workflow=workflow_store().get(item['workflow_id'],self.user)
+                    if workflow['state']=='waiting':workflow_store().control(workflow['id'],self.user,'resume')
+            elif path=='/api/automation/cancel':item=store.actions.cancel(body.get('id'),self.user)
+            elif path=='/api/automation/reconcile':item=store.actions.reconcile(body.get('id'),self.user,body.get('outcome'),body.get('note',''),admin=self.user_role=='admin')
+            elif path=='/api/automation/dns-provider':
+                if self.user_role!='admin':raise kf_tool_runtime.ActionDenied('仅管理员可配置 DNS 执行服务商')
+                item=kf_dns_provider.DNSProviders(BASE,dnsmod()).configure(body,automation_context(body.get('slug')))
+            elif path=='/api/automation/dns-records':
+                automation_access(self.user,body.get('slug'),'dns')
+                provider,records,authority=kf_dns_provider.DNSProviders(BASE,dnsmod()).records(automation_context(body['slug']))
+                return self._send(200,{'provider':provider['provider'],'records':records,'authority':authority})
+            else:return self._send(404,{'error':'not found'})
+            audit(self.user,'automation_'+path.rsplit('/',1)[-1],str(item.get('id',item.get('slug','')))[:80],str(item.get('state','')))
+            return self._send(200,{'item':item})
+        except kf_tool_runtime.ActionDenied as exc:return self._send(403,{'error':str(exc)})
+        except (kf_tool_runtime.ActionConflict,kf_domain_vault.VaultConflict) as exc:return self._send(409,{'error':str(exc)})
+        except kf_ai.AIError as exc:return self._send(400,{'error':str(exc)})
 
     def _mcp_post(self, path, body):
         if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
@@ -4223,138 +4669,10 @@ class Handler(BaseHTTPRequestHandler):
         except kf_ai.AIError as e:
             return self._send(400, {"error": str(e)})
 
-    def _ai_build(self, body):
-        slug = kf_ai.text(body.get("slug", ""), "站点标识", 20, True).lower()
-        if not SLUG_RE.fullmatch(slug):
-            raise kf_ai.AIError("站点标识必须是小写字母开头的 2–20 位字母、数字或短横线")
-        mode = body.get("mode", "existing")
-        if mode not in ("new", "existing"):
-            raise kf_ai.AIError("请选择新站点或已有站点")
-        style = None
-        if body.get("style_template_id"):
-            style = kf_styles.StyleStore(BASE).resolve(body["style_template_id"])
-        elif body.get("reference_style") is not None:
-            supplied = body["reference_style"]
-            if not isinstance(supplied, dict):
-                raise kf_ai.AIError("参考风格必须是对象")
-            style = {"tokens": kf_styles.normalize_tokens(supplied.get("tokens")),
-                     "summary": kf_ai.text(supplied.get("summary", ""), "风格说明", 1500),
-                     "guidance": kf_ai.text(supplied.get("guidance", ""), "风格指导", 2400),
-                     "source_url": kf_styles.public_url(supplied.get("source_url")), "name": "本次参考风格"}
-        selection = body.get("prompt_selection")
-        brief = kf_ai.text(body.get("brief", ""), "建站要求", 6000, selection is None)
-        prompt_snapshot = kf_prompts.PromptStore(BASE).compose(selection, brief) if selection is not None else None
-        if prompt_snapshot:
-            brief = prompt_snapshot["brief"]
-        language = body.get("language", "zh")
-        if language not in ("zh", "en"):
-            raise kf_ai.AIError("请选择中文或英文")
-        profile, key = ai_store().resolve(body.get("profile_id"))
-        plan, port, industry = None, None, body.get("industry", "tech")
-        with draft_lock(slug):
-            if mode == "existing":
-                if not (SITES / slug / "meta.json").is_file():
-                    raise kf_ai.AIError("站点不存在，请先开通或选择新建站点")
-                meta = load_meta(slug)
-                company, domain = meta.get("company", slug), meta.get("domain", "")
-                original = read_draft(slug)
-                pages = original.get("pages", [])
-                if is_dirty(slug) and body.get("replace_draft") is not True:
-                    return self._send(409, {"error": "该站点已有未发布草稿；确认替换后再生成（旧草稿会备份）"})
-            else:
-                if not can_write(self.user_role, "/api/create"):
-                    return self._send(403, {"error": "当前角色没有新建站点权限"})
-                company = kf_ai.text(body.get("company", ""), "企业名称", 60, True)
-                domain = kf_ai.text(body.get("domain", ""), "域名", 80, True).lower()
-                if not DOMAIN_RE.fullmatch(domain) or industry not in INDUSTRIES:
-                    raise kf_ai.AIError("域名或行业模板不合法")
-                if domain in host_map():
-                    raise kf_ai.AIError("该域名已有站点，请选择已有站点或使用其他域名")
-                plan = next((p for p in plans() if p["id"] == body.get("plan_id")), None)
-                if plan is None:
-                    raise kf_ai.AIError("请选择套餐")
-                import kf_template
-                pages = kf_template.build_spec(industry, company, domain)
-                original = None
-            if not isinstance(pages, list) or not 1 <= len(pages) <= 12:
-                raise kf_ai.AIError("站点需要有 1–12 个可编辑页面")
-            if any(not SLUG_RE.fullmatch(p.get("slug", "")) for p in pages):
-                raise kf_ai.AIError("站点页面标识不符合建站规范")
-            if mode == "new":
-                port = reserve_site(slug)
-            try:
-                job = ai_store().create_job(slug, profile, self.user, mode, prompt_snapshot)
-                if style:
-                    job["style"] = style
-                    ai_store().update_job(job["id"], style=style)
-                args = (job, profile, key, company, domain, brief, language, pages,
-                        original, port, plan, industry)
-                threading.Thread(target=self._ai_worker, args=args, daemon=True).start()
-            except Exception:
-                if mode == "new":
-                    release_site(slug)
-                raise
-        audit(self.user, "ai_build", slug, "任务 %s；%s；%s" % (job["id"], profile["name"], profile["model"]))
-        return self._send(202, {"job": job})
+    def _ai_build(self,body):
+        code,data=BuildService(self.user).start(body)
+        return self._send(code,data)
 
-    def _ai_worker(self, job, profile, key, company, domain, brief, language,
-                   pages, original, port, plan, industry):
-        store, slug, jid = ai_store(), job["slug"], job["id"]
-        try:
-            store.update_job(jid, status="generating", message="正在模拟生成页面" if job["simulated"] else "正在调用模型生成页面")
-            if job.get("prompt") or job.get("style"):
-                guidance = (job.get("prompt") or {}).get("instructions", "")
-                if job.get("style"):
-                    guidance += kf_styles.guidance(job["style"])
-                result = kf_ai.generate(profile, key, company, brief, pages, language, guidance=guidance)
-            else:
-                result = kf_ai.generate(profile, key, company, brief, pages, language)
-            # Validate rendered content too, before provisioning or changing the draft.
-            for page in result["pages"]:
-                rendered = ks().render_sections(page["sections"])
-                if len(rendered) < ks().MIN_HTML:
-                    raise kf_ai.AIError("生成页面内容不足，草稿未更改")
-            if job["mode"] == "new":
-                store.update_job(jid, status="provisioning", message="页面已生成，正在开通 WordPress 与数据库（首次拉取镜像可能需要数分钟）")
-                provision(company, domain, slug, port, plan["name"], plan["price"], industry, plan["id"])
-                with _lock:
-                    failed = _live.get(slug, {}).get("state") == "failed"
-                if failed or not (SITES / slug / "site-spec.json").is_file():
-                    raise kf_ai.AIError("站点开通失败；请查看站点状态。已有目录会保留，请修复后选择已有站点重试")
-                if {p["slug"] for p in read_spec(slug).get("pages", [])} != {p["slug"] for p in pages}:
-                    raise kf_ai.AIError("站点模板初始化未完成，请修复后重试")
-                meta = load_meta(slug)
-                meta["plan_id"] = plan["id"]
-                kf_ai.atomic_json(SITES / slug / "meta.json", meta)
-                inv = self._make_invoice(slug, company, domain, plan)
-                store.update_job(jid, invoice=inv["no"])
-            store.update_job(jid, status="saving", message="正在校验并保存草稿")
-            with draft_lock(slug):
-                current = read_draft(slug)
-                if original is not None and current != original:
-                    raise kf_ai.AIError("生成期间草稿已改变，本次内容未覆盖；请重新生成")
-                backup = SITES / slug / ".backups" / ("ai-" + jid + ".json")
-                kf_ai.atomic_json(backup, current)
-                if job.get("style"):
-                    result["design"] = job["style"]["tokens"]
-                elif current.get("design"):
-                    result["design"] = current["design"]
-                result["ai"] = {"job_id": jid, "simulated": job["simulated"], "model": profile["model"],
-                                "language": language, "generated_at": int(time.time()),
-                                "prompt": job.get("prompt"), "style": job.get("style")}
-                kf_ai.atomic_json(draft_path(slug), result)
-            store.update_job(jid, status="completed", message="模拟草稿已生成，请预览、编辑后发布" if job["simulated"] else "草稿已生成，请预览、编辑后发布",
-                             pages=len(result["pages"]), preview="/preview/" + slug + "/home")
-            audit(job["user"], "ai_complete", slug, jid)
-        except kf_ai.AIError as e:
-            store.update_job(jid, status="failed", message=str(e))
-            audit(job["user"], "ai_failed", slug, str(e))
-        except Exception as e:
-            store.update_job(jid, status="failed", message="建站任务失败（%s），请检查服务日志或站点状态后重试" % type(e).__name__)
-            audit(job["user"], "ai_failed", slug, type(e).__name__)
-        finally:
-            if job["mode"] == "new":
-                release_site(slug)
 
     def do_GET(self):
         if self._maybe_site():
@@ -4390,11 +4708,13 @@ class Handler(BaseHTTPRequestHandler):
         path = raw.rstrip("/") or "/"
         if path == "/":
             return self._send(200, PAGE, "text/html; charset=utf-8")
-        if path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js"):
+        if path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
             return self._send(200, {"items":kf_mcp.MCPStore(BASE).public()})
+        if path.startswith("/api/automation/"):
+            return self._automation_get(path)
         if path.startswith("/api/ai/"):
             return self._ai_get(path)
         if path == "/health":
@@ -4729,7 +5049,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/upload":
             return self._upload()
 
-        if path.startswith(("/api/ai/", "/api/domain/accounts", "/api/mcp/")):
+        if path.startswith(("/api/ai/", "/api/domain/accounts", "/api/mcp/", "/api/automation/")):
             try:
                 content_length = int(self.headers.get("Content-Length", "0"))
             except ValueError:
@@ -4739,6 +5059,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(413, {"error": "请求超过 64KB 限制"})
         body = self._body()
 
+        if path.startswith("/api/automation/"):
+            return self._automation_post(path, body)
         if path.startswith("/api/mcp/"):
             return self._mcp_post(path, body)
         if path.startswith("/api/domain/accounts"):
@@ -4949,27 +5271,8 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
-    def _make_invoice(self, slug, company, domain, plan, kind="new", years=0):
-        s = settings()
-        with _file_lock:
-            invs = invoices()
-            no = next_invoice_no()
-            subtotal = float(plan["price"])
-            gst = round(subtotal * s["gst_rate"], 2) if s.get("gst_enabled") else 0.0
-            inv = {
-                "no": no, "slug": slug, "company": company, "domain": domain,
-                "plan_id": plan["id"], "plan_name": plan["name"],
-                "plan_specs": plan.get("specs", ""),
-                "subtotal": subtotal, "gst": gst, "total": round(subtotal + gst, 2),
-                "status": "unpaid",
-                "issued_at": datetime.now(SGT).strftime("%Y-%m-%d %H:%M"),
-                "paid_at": "",
-                "kind": kind,
-                "years": years,
-            }
-            invs.append(inv)
-            _write(INVOICES_F, invs)
-        return inv
+    def _make_invoice(self,*args,**kwargs):
+        return make_invoice(*args,**kwargs)
 
     def _issue(self, slug):
         slug = str(slug).strip().lower()
@@ -5615,59 +5918,41 @@ class Handler(BaseHTTPRequestHandler):
         if not domain:
             return self._send(400, {"error": "站点没有配置域名"})
         ip = str(body.get("ip") or "").strip() or "101.204.233.11"
-        zones[slug] = m.new_zone(domain, ip)
-        m.save_zones(zones)
+        def enable(zones):
+            if zones.get(slug):raise kf_ai.AIError('DNS 区域已存在，请刷新')
+            zones[slug]=m.new_zone(domain,ip)
+        try:m.update_zones(enable)
+        except kf_ai.AIError as exc:return self._send(409,{'error':str(exc)})
         return self._send(200, {"ok": True, "domain": domain})
 
     def _dns_record(self, body):
-        slug = str(body.get("slug", "")).strip().lower()
-        if not SLUG_RE.match(slug) or not (SITES / slug).exists():
-            return self._send(400, {"error": "站点不存在"})
-        name = str(body.get("name", "@")).strip() or "@"
-        rtype = str(body.get("type", "A")).strip().upper()
-        value = str(body.get("value", "")).strip()
+        if session_user(self.headers.get('Cookie'))!=self.user:return self._send(403,{'error':'请登录后准备 DNS 变更'})
         try:
-            ttl = max(60, min(86400, int(body.get("ttl", 300))))
-        except Exception:
-            ttl = 300
-        if rtype not in ("A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV"):
-            return self._send(400, {"error": "不支持的记录类型"})
-        if not value:
-            return self._send(400, {"error": "记录值不能为空"})
-        if not re.match(r"^(@|\*|[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*)$",
-                        name.lower()):
-            return self._send(400, {"error": "记录名不合法"})
-        m = dnsmod()
-        zones = m.load_zones()
-        z = zones.get(slug)
-        if not z:
-            return self._send(400, {"error": "请先启用 DNS 托管"})
-        if len(z.get("records") or []) >= MAX_DNS_RECORDS:
-            return self._send(400, {"error": "该域名的记录数已达上限（%d 条）"
-                                              % MAX_DNS_RECORDS})
-        z["records"].append({"name": name, "type": rtype, "ttl": ttl, "value": value})
-        m.save_zones(zones)
-        return self._send(200, {"ok": True})
+            slug=body.get('slug');record={k:body.get(k) for k in ('name','type','ttl')}
+            record['content']=str(body.get('value','')).strip()
+            if record['type']=='MX':
+                parts=record['content'].split(None,1)
+                if len(parts)!=2:raise kf_ai.AIError('MX 值需包含优先级和邮件主机')
+                record['priority']=int(parts[0]);record['content']=parts[1]
+            item=automation_store().prepare_builtin(self.user,{'slug':slug,'tool':'dns.change','arguments':{'operation':'add','record':record}})
+            return self._send(202,{'action':item,'message':'请预览并确认 DNS 变更'})
+        except (ValueError,TypeError) as exc:return self._send(400,{'error':str(exc) if isinstance(exc,kf_ai.AIError) else 'DNS 记录格式无效'})
 
     def _dns_delete(self, body):
-        slug = str(body.get("slug", "")).strip().lower()
-        if not SLUG_RE.match(slug) or not (SITES / slug).exists():
-            return self._send(400, {"error": "站点不存在"})
+        if session_user(self.headers.get('Cookie'))!=self.user:return self._send(403,{'error':'请登录后准备 DNS 变更'})
         try:
-            idx = int(body.get("index", -1))
-        except Exception:
-            idx = -1
-        m = dnsmod()
-        zones = m.load_zones()
-        z = zones.get(slug)
-        if not z or not (0 <= idx < len(z["records"])):
-            return self._send(404, {"error": "记录不存在"})
-        rec = z["records"][idx]
-        if rec["type"] in ("SOA", "NS") and rec["name"] == "@":
-            return self._send(400, {"error": "SOA / NS 记录不可删除"})
-        z["records"].pop(idx)
-        m.save_zones(zones)
-        return self._send(200, {"ok": True})
+            context=automation_context(body.get('slug'));zone=dnsmod().load_zones().get(context['slug'])
+            index=int(body.get('index',-1))
+            if not zone or not 0<=index<len(zone['records']):raise kf_ai.AIError('本机参考记录不存在，请刷新')
+            old=zone['records'][index]
+            _,records,_=kf_dns_provider.DNSProviders(BASE,dnsmod()).records(context)
+            name=context['domain'] if old['name']=='@' else old['name'].rstrip('.') if old['name'].endswith('.') else old['name']+'.'+context['domain']
+            value=old['value'].split(None,1)[-1] if old['type']=='MX' else old['value']
+            matches=[r for r in records if r['name']==name and r['type']==old['type'] and r['content'].rstrip('.')==value.rstrip('.')]
+            if len(matches)!=1:raise kf_ai.AIError('服务商记录与本机参考不一致，请在运营助手读取真实记录后操作')
+            item=automation_store().prepare_builtin(self.user,{'slug':context['slug'],'tool':'dns.change','arguments':{'operation':'delete','record_id':matches[0]['id']}})
+            return self._send(202,{'action':item,'message':'请预览并确认 DNS 删除'})
+        except (ValueError,TypeError) as exc:return self._send(400,{'error':str(exc) if isinstance(exc,kf_ai.AIError) else 'DNS 记录格式无效'})
 
     def _renew(self, body):
         slug = str(body.get("slug", "")).strip().lower()
@@ -5739,74 +6024,14 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, {"ok": True, "length": res.get("length"),
                                 "dirty": is_dirty(slug), "message": "已保存到草稿"})
 
-    def _render_check(self, slug, page, title, sections, write=False):
-        import tempfile
-        fd, tmp_name = tempfile.mkstemp(prefix=".tmp-page-", suffix=".json", dir=str(CONSOLE))
-        os.close(fd)
-        tmp = Path(tmp_name)
-        tmp.write_text(json.dumps({"title": title, "sections": sections}, ensure_ascii=False))
-        try:
-            args = [sys.executable, str(BASE / "core" / "kf_sections.py"),
-                    "--site", str(SITES / slug), "--page-slug", page, "--save", str(tmp)]
-            if not write:
-                args.append("--dry-run")
-            r = subprocess.run(args, capture_output=True, text=True, timeout=300)
-            out = (r.stdout or "").strip().splitlines()
-            return json.loads(out[-1]) if out else {"ok": False, "errors": [(r.stderr or "")[-200:]]}
-        except Exception as e:
-            return {"ok": False, "stage": "exception", "errors": [str(e)]}
-        finally:
-            tmp.unlink(missing_ok=True)
+    def _render_check(self,*args,**kwargs):
+        return render_check(*args,**kwargs)
 
     @draft_operation
-    def _publish(self, body):
-        slug = str(body.get("slug", "")).strip().lower()
-        page_slug = str(body.get("page", "")).strip()
-        if not SLUG_RE.match(slug) or not (SITES / slug).exists():
-            return self._send(400, {"ok": False, "error": "站点不存在"})
-
-        draft = read_draft(slug)
-        pages = draft.get("pages", [])
-        targets = [p for p in pages if p["slug"] == page_slug] if page_slug else pages
-        if not targets:
-            return self._send(404, {"ok": False, "error": "草稿里没有这一页"})
-
-        if draft.get("design"):
-            tokens = sanitize_design(draft["design"])
-            if not apply_design(slug, tokens):
-                return self._send(500, {"ok": False, "error": "风格同步失败，页面尚未发布，请重试"})
-        failed = []
-        published = []
-        for page in targets:
-            res = self._render_check(slug, page["slug"], page.get("title", page["slug"]),
-                                     page.get("sections", []), write=True)
-            if not res.get("ok"):
-                failed.append({"page": page["slug"],
-                               "error": "；".join(res.get("errors", ["失败"]))})
-                break
-            published.append(page)
-
-        live = read_spec(slug)
-        live_pages = live.get("pages", [])
-        for page in published:
-            cur = next((p for p in live_pages if p["slug"] == page["slug"]), None)
-            if cur is None:
-                live_pages.append(json.loads(json.dumps(page)))
-            else:
-                cur["sections"] = json.loads(json.dumps(page.get("sections", [])))
-                cur["title"] = page.get("title", cur.get("title", page["slug"]))
-        live["pages"] = live_pages
-        if draft.get("design"):
-            live["design"] = draft["design"]
-        if "ai" in draft:
-            live["ai"] = draft["ai"]
-        if published:
-            kf_ai.atomic_json(spec_path(slug), live)
-        if failed:
-            return self._send(400, {"ok": False,
-                                    "error": "发布中断，已发布 %d 页；请检查失败页面后重试" % len(published),
-                                    "failed": failed, "pages": len(published), "dirty": is_dirty(slug)})
-        return self._send(200, {"ok": True, "pages": len(published), "dirty": is_dirty(slug)})
+    def _publish(self,body):
+        try:code,data=publish_site(body,self._render_check)
+        except kf_ai.AIError as exc:return self._send(409,{'error':str(exc)})
+        return self._send(code,data)
 
     @draft_operation
     def _design_save(self, body):
@@ -5904,6 +6129,8 @@ if __name__ == "__main__":
         ensure_admin()
     except Exception as e:
         print("users init failed:", e, flush=True)
+    automation_store()
+    workflow_store()
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
     print(f"KampongFlow console v2 on {BIND}:{PORT}", flush=True)
     srv.serve_forever()

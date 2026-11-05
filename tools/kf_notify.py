@@ -157,63 +157,9 @@ def build_digest(with_leads=True):
 
 
 def send(to, subject, body, smtp):
-    provider = (smtp.get("provider") or "smtp").lower()
-    frm = (smtp.get("from") or smtp.get("user") or "").strip()
-
-    if provider in ("resend", "sendgrid"):
-        import urllib.request as ur
-        key = (smtp.get("api_key") or "").strip()
-        if not key or not frm:
-            raise RuntimeError("邮件 API 未配置")
-        if provider == "resend":
-            payload = {"from": frm, "to": [to], "subject": subject, "text": body}
-            url, hdr = "https://api.resend.com/emails", {"Authorization": "Bearer " + key}
-        else:
-            payload = {"personalizations": [{"to": [{"email": to}]}],
-                       "from": {"email": frm}, "subject": subject,
-                       "content": [{"type": "text/plain", "value": body}]}
-            url, hdr = "https://api.sendgrid.com/v3/mail/send", {"Authorization": "Bearer " + key}
-        last = None
-        for i in range(3):
-            try:
-                r = ur.Request(url, data=json.dumps(payload).encode(),
-                               headers={**hdr, "Content-Type": "application/json"}, method="POST")
-                with ur.urlopen(r, timeout=25) as resp:
-                    if resp.status >= 300:
-                        raise RuntimeError("HTTP %d" % resp.status)
-                return
-            except Exception as e:
-                last = e
-                if i < 2:
-                    time.sleep(2 * (i + 1))
-        raise RuntimeError("邮件 API 失败：%s" % last)
-
-    import smtplib
-    from email.message import EmailMessage
-    host = (smtp.get("host") or "").strip()
-    if not host or not frm:
-        raise RuntimeError("SMTP 未配置")
-    port = int(smtp.get("port") or 587)
-    msg = EmailMessage()
-    msg["From"] = frm
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.set_content(body)
-    if port == 465:
-        srv = smtplib.SMTP_SSL(host, port, timeout=20)
-    else:
-        srv = smtplib.SMTP(host, port, timeout=20)
-        if smtp.get("tls", True):
-            srv.starttls()
-    try:
-        if smtp.get("user"):
-            srv.login(smtp["user"], smtp.get("pass", ""))
-        srv.send_message(msg)
-    finally:
-        try:
-            srv.quit()
-        except Exception:
-            pass
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'core'))
+    from kf_mail import send as send_once
+    return send_once(to, subject, body, smtp)
 
 
 def log(msg):

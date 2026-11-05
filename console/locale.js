@@ -98,6 +98,40 @@ AI 建站|AI builder
 系统设置|System settings
 设置 LLM|LLM settings
 MCP 管理|MCP management
+运营助手|Operations assistant
+工具来源|Tool source
+MVP 内置业务|MVP built-in operations
+生成操作预览|Prepare operation preview
+刷新记录|Refresh history
+操作记录|Operation history
+查看 / 确认|Review / approve
+创建网站交付流程|Create website delivery workflow
+交付流程|Delivery workflows
+创建交付流程|Create delivery workflow
+开始 / 继续|Start / resume
+重试当前步骤|Retry current step
+DNS 执行服务商（管理员）|DNS provider for changes (admin)
+保存 DNS 执行配置|Save DNS provider
+建站参考资料（已有站点，可选）|Reference data (existing sites, optional)
+客户资料|Client information
+品牌与风格|Brand and design
+现有页面|Existing pages
+素材目录|Media inventory
+从运营助手选择 MCP 资料|Choose MCP references in Operations
+允许 AI 自动查询已授权的 MCP 只读资料（最多 4 次）|Allow AI to query approved read-only MCP references (up to 4 calls)
+所选资料会发送至当前模型服务商，并随任务记录来源。外部资料仅作为参考，不能覆盖基本原则与美学标准。|Selected data is sent to the chosen model provider and its sources are recorded. External data cannot override the project's principles and design standards.
+允许使用范围|Allowed usage
+允许访问的站点（可多选）|Allowed sites (multiple selection)
+每小时调用上限|Calls per hour
+调用超时（秒）|Call timeout (seconds)
+工具与资料白名单|Tool and reference allowlist
+工具规则（JSON 数组）|Tool rules (JSON array)
+允许读取的资源 URI（每行一项）|Allowed resource URIs (one per line)
+允许获取的提示词名称（每行一项）|Allowed prompt names (one per line)
+查看建站任务与预览|View build jobs and previews
+用于 AI 建站资料|Use as AI website reference
+编辑并预览发送|Edit and review sending
+参数定义|Input schema
 搜索 MCP 名称、地址或说明|Search MCP names, URLs or descriptions
 添加 MCP 服务|Add MCP server
 MCP 服务配置|MCP server settings

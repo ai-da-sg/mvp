@@ -105,7 +105,8 @@ async function initAI() {
       $('#aiMode').value=STATE.sites.length?'existing':'new'; $('#aiIndustry').value='tech';
       AI_READY=true;
     }
-    aiMode(); await aiJobs();
+    if(window.aiContextTarget){$('#aiMode').value='existing';$('#aiSite').value=window.aiContextTarget;window.aiContextTarget=null;}
+    renderAIContext();aiMode(); await aiJobs();
     if (!AI_POLL) AI_POLL=setInterval(()=>{if(!$('#p-ai').classList.contains('hidden')) aiJobs();},3000);
   } catch(e) { aiMessage('#aiBuildMsg', e.message, true); }
 }
@@ -125,7 +126,9 @@ $('#aiBuildForm').onsubmit=async e=>{
     const body={mode,slug:mode==='new'?$('#aiSlug').value.trim():$('#aiSite').value,
       company:$('#aiCompany').value.trim(),domain:$('#aiDomain').value.trim(),plan_id:$('#aiPlan').value,
       industry:$('#aiIndustry').value,profile_id:$('#aiProfile').value,language:$('#aiLanguage').value,
-      brief:$('#aiBrief').value.trim(),replace_draft:$('#aiReplace').checked};
+      brief:$('#aiBrief').value.trim(),replace_draft:$('#aiReplace').checked,
+      context_options:mode==='existing'?[...document.querySelectorAll('#aiContextOptions input[value]:checked')].map(e=>e.value):[],
+      context_actions:mode==='existing'?(window.aiContextActions||[]):[],auto_research:mode==='existing'&&$('#aiAutoResearch').checked};
     Object.assign(body, styleSelection());
     const selection=promptSelection();
     if(selection){await previewPrompt();body.prompt_selection=selection;}
@@ -267,3 +270,10 @@ $('#styleEditForm').onsubmit=async e=>{
   $('#styleEditForm').classList.add('hidden');STYLE_EDIT=null;aiMessage('#styleManageMsg','风格模板已保存，可用于后续建站');
  }catch(e){aiMessage('#styleManageMsg',e.message,true);}finally{button.disabled=false;}
 };
+
+function renderAIContext(){
+ const entries=window.aiContextActions||[];
+ $('#aiContextList').innerHTML=entries.map(id=>`<p><span data-user-content>${esc(window.aiContextLabels?.[id]||id)}</span> <button type="button" class="ghost" data-context-remove="${esc(id)}">移除</button></p>`).join('')||'<p class="hint">尚未选择 MCP 资料；可先在运营助手运行已授权的只读工具或资源读取。</p>';
+}
+$('#aiContextList').onclick=e=>{const b=e.target.closest('[data-context-remove]');if(!b)return;window.aiContextActions=(window.aiContextActions||[]).filter(id=>id!==b.dataset.contextRemove);renderAIContext();};
+$('#aiChooseContext').onclick=()=>navigateTo('automation');

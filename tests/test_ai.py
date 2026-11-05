@@ -126,7 +126,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('ai.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js'):
+        for filename in ('ai.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -247,6 +247,50 @@ class ConsoleTests(unittest.TestCase):
         for url in ['//evil.example','/\\evil.example','/ok\r\nLocation:evil','/\t/evil.example']:
             self.assertEqual(self.m.safe_next(url),'/')
         self.assertEqual(self.m.safe_next('/wordpress/authorize?site=demo'),'/wordpress/authorize?site=demo')
+
+    def test_workflow_http_build_preview_confirm_and_complete(self):
+        import kf_builtin_tools
+        with patch.object(self.m,'render_check',return_value={'ok':True}) as render, patch.object(kf_builtin_tools,'https_check',return_value={'ok':True,'certificate_valid':True}):
+            status,data=self.request('/api/automation/workflow/create',{'slug':'demo','brief':'Build a useful website','context_options':['client']})
+            self.assertEqual(status,200);ident=data['item']['id']
+            self.assertEqual(self.request('/api/automation/workflow/control',{'id':ident,'action':'start'})[0],200)
+            deadline=time.time()+6
+            while time.time()<deadline:
+                item=self.request('/api/automation/workflows')[1]['items'][0]
+                if item['state'] in ('waiting','failed'):break
+                time.sleep(.05)
+            self.assertEqual(item['state'],'waiting',item)
+            action_id=next(s['action_id'] for s in item['steps'] if s['state']=='waiting')
+            action=self.request('/api/automation/action/'+action_id)[1]['item']
+            self.assertEqual(action['tool'],'site.publish');self.assertTrue(action['snapshot']['pages'])
+            render.assert_not_called()
+            self.assertEqual(self.request('/api/automation/execute',{'id':action_id,'digest':action['digest'],'confirmed':True})[0],200)
+            deadline=time.time()+4
+            while time.time()<deadline:
+                item=self.request('/api/automation/workflows')[1]['items'][0]
+                if item['state'] in ('completed','failed'):break
+                time.sleep(.05)
+            self.assertEqual(item['state'],'completed',item);self.assertTrue(render.called)
+            draft=json.loads((self.base/'sites/demo/site-draft.json').read_text())
+            self.assertIn('context_sources',draft['ai']);self.assertNotIn('data',draft['ai']['context_sources'][0])
+
+    def test_automation_scopes_review_and_sender_idempotency(self):
+        import kf_builtin_tools
+        self.assertEqual(self.request('/api/automation/config',user='finance-test')[0],403)
+        status,data=self.request('/api/automation/prepare',{'slug':'demo','tool':'site.context','arguments':{'selected':['client']}})
+        self.assertEqual(status,200);item=data['item']
+        status,data=self.request('/api/automation/execute',{'id':item['id'],'digest':item['digest']})
+        self.assertEqual(status,200);self.assertEqual(data['item']['state'],'succeeded')
+        self.assertEqual(self.request('/api/automation/execute',{'id':item['id'],'digest':item['digest']},user='ops-test')[0],403)
+        mail={'slug':'demo','tool':'mail.send','arguments':{'to':'client@example.test','subject':'Review','body':'Approved content'}}
+        status,data=self.request('/api/automation/prepare',mail);self.assertEqual(status,200);item=data['item']
+        self.assertEqual(self.request('/api/automation/execute',{'id':item['id'],'digest':item['digest']})[0],403)
+        with patch.object(kf_builtin_tools,'send',return_value={'state':'accepted','delivered':None}) as send:
+            payload={'id':item['id'],'digest':item['digest'],'confirmed':True}
+            self.assertEqual(self.request('/api/automation/execute',payload)[1]['item']['state'],'succeeded')
+            self.assertEqual(self.request('/api/automation/execute',payload)[1]['item']['state'],'succeeded')
+            self.assertEqual(send.call_count,1)
+        self.assertNotIn('Approved content',(self.base/'console/audit.log').read_text())
 
     def test_mcp_admin_permissions_and_credential_redaction(self):
         import kf_mcp
