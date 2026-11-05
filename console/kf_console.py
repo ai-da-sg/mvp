@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 import kf_ai
 import kf_prompts
 import kf_styles
+import kf_sso
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -146,7 +147,7 @@ DEFAULT_ROLES = {
     "ops": {"label": "运营", "write": [
         "/api/spec", "/api/design", "/api/media/", "/api/dns/", "/api/domain/manage",
         "/api/clients/save", "/api/shares", "/api/publish", "/api/create", "/api/suspend",
-        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build",
+        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login",
     ]},
     "finance": {"label": "财务", "write": [
         "/api/ledger", "/api/invoice", "/api/renew", "/api/clients/save",
@@ -428,6 +429,11 @@ def session_user(cookie_header):
         return None
     s["exp"] = time.time() + SESSION_TTL      # 滑动续期
     return s["user"]
+
+
+def safe_next(value):
+    return value if (isinstance(value, str) and value.startswith("/") and not value.startswith("//")
+                     and not any(ord(c) <= 32 or c == "\\" for c in value) and len(value) < 2000) else "/"
 
 
 def check_login(user, pw):
@@ -1888,6 +1894,13 @@ def provision(company, domain, slug, port, plan_name="", plan_price="", industry
                 _live[slug] = {"state": "failed",
                                "msg": (r.stderr or r.stdout or "未知错误").strip()[-400:]}
         else:
+            cfg = kf_sso.SSOStore(BASE).config()
+            if cfg.get("console_url"):
+                result = subprocess.run([sys.executable, str(BASE / "tools" / "kf_sso_install.py"),
+                    "--base", str(BASE), "--slug", slug, "--console-url", cfg["console_url"],
+                    "--site-url", "https://" + domain], capture_output=True, text=True, timeout=240)
+                if result.returncode:
+                    raise kf_ai.AIError("站点已开通，但统一登录接入失败；请修复后再交付")
             with _lock:
                 _live.pop(slug, None)
     except Exception as e:
@@ -2625,6 +2638,7 @@ function renderSites(){
   <td>${expiryCell(x)}</td>
   <td>${x.http===200?`<a href="http://${location.hostname}:${x.port}/" target="_blank">打开</a>　`:''}
    <a href="/api/site/${encodeURIComponent(x.slug)}/handover.pdf">交接单</a>
+   ${STATE.wordpress?.[x.slug]?.enabled?`<a class="kf-wp-entry" href="${esc(STATE.wordpress[x.slug].url)}/?kf_mvp_sso=begin" target="_blank" rel="noopener">进入 WordPress 后台</a>`:''}
    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
      ${ROLE==='finance'?'':`<button class="ghost" onclick="renewSite('${esc(x.slug)}')">续费</button>
      <button class="ghost" onclick="toggleSuspend('${esc(x.slug)}','${x.billing_status||'active'}')">${x.billing_status==='suspended'?'恢复':'暂停'}</button>`}
@@ -2638,6 +2652,7 @@ function renderSites(){
 async function load(){
  const r=await fetch('/api/state');if(!r.ok)throw Error(r.status===401?'登录已过期，请重新登录':'暂时无法获取状态');STATE=await r.json();
  ROLE=STATE.role||'ops'; applyRole();
+ try {STATE.wordpress=(await (await fetch('/api/wordpress/sites')).json()).sites||{};} catch(_){STATE.wordpress={};}
  if($('#whoami')) $('#whoami').textContent=(STATE.me||'')+'（'+({admin:'管理员',ops:'运营',finance:'财务'}[ROLE]||ROLE)+'）';
  const s=STATE.sites||[];
  $('#stats').innerHTML=`<div class="stat"><b>${s.length}</b><span>站点</span></div>
@@ -4022,6 +4037,40 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
         return True
 
+    def _wordpress_callback(self):
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 1 <= size <= 8192:
+                return self._send(413, {"error": "请求大小无效"})
+            raw = self.rfile.read(size)
+            result = kf_sso.SSOStore(BASE).callback(raw, self.headers, SESSIONS, load_users(),
+                lambda role: can_write(role, "/api/wordpress/login"))
+            return self._send(200, result)
+        except (ValueError, kf_ai.AIError):
+            return self._send(403, {"error": "统一登录验证失败，请返回 MVP 重新登录"})
+
+    def _wordpress_authorize(self):
+        user = session_user(self.headers.get("Cookie"))
+        if not user:
+            return self._send(303, "", extra={"Location": "/login?next=" + urllib.parse.quote(safe_next(self.path), safe="")})
+        try:
+            params = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            slug = params.get("site", [""])[0]; challenge = params.get("challenge", [""])[0]
+            sid = cookie_value(self.headers.get("Cookie"), "kf_sid").rsplit(".", 1)[0]
+            store = kf_sso.SSOStore(BASE)
+            token = store.issue(slug, challenge, sid, SESSIONS, load_users(), lambda role: can_write(role, "/api/wordpress/login"))
+            target = store.site(slug)["url"] + "/?kf_mvp_sso=finish"
+            audit(user, "wordpress_login", slug, "一次性浏览器凭证")
+            page = ('<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="referrer" content="no-referrer">'
+                    '<title>进入 WordPress</title><p>正在进入 WordPress 后台…</p>'
+                    '<form method="post" action="' + _htmlesc.escape(target, quote=True) + '">'
+                    '<input type="hidden" name="ticket" value="' + token + '">'
+                    '<button type="submit">继续进入 WordPress</button></form>'
+                    '<script>document.forms[0].submit()</script></html>')
+            return self._send(200, page, "text/html; charset=utf-8", {"Referrer-Policy": "no-referrer"})
+        except kf_ai.AIError as exc:
+            return self._send(403, {"error": str(exc)})
+
     def _ai_get(self, path):
         if self.user_role not in ("admin", "ops"):
             return self._send(403, {"error": "当前角色无权使用自动建站"})
@@ -4228,7 +4277,11 @@ class Handler(BaseHTTPRequestHandler):
         if raw in ("/appearance.js", "/locale.js"):
             return self._send(200, (CONSOLE / raw.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if raw == "/login":
-            return self._send(200, login_page(), "text/html; charset=utf-8")
+            nxt = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("next", ["/"])[0]
+            user = session_user(self.headers.get("Cookie"))
+            if user and (load_users().get(user) or {}).get("active"):
+                return self._send(303, "", extra={"Location": safe_next(nxt)})
+            return self._send(200, login_page(next_url=safe_next(nxt)), "text/html; charset=utf-8")
         if raw == "/logout":
             sid = (cookie_value(self.headers.get("Cookie"), "kf_sid") or "").split(".")[0]
             SESSIONS.pop(sid, None)
@@ -4244,6 +4297,8 @@ class Handler(BaseHTTPRequestHandler):
                               "text/html; charset=utf-8")
         if raw.startswith("/s/") or raw.startswith("/sa/"):
             return self._public(raw)
+        if raw == "/wordpress/authorize":
+            return self._wordpress_authorize()
         if not self._guard():
             return
         path = raw.rstrip("/") or "/"
@@ -4261,6 +4316,11 @@ class Handler(BaseHTTPRequestHandler):
                                     "peer": self.client_address[0] if self.client_address else "",
                                     "xff": self.headers.get("X-Forwarded-For", ""),
                                     "proto": self.headers.get("X-Forwarded-Proto", "")})
+        if path == "/api/wordpress/sites":
+            cfg = kf_sso.SSOStore(BASE).config()
+            allowed = self.user_role in ("admin", "ops") and can_write(self.user_role, "/api/wordpress/login")
+            return self._send(200, {"sites": {slug: {"url": item["url"], "enabled": bool(item.get("enabled") and allowed)}
+                                              for slug, item in cfg["sites"].items()}})
         if path == "/api/state":
             # settings 里含 smtp.api_key 等敏感值，绝不能原样下发
             pub = dict(settings())
@@ -4552,6 +4612,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ POST
     def do_POST(self):
+        if self.path.split("?")[0] == "/api/wordpress/callback":
+            return self._wordpress_callback()
         if self.path.split("?")[0] == "/login":
             return self._login()
         if self.path.split("?")[0].startswith("/portal/"):
@@ -5318,8 +5380,7 @@ class Handler(BaseHTTPRequestHandler):
         pw = str(form.get("pw", ""))
         code = str(form.get("code", "")).strip()
         nxt = str(form.get("next", "/")) or "/"
-        if not nxt.startswith("/"):
-            nxt = "/"
+        nxt = safe_next(nxt)
         ip = client_ip(self)
         ipwait = ip_blocked(ip)
         if ipwait > 0:

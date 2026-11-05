@@ -182,8 +182,8 @@ if [ "$UPGRADE" = "1" ]; then
   ok "已备份代码 → $BK"
 
   # 只同步代码，不碰 sites/ 与 console 下的数据文件
-  for f in console/kf_console.py console/ai.js console/prompts.js console/appearance.js console/locale.js core/kf_ai.py core/kf_prompts.py core/kf_styles.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
-           tools/kf_update.py tools/kf_notify.py tools/kf_provision.sh tools/kf_proxy.sh tools/kf_tls.sh; do
+  for f in console/kf_console.py console/ai.js console/prompts.js console/appearance.js console/locale.js core/kf_ai.py core/kf_prompts.py core/kf_styles.py core/kf_sso.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
+           tools/kf_update.py tools/kf_sso_install.py tools/kf_notify.py tools/kf_provision.sh tools/kf_proxy.sh tools/kf_tls.sh; do
     install -D -m 755 "$SRC/$f" "$KF_BASE/$f"
   done
   mkdir -p "$KF_BASE/theme"
@@ -293,8 +293,8 @@ ok "目录结构就绪（敏感文件权限 600）"
 
 # 代码同步（源码目录与安装目录不同时）
 if [ "$SRC" != "$KF_BASE" ]; then
-  for f in console/kf_console.py console/ai.js console/prompts.js console/appearance.js console/locale.js core/kf_ai.py core/kf_prompts.py core/kf_styles.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
-           tools/kf_update.py tools/kf_notify.py tools/kf_provision.sh tools/kf_proxy.sh tools/kf_tls.sh; do
+  for f in console/kf_console.py console/ai.js console/prompts.js console/appearance.js console/locale.js core/kf_ai.py core/kf_prompts.py core/kf_styles.py core/kf_sso.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
+           tools/kf_update.py tools/kf_sso_install.py tools/kf_notify.py tools/kf_provision.sh tools/kf_proxy.sh tools/kf_tls.sh; do
     install -D -m 755 "$SRC/$f" "$KF_BASE/$f"
   done
   mkdir -p "$KF_BASE/theme"
@@ -347,8 +347,8 @@ fi
 
 # ---------- 4. 语法自检 ----------
 head_ "4/7 代码自检"
-for f in console/kf_console.py core/kf_ai.py core/kf_prompts.py core/kf_styles.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
-         tools/kf_update.py tools/kf_notify.py; do
+for f in console/kf_console.py core/kf_ai.py core/kf_prompts.py core/kf_styles.py core/kf_sso.py core/kf_sections.py core/kf_dns.py core/kf_template.py \
+         tools/kf_update.py tools/kf_sso_install.py tools/kf_notify.py; do
   "$PYTHON" -m py_compile "$KF_BASE/$f" || die "语法错误：$f"
 done
 bash -n "$KF_BASE/tools/kf_provision.sh" || die "语法错误：tools/kf_provision.sh"

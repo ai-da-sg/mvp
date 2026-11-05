@@ -226,6 +226,28 @@ class ConsoleTests(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
         self.assertEqual(json.loads((self.base/'sites/demo/design.json').read_text()), tokens)
 
+    def test_wordpress_entry_uses_browser_session_and_hides_keys(self):
+        import kf_sso
+        import re
+        store = kf_sso.SSOStore(self.base)
+        store.configure('https://mvp.example.com','demo','https://site.example.com')
+        status, data = self.request('/api/wordpress/sites')
+        self.assertEqual(status,200)
+        self.assertTrue(data['sites']['demo']['enabled'])
+        self.assertNotIn('secret',json.dumps(data))
+        self.assertFalse(self.request('/api/wordpress/sites',user='finance-test')[1]['sites']['demo']['enabled'])
+        challenge=kf_sso.digest('a'*64)
+        path='/wordpress/authorize?site=demo&challenge='+challenge
+        self.assertEqual(self.request(path,user='finance-test')[0],403)
+        status,page=self.request(path)
+        self.assertEqual(status,200)
+        self.assertIn('https://site.example.com/?kf_mvp_sso=finish',page)
+        self.assertRegex(page,r'name="ticket" value="[a-f0-9]{64}"')
+        self.assertEqual(self.request('/api/wordpress/callback',{'site':'demo'},user=None)[0],403)
+        for url in ['//evil.example','/\\evil.example','/ok\r\nLocation:evil','/\t/evil.example']:
+            self.assertEqual(self.m.safe_next(url),'/')
+        self.assertEqual(self.m.safe_next('/wordpress/authorize?site=demo'),'/wordpress/authorize?site=demo')
+
     def test_pdf_font_fallback(self):
         inv = {'no':'TEST-001','company':'测试客户','domain':'example.test','plan_name':'Demo',
                'plan_specs':'测试服务','subtotal':100,'gst':0,'total':100,'status':'unpaid',

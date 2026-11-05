@@ -115,3 +115,5 @@ chmod +x install.sh
 ## 许可
 
 私有项目，未经授权请勿分发。
+
+统一管理入口与 WordPress 登录接入：[操作说明](docs/WordPress统一登录.md)。

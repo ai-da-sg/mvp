@@ -38,6 +38,7 @@ print(json.dumps(result))
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
+  if(p==='/api/wordpress/sites')data={sites:{demo:{url:'https://demo.example',enabled:role!=='finance'}}};
   if(p.startsWith('/api/spec/'))data=spec;
   if(p==='/api/spec'){
    const body=req.postDataJSON();calls.push({path:p,body});
@@ -113,6 +114,7 @@ print(json.dumps(result))
   if(out)await page.screenshot({path:path.join(out,'mobile-'+width+'.png'),fullPage:true});
  }
  await page.setViewportSize({width:1440,height:1000});
+ assert.equal(await page.locator('.kf-wp-entry').getAttribute('href'),'https://demo.example/?kf_mvp_sso=begin');
  await nav('ai');await page.waitForFunction(()=>document.querySelector('#aiPromptTemplate').options.length>1);
  await page.selectOption('#aiPromptTemplate','company');await page.locator('#promptServices').fill('真实设计服务');
  await page.locator('#aiPromptPreviewBtn').click();await page.waitForFunction(()=>document.querySelector('#aiPromptPreview').value.includes('真实设计服务'));

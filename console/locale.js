@@ -55,6 +55,7 @@ DNS 解析|DNS records
 保存风格模板|Save style template
 读取公开页面与样式，提取颜色、字体和布局线索。不复制原站品牌或图片；动态页面可能无法完整分析。|Read public HTML and CSS for colors, fonts and layout clues. Original branding and images are not copied. Dynamic pages may yield incomplete results.
 风格随生成内容一起保存到草稿，预览确认后发布；模板更新不会改变已经生成的网站。|The style is saved with the draft and applied when published. Updating a template does not change existing generated sites.
+进入 WordPress 后台|Open WordPress admin
 AI 建站|AI builder
 提示词库|Prompt library
 页面编辑|Page editor
