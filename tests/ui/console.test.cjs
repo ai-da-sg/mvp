@@ -38,6 +38,7 @@ print(json.dumps(result))
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
+  if(p==='/api/automation/config')await new Promise(resolve=>setTimeout(resolve,100));
   if(p==='/api/automation/config')data={tools:[{name:'site.context',purpose:'build'},{name:'site.publish',purpose:'build'}],dns_providers:[],can_configure:role==='admin'};
   if(p==='/api/automation/providers'){
    if(req.method()==='POST'){const {values,...b}=req.postDataJSON();providerItems=b.action==='delete'?[]:[{...b,version:(b.version||0)+1,config:Object.fromEntries(Object.entries(values).filter(([k])=>!pages.providerCatalog[b.provider].fields.find(f=>f.key===k).secret))}];}

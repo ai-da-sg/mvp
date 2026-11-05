@@ -6,11 +6,14 @@ const AUTO_STATES={prepared:'待执行',running:'执行中',succeeded:'已完成
 function autoField(name,label,type='text',value='',required=false){return `<div class="field"><label for="auto-${name}">${esc(label)}</label><input id="auto-${name}" name="${name}" type="${type}" value="${esc(value)}" ${required?'required':''}></div>`;}
 function autoText(name,label,value='',required=false){return `<div class="fld"><label for="auto-${name}">${esc(label)}</label><textarea id="auto-${name}" name="${name}" rows="5" ${required?'required':''}>${esc(value)}</textarea></div>`;}
 async function loadAutomation(){
+ const controls=['autoSite','autoPurpose','autoSource','autoTool','autoPrepare'].map(id=>document.getElementById(id));controls.forEach(e=>e.disabled=true);
+ try{
  const previous=window.autoPendingAction?.slug||$('#autoSite').value;$('#autoSite').innerHTML=(STATE.sites||[]).map(s=>`<option value="${esc(s.slug)}">${esc(s.company)} / ${esc(s.domain)}</option>`).join('');if(previous)$('#autoSite').value=previous;
  AUTO_CONFIG=await aiRequest('/api/automation/config');$('#autoDNSConfig').hidden=!AUTO_CONFIG.can_configure;$('#autoMailConfig').hidden=!AUTO_CONFIG.can_configure;
  await autoSources();await autoHistory();await autoWorkflows();
  if(window.autoPendingAction){const item=window.autoPendingAction;window.autoPendingAction=null;showAutoReview(item);}
  if(!AUTO_POLL)AUTO_POLL=setInterval(()=>{if(!$('#p-automation').classList.contains('hidden'))autoWorkflows().catch(e=>aiMessage('#workflowMsg',e.message,true));},5000);
+ }finally{controls.forEach(e=>e.disabled=false);}
 }
 async function autoSources(){
  $('#autoReview').classList.add('hidden');AUTO_ITEM=null;
