@@ -27,16 +27,38 @@ class StyleTests(unittest.TestCase):
             snapshot = store.resolve(item['id'])
             updated = store.change(dict(item, name='Revised', enabled=False))
             self.assertEqual(updated['version'], 2)
-            self.assertEqual(store.public()['templates'], [])
+            self.assertNotIn(item['id'], [t['id'] for t in store.public()['templates']])
             with self.assertRaises(styles.StyleConflict): store.change(item)
             with self.assertRaises(AIError): store.resolve(item['id'])
             copied = store.change(dict(updated, action='duplicate'))
             self.assertNotEqual(copied['id'], item['id'])
             self.assertEqual(copied['version'], 1)
             store.change(dict(updated, action='delete'))
-            self.assertEqual(len(styles.StyleStore(root).public(True)['templates']), 1)
+            self.assertEqual(len(styles.StyleStore(root).public(True)['templates']), 9)
             self.assertEqual(snapshot['name'], 'Studio')
             self.assertEqual(store.path.stat().st_mode & 0o777, 0o600)
+
+    def test_local_catalog_delete_persistence_and_advanced_validation(self):
+        with tempfile.TemporaryDirectory() as root:
+            store = styles.StyleStore(root)
+            originals = store.public(True)['templates']
+            self.assertEqual(len(originals), 8)
+            for item in originals:
+                self.assertEqual(styles.normalize_tokens(item['tokens']), item['tokens'])
+                self.assertIn('--kf-heading-size:', styles.advanced_css(item['tokens']))
+                self.assertIn('blueprint', styles.guidance(item))
+            item = originals[0]
+            changed = store.change(dict(item, name='Locally edited', tags=['custom']))
+            store.change(dict(originals[1], action='delete'))
+            reloaded = styles.StyleStore(root)
+            self.assertEqual(reloaded.resolve(changed['id'])['name'], 'Locally edited')
+            self.assertNotIn(originals[1]['id'], [v['id'] for v in reloaded.public(True)['templates']])
+            for bad in [{'columns':5}, {'content_width':float('inf')}, {'heading_size':True},
+                        {'body_font':'url(https://evil.test)'}, {'custom_css':'body{}'}, {'hero':'<script>'}]:
+                with self.subTest(bad=bad), self.assertRaises(AIError):
+                    store.change(dict(changed, tokens=dict(changed['tokens'], advanced=bad)))
+            for bad in [{'industry':'unknown'}, {'tags':['x'*33]}, {'blueprint':['script']}]:
+                with self.subTest(bad=bad), self.assertRaises(AIError): store.change(dict(changed, **bad))
 
     def test_url_and_address_boundaries(self):
         for url in ['file:///etc/passwd','https://u:p@example.com','http://example.com:3000','https://example.com/\r\nx','https://example.com\\@evil.test']:

@@ -182,6 +182,29 @@ class ConsoleTests(unittest.TestCase):
         self.assertIn('Form preview only', page)
         self.assertNotIn('127.0.0.1:18085', page)
 
+    def test_local_style_preview_permissions_and_publish_tokens(self):
+        status, library = self.request('/api/ai/styles')
+        self.assertEqual(status, 200)
+        self.assertEqual(len(library['templates']), 8)
+        item = library['templates'][0]
+        status, result = self.request('/api/ai/styles/preview', item, user='ops-test')
+        self.assertEqual(status, 200, result)
+        self.assertIn('default-src &#39;none&#39;', result['html'])
+        self.assertIn('data:image/svg+xml;base64,', result['html'])
+        self.assertIn('--kf-heading-size:88px', result['html'])
+        status, form = self.request('/api/ai/styles/preview', dict(item, blueprint=['form','cards','stats','band','rich']), user='ops-test')
+        self.assertEqual(status, 200)
+        self.assertNotIn('[kf_contact_form', form['html'])
+        self.assertNotIn('区块缺少字段', form['html'])
+        self.assertIn('Preview only', form['html'])
+        self.assertEqual(self.m.sanitize_design(item['tokens']), item['tokens'])
+        self.assertEqual(self.request('/api/ai/styles/preview', item, user='finance-test')[0], 403)
+        malformed = dict(item, tokens=dict(item['tokens'], advanced={'hero':'</style><script>'}))
+        self.assertEqual(self.request('/api/ai/styles/preview', malformed)[0], 400)
+        self.assertEqual(self.request('/api/design', dict(malformed['tokens'], slug='demo'))[0], 400)
+        self.assertEqual(self.request('/api/ai/styles', dict(item, name='Forbidden'), user='ops-test')[0], 403)
+        self.assertEqual(self.request('/api/ai/styles')[1]['templates'][0], item)
+
     def test_reference_styles_permissions_generation_preview_and_publish(self):
         import kf_styles
         analysis = kf_styles.extract('<title>Reference</title><style>body{color:#345678}</style>', [], 'https://example.com/', [])

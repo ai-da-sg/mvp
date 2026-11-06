@@ -831,8 +831,53 @@ def design_vars(slug, tokens=None):
         "--kf-pad": ln((d.get("layout") or {}).get("pad"), "76px"),
         "--kf-font-head": fonts.get(typ.get("heading"), fonts["sans"]),
         "--kf-font-body": fonts["sans"],
+        "--kf-overlay": (d.get("photos") or {}).get("overlay", "0.46") if re.fullmatch(r"(?:0(?:\.\d{1,2})?|1(?:\.0{1,2})?)", str((d.get("photos") or {}).get("overlay", "0.46"))) else "0.46",
     }
-    return ":root{" + "".join(f"{k}:{val};" for k, val in v.items()) + "}"
+    return ":root{" + "".join(f"{k}:{val};" for k, val in v.items()) + "}" + kf_styles.advanced_css(d)
+
+
+def style_preview_html(body):
+    """Render an isolated local sample using the same section renderer and theme."""
+    import html as _html
+    import base64
+    tokens = kf_styles.normalize_tokens(body.get('tokens', {}))
+    recipe = kf_styles.normalize_recipe(body)
+    name = kf_ai.text(body.get('name', 'Untitled style'), '模板名称', 80, True)
+    samples = {
+        'hero': {'kicker':'YOUR BRAND / LOCAL TEMPLATE', 'title':name,
+                 'text':'A considered first impression. Replace this sample with your business story.',
+                 'art':True, 'cta':{'label':'Explore our work','href':'#sample-content'}},
+        'cards': {'title':'Designed around your needs', 'items':[
+            {'title':'Thoughtful details','text':'Use this space to explain a real service or benefit.'},
+            {'title':'A clear process','text':'Guide visitors through the next step with confidence.'},
+            {'title':'Room to grow','text':'Adapt the content and layout to fit your business.'}]},
+        'split': {'title':'A story worth sharing', 'text':'Use a strong visual and a short introduction to explain what makes your approach distinctive.',
+                  'items':['Your approach','Your experience','Your next chapter']},
+        'gallery': {'title':'Selected work','items':[{'src':'/template-sample-%d.svg'%i,'label':'Sample composition %d'%i} for i in range(1,4)]},
+        'quotes': {'title':'In their words','items':[{'text':'A testimonial belongs here only when supplied and approved by a real customer.','by':'Sample placeholder'}]},
+        'table': {'title':'The details, at a glance','headers':['Offering','Details'],'rows':[['Your service','Add a verified description'],['Your next option','Add confirmed information']]},
+        'list': {'title':'What comes next','items':['Explore the options','Ask a question','Plan your next step']},
+        'rich': {'html':'<h2>Space for your story</h2><p>A flexible section for an introduction, an announcement or an editorial passage.</p>'},
+        'form': {'title':'Get in touch','submit':'Send enquiry'},
+        'stats': {'items':[{'value':'—','label':'Add verified metrics'},{'value':'—','label':'Replace sample values'}]},
+        'band': {'src':'/template-sample-1.svg','alt':'Original abstract sample artwork','caption':'Local placeholder artwork'},
+        'cta': {'title':'Let’s begin a conversation','text':'One clear next step, in your own words.','button':'Get in touch','href':'#sample-content'},
+    }
+    sections=[dict(samples[k],type=k) for k in recipe['blueprint'] or ['hero','cards','split','cta']]
+    content=ks().render_sections(sections)
+    content=re.sub(r'\[kf_contact_form[^\]]*\]', '<div class="kf-form"><label>Your name<input disabled placeholder="Sample form"></label><label>Email<input disabled placeholder="you@example.com"></label><button class="kf-btn" disabled>Preview only</button></div>', content)
+    for i in range(1,4):
+        svg=('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">'
+             '<rect width="800" height="600" fill="%s"/><circle cx="%d" cy="240" r="180" fill="%s"/>'
+             '<path d="M0 600 400 250 800 600Z" fill="%s"/></svg>')%(tokens['palette']['bg'],200*i,tokens['palette']['accent'],tokens['palette']['primary'])
+        content=content.replace('/template-sample-%d.svg'%i,'data:image/svg+xml;base64,'+base64.b64encode(svg.encode()).decode())
+    css=(BASE/'theme/kampong/style.css').read_text()+'\n'+design_vars('',tokens)+'\n'+(BASE/'theme/kampong/reference.css').read_text()
+    return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; img-src data:; style-src &#39;unsafe-inline&#39;; form-action &#39;none&#39;; base-uri &#39;none&#39;">'
+            '<title>'+_html.escape(name)+'</title><style>'+css+'</style></head><body class="kf-style-reference">'
+            '<header class="kf-header"><div class="kf-container kf-header-inner"><b class="kf-logo">'+_html.escape(name)+'</b></div></header>'
+            '<main id="sample-content" class="kf-main"><div class="kf-content">'+content+'</div></main>'
+            '<footer class="kf-footer"><div class="kf-container">Local template preview · Sample content</div></footer></body></html>')
 
 
 # Untrusted previews/assets must never execute with the console's origin privileges.
@@ -1822,6 +1867,8 @@ HEADS = {"sans", "serif", "rounded", "mono"}
 
 
 def sanitize_design(body):
+    if body.get("preset") == "reference":
+        return kf_styles.normalize_tokens(body)
     pal = body.get("palette") or {}
     shape = body.get("shape") or {}
     typ = body.get("type") or {}
@@ -2362,7 +2409,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <button type="button" id="navToggle" class="ghost nav-toggle" aria-expanded="false" aria-controls="navGroups">导航菜单 · 站点总览</button>
 <nav id="navGroups" class="nav-groups" aria-label="主导航与二级菜单">
 <details class="nav-group" data-group="0" open><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>站点运营</summary><div class="submenu"><button type="button" class="tab" data-t="automation" aria-controls="p-automation">运营助手</button><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
-<details class="nav-group" data-group="1"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-1 5 5-1L21 7l-6-6L4 16ZM13 3l6 6"/></svg>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
+<details class="nav-group" data-group="1"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-1 5 5-1L21 7l-6-6L4 16ZM13 3l6 6"/></svg>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="styles" aria-controls="p-styles">风格模板</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
 <details class="nav-group" data-group="2"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4v2"/></svg>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
 <details class="nav-group" data-group="3"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
@@ -2423,8 +2470,9 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="field"><label for="aiDomain">域名</label><input id="aiDomain" maxlength="80" placeholder="example.com"></div>
 <div class="field"><label for="aiSlug">站点标识</label><input id="aiSlug" maxlength="20" pattern="[a-z][a-z0-9-]{1,19}" placeholder="bay-studio"></div>
 <div class="field"><label for="aiPlan">套餐</label><select id="aiPlan"></select></div>
-<div class="field"><label for="aiIndustry">行业与视觉模板</label><select id="aiIndustry"></select></div>
+<div class="field"><label for="aiIndustry">基础行业（未选择风格模板时使用）</label><select id="aiIndustry"></select></div>
 </div><p class="hint">新站会创建 WordPress、数据库和套餐账单，内容先保存为草稿。</p></div>
+<div class="formrow"><div class="field"><label for="aiStyleTemplate">本次生成使用的风格</label><select id="aiStyleTemplate"><option value="">保持站点当前风格</option></select></div><button type="button" class="ghost" id="aiStyleManage">管理风格模板</button></div>
 <div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求 / 额外补充</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍主营业务、目标客户和希望访客完成的操作。"></textarea></div>
 <fieldset class="prompt-composer" style="margin-top:20px;border:1px solid var(--line);border-radius:10px;padding:16px">
 <legend>提示词方案</legend>
@@ -2444,7 +2492,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <details id="aiReferenceOptions" class="optional-options"><summary>参考网站与风格模板</summary><div class="optional-content">
 <div class="formrow"><div class="field"><label for="aiReferenceUrl">参考网站地址</label><input id="aiReferenceUrl" type="url" maxlength="2000" placeholder="https://example.com"></div><button type="button" id="aiAnalyzeStyle">分析参考风格</button></div>
 
-<div class="formrow"><div class="field"><label for="aiStyleTemplate">本次生成使用的风格</label><select id="aiStyleTemplate"><option value="">保持站点当前风格</option></select></div><button type="button" class="ghost" id="aiStyleManage">管理风格模板</button></div>
+
 <div id="aiStyleResult" class="hidden"><p id="aiStyleSummary"></p><div id="aiStyleSwatches" style="display:flex;gap:8px;flex-wrap:wrap"></div><p id="aiStyleWarnings" class="hint"></p><details><summary>分析依据</summary><pre id="aiStyleEvidence" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details><button type="button" class="ghost" id="aiStyleSaveAnalysis">编辑并保存为模板</button></div>
 
 <div id="aiStyleMsg" class="msg" role="status" aria-live="polite"></div>
@@ -2454,24 +2502,29 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <label id="aiReplaceWrap" class="hint" style="display:block;margin:12px 0"><input id="aiReplace" type="checkbox"> 允许替换未发布草稿（原草稿会备份）</label>
 <button id="aiGenerate" type="submit">生成整站草稿</button><span id="aiBuildMsg" class="msg" role="status" aria-live="polite"></span>
 </form>
-<details id="styleManager" style="margin-top:24px"><summary>风格模板管理</summary>
-<div class="formrow"><div class="field"><label for="styleSearch">搜索模板名称或分类</label><input id="styleSearch" type="search"></div><button type="button" class="ghost" id="styleRefresh">刷新模板</button></div>
-<div id="styleLibrary"></div>
-<form id="styleEditForm" class="hidden" style="margin-top:16px">
-<h3>编辑风格模板</h3>
-<div class="formrow"><div class="field"><label for="styleName">模板名称</label><input id="styleName" required maxlength="80"></div><div class="field"><label for="styleCategory">分类</label><input id="styleCategory" maxlength="40" placeholder="例如：教育、科技、医疗"></div></div>
-<div class="fld"><label for="styleSource">参考来源</label><input id="styleSource" type="url" maxlength="2000"></div>
-<div class="fld"><label for="styleSummary">风格说明</label><textarea id="styleSummary" maxlength="1500" rows="2"></textarea></div>
-<div class="fld"><label for="styleGuidance">内容生成指导</label><textarea id="styleGuidance" maxlength="2400" rows="3"></textarea></div>
-<div id="styleColors" class="formrow"></div>
-<div class="formrow"><div class="field"><label for="styleHeading">标题字体</label><select id="styleHeading"><option value="sans">无衬线</option><option value="serif">衬线</option><option value="rounded">圆润</option><option value="mono">等宽</option></select></div><div class="field"><label for="styleRadius">卡片圆角（px）</label><input id="styleRadius" type="number" min="0" max="999" required></div><div class="field"><label for="stylePad">区块间距（px）</label><input id="stylePad" type="number" min="24" max="120" required></div></div>
-<label><input id="styleEnabled" type="checkbox" checked>启用此模板</label>
-<button type="submit">保存风格模板</button><button type="button" class="ghost" id="styleCancel">取消</button>
-</form><div id="styleManageMsg" class="msg" role="status"></div></details>
 <h3 style="margin-top:28px">建站任务</h3>
 <div id="aiJobs" aria-live="polite"></div>
 
 </div>
+
+<div id="p-styles" class="hidden"><section id="styleManager">
+<div class="formrow"><div class="field"><label for="styleSearch">搜索模板名称或分类</label><input id="styleSearch" type="search"></div><div class="field"><label for="styleStatus">模板状态</label><select id="styleStatus"><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div><button type="button" id="styleNew">新建模板</button><button type="button" class="ghost" id="styleImport">导入模板</button><input id="styleImportFile" type="file" accept="application/json,.json" hidden><button type="button" class="ghost" id="styleRefresh">刷新模板</button></div>
+<div id="styleLibrary" class="style-library"></div><section id="stylePreviewPanel" class="hidden"><div class="formrow"><h3>模板预览</h3><label for="stylePreviewWidth">预览宽度</label><select id="stylePreviewWidth"><option value="100%">桌面</option><option value="375px">手机</option></select><button type="button" class="ghost" id="stylePreviewClose">关闭预览</button></div><p class="hint">本地示例内容，用于检查布局与配色，不代表已生成的网站。</p><iframe id="stylePreviewFrame" title="风格模板预览" sandbox="" referrerpolicy="no-referrer"></iframe></section>
+<form id="styleEditForm" class="hidden" style="margin-top:16px">
+<h3>编辑风格模板</h3>
+<div class="formrow"><div class="field"><label for="styleName">模板名称</label><input id="styleName" required maxlength="80"></div><div class="field"><label for="styleCategory">分类</label><input id="styleCategory" maxlength="40" placeholder="例如：教育、科技、医疗"></div></div>
+<div class="formrow"><div class="field"><label for="styleIndustry">基础行业</label><select id="styleIndustry"></select></div><div class="field"><label for="styleTags">标签（逗号分隔）</label><input id="styleTags" maxlength="400"></div></div><div class="fld"><label for="styleSource">参考来源</label><input id="styleSource" type="url" maxlength="2000"></div>
+<div class="fld"><label for="styleSummary">风格说明</label><textarea id="styleSummary" maxlength="1500" rows="2"></textarea></div>
+<div class="fld"><label for="styleGuidance">内容生成指导</label><textarea id="styleGuidance" maxlength="2400" rows="3"></textarea></div>
+<div id="styleColors" class="formrow"></div>
+<div class="formrow"><div class="field"><label for="styleHeading">标题字体</label><select id="styleHeading"><option value="sans">无衬线</option><option value="serif">衬线</option><option value="rounded">圆润</option><option value="mono">等宽</option></select></div><div class="field"><label for="styleRadius">卡片圆角（px）</label><input id="styleRadius" type="number" min="0" max="999" required></div><div class="field"><label for="stylePad">区块间距（px）</label><input id="stylePad" type="number" min="24" max="120" required></div></div>
+<details class="optional-options"><summary>高级视觉参数</summary><div class="optional-content"><div id="styleAdvanced" class="formrow"></div><div class="formrow"><div class="field"><label for="styleButtonRadius">按钮圆角（px）</label><input id="styleButtonRadius" type="number" min="0" max="999"></div><div class="field"><label for="styleOverlay">图片遮罩（0–1）</label><input id="styleOverlay" type="number" min="0" max="1" step="0.01"></div></div></div></details>
+<details class="optional-options"><summary>页面结构与特殊要求</summary><div class="optional-content"><p class="hint">调整首页区块的顺序；结构与生成指导会随模板版本保存并发送给建站模型。</p><div class="formrow"><div class="field"><label for="styleBlockType">区块类型</label><select id="styleBlockType"></select></div><button type="button" class="ghost" id="styleAddBlock">添加区块</button></div><div id="styleBlueprint"></div></div></details>
+<details class="optional-options"><summary>高级 JSON 编辑</summary><div class="optional-content"><p class="hint">可编辑完整模板参数；应用前会校验格式、范围和文字对比度。</p><textarea id="styleJSON" class="json-edit" aria-label="模板 JSON"></textarea><button type="button" class="ghost" id="styleApplyJSON">应用 JSON</button><button type="button" class="ghost" id="styleSyncJSON">从表单更新 JSON</button></div></details>
+<button type="button" class="ghost" id="stylePreviewEdit">预览当前修改</button>
+<label><input id="styleEnabled" type="checkbox" checked>启用此模板</label>
+<button type="submit">保存风格模板</button><button type="button" class="ghost" id="styleCancel">取消</button>
+</form><div id="styleManageMsg" class="msg" role="status"></div></section></div>
 
 <div id="p-llm" class="hidden"><details open id="aiSettings" style="margin-top:28px"><summary style="cursor:pointer">服务商与模型配置（管理员）</summary>
 <details class="page-help"><summary>模型配置说明</summary><div class="help-content"><p class="hint">可保存多套模型。API 地址支持服务商 Base URL 或完整接口地址；模型 ID 按服务商提供的名称填写。密钥仅保存在服务器。</p></div></details>
@@ -2774,7 +2827,7 @@ let STATE={sites:[],invoices:[],plans:[]};
 let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
-    ? ['automation','ai','prompts','layout','design','media','share','dns','maint','team','llm','mcp','providers']
+    ? ['automation','ai','styles','prompts','layout','design','media','share','dns','maint','team','llm','mcp','providers']
     : (ROLE==='admin' ? [] : ['team','llm','mcp','providers']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
@@ -2789,6 +2842,7 @@ let CURRENT_TAB='sites', NAV_READY=false;
 function navigateTo(key, updateHistory=true){
  const t=[...document.querySelectorAll('.tab')].find(x=>x.dataset.t===key);
  if(!t || t.style.display==='none') return false;
+ if(CURRENT_TAB==='styles'&&key!=='styles'&&typeof styleCanLeave==='function'&&!styleCanLeave())return false;
  if(EDITOR_BUSY){ showGlobalError('正在保存或发布，请稍候再切换页面。'); return false; }
  if(CURRENT_TAB==='layout' && !commitJson())return false;
  $('#globalMsg').classList.add('hidden');
@@ -2803,7 +2857,7 @@ function navigateTo(key, updateHistory=true){
  $('#navGroups').classList.remove('expanded');$('#navToggle').setAttribute('aria-expanded','false');
  if(updateHistory && location.hash!=='#'+key) history.pushState(null,'','#'+key);
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
- const initializers={providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
+ const initializers={styles:()=>styleLoad(),providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
  if(updateHistory){$('#pageTitle').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
  return true;
@@ -4190,7 +4244,7 @@ class BuildService:
         if action_ids:context_sources.extend(automation_store().context_results(self.user,slug,action_ids))
         if len(json.dumps(context_sources,ensure_ascii=False))>48000:raise kf_ai.AIError('所选资料超过上下文限制，请减少资料或选择更小的资源')
         profile, key = ai_store().resolve(body.get("profile_id"))
-        plan, port, industry = None, None, body.get("industry", "tech")
+        plan, port, industry = None, None, (style or {}).get("industry") or body.get("industry", "tech")
         with draft_lock(slug):
             if mode == "existing":
                 if not (SITES / slug / "meta.json").is_file():
@@ -4795,6 +4849,8 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._send(400, {"error": "请求必须是 JSON 对象"})
         try:
+            if path == "/api/ai/styles/preview":
+                return self._send(200, {"html": style_preview_html(body), "tokens": kf_styles.normalize_tokens(body.get("tokens", {})), "recipe": kf_styles.normalize_recipe(body)})
             if path == "/api/ai/styles/analyze":
                 return self._send(200, kf_styles.analyze(body.get("url")))
             if path == "/api/ai/styles":
@@ -5208,7 +5264,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True}, extra={"Set-Cookie": "kf_sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax" + ("; Secure" if self._is_secure() else "")})
         if path != "/api/upload" and self.headers.get_content_type() != "application/json":
             return self._send(415, {"error": "请使用 JSON 请求"})
-        is_prompt_preview = path in ("/api/ai/prompts/preview", "/api/ai/styles/analyze") and self.user_role in ("admin", "ops")
+        is_prompt_preview = path in ("/api/ai/prompts/preview", "/api/ai/styles/analyze", "/api/ai/styles/preview") and self.user_role in ("admin", "ops")
         if not is_prompt_preview and not can_write(getattr(self, "user_role", "ops"), path):
             audit(getattr(self, "user", "-"), "denied", path)
             return self._send(403, {"error": "当前角色无权执行此操作"})
@@ -6215,7 +6271,10 @@ class Handler(BaseHTTPRequestHandler):
         slug = str(body.get("slug", "")).strip().lower()
         if not SLUG_RE.match(slug) or not (SITES / slug).exists():
             return self._send(400, {"error": "站点不存在"})
-        tokens = sanitize_design(body)
+        try:
+            tokens = sanitize_design(body)
+        except kf_ai.AIError as exc:
+            return self._send(400, {"error": str(exc)})
         before = _read(SITES / slug / "design.json", {})
         ok = apply_design(slug, tokens)
         if ok:

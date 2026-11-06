@@ -59,6 +59,6 @@ const output=path.resolve(__dirname,'../../output/e2e-real/readability');
   await page.setViewportSize({width:375,height:900});await navigate('sites');await page.locator('#navToggle').click();await page.locator('#navToggle').press('Escape');assert.equal(await page.locator('#navToggle').getAttribute('aria-expanded'),'false');
   await page.selectOption('#uiLanguage','zh');await ui.logout();await ui.login('finance-test',cfg.password);await ui.ready();await settle();
   assert.equal(await page.locator('#newSite').isVisible(),false);assert.equal(await page.locator('#siteCreate').isVisible(),false);
-  assert.deepEqual(errors,[]);console.log('PASS readability: search, filters, retained form, role boundaries, keyboard navigation and all 19 pages in 2 languages × 2 themes × 3 widths');
+  assert.deepEqual(errors,[]);console.log('PASS readability: search, filters, retained form, role boundaries, keyboard navigation and all 20 pages in 2 languages × 2 themes × 3 widths');
  }finally{if(browser)await browser.close();child.stdin.end('\n');await once(child,'exit');}
 })().catch(e=>{console.error(e);process.exitCode=1});

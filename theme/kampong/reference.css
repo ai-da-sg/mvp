@@ -21,3 +21,36 @@
 .kf-style-reference .kf-btn:hover{transform:none}
 .kf-style-reference .kf-eyebrow{color:var(--kf-primary)}
 .kf-style-reference a:focus-visible,.kf-style-reference button:focus-visible{outline:3px solid var(--kf-primary);outline-offset:4px}
+
+/* Rich local template controls. Absent variables retain legacy reference styles. */
+.kf-style-reference{font-family:var(--kf-font-body);font-size:var(--kf-body-size,16px);line-height:var(--kf-line-height,1.65)}
+.kf-style-reference .kf-header{position:var(--kf-header-position,sticky);background:var(--kf-surface)}
+.kf-style-reference .kf-hero-grid{grid-template-columns:var(--kf-hero-columns,1fr);gap:var(--kf-grid-gap,24px);align-items:center}
+.kf-style-reference .kf-hero-copy{text-align:var(--kf-hero-align,left)}
+.kf-style-reference .kf-hero h1{font-size:clamp(32px,5.5vw,var(--kf-heading-size,64px));font-weight:var(--kf-heading-weight,650);margin-inline:var(--kf-hero-margin,0);overflow-wrap:anywhere}
+.kf-style-reference .kf-hero p,.kf-style-reference .kf-hero .wp-block-buttons{margin-inline:var(--kf-hero-margin,0)}
+.kf-style-reference .kf-hero .wp-block-buttons{justify-content:var(--kf-hero-align,left)}
+.kf-style-reference .kf-art{display:var(--kf-hero-art,none);min-height:280px;max-width:100%;overflow:hidden}
+.kf-style-reference .kf-grid{grid-template-columns:repeat(var(--kf-columns,3),minmax(0,1fr));gap:var(--kf-grid-gap,24px)}
+.kf-style-reference .kf-card,.kf-style-reference .kf-card:hover{border:var(--kf-card-border,1px solid #00000020);background:var(--kf-card-bg,var(--kf-surface));box-shadow:var(--kf-card-shadow,none)}
+.kf-style-reference .kf-gallery img{aspect-ratio:var(--kf-image-ratio,4 / 3);object-fit:cover}
+.kf-style-reference .kf-hero .kf-btn{background:var(--kf-primary);color:#fff;border-color:var(--kf-primary)}
+@media(max-width:900px){
+ .kf-style-reference .kf-hero-grid,.kf-style-reference .kf-grid{grid-template-columns:1fr}
+ .kf-style-reference .kf-hero,.kf-style-reference .kf-section{padding-block:var(--kf-mobile-pad,40px)}
+ .kf-style-reference .kf-art{min-height:180px}
+}
+@media(prefers-reduced-motion:reduce){.kf-style-reference *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+.kf-style-reference h2,.kf-style-reference h3{font-weight:var(--kf-heading-weight,650)}
+.kf-style-reference .kf-card p{font-size:var(--kf-body-size,16px);line-height:var(--kf-line-height,1.65)}
+
+/* Replace the legacy preschool mascot with neutral local composition artwork. */
+.kf-style-reference .kf-art{isolation:isolate;border-radius:var(--kf-radius);background:var(--kf-surface)}
+.kf-style-reference .kf-art .blob,.kf-style-reference .kf-art .ring,.kf-style-reference .kf-art .gem::before,.kf-style-reference .kf-art .gem::after{display:none}
+.kf-style-reference .kf-art .gem{animation:none;box-shadow:none;background-image:none;border-radius:50%;width:140px;height:140px}
+.kf-style-reference .kf-art .g1{background:var(--kf-primary);left:10%;top:12%;transform:none}
+.kf-style-reference .kf-art .g2{background:var(--kf-accent);left:auto;right:10%;top:auto;bottom:12%;transform:none;border-radius:var(--kf-radius)}
+.kf-style-reference .kf-art .g3{display:none}
+.kf-style-reference .kf-gallery{gap:var(--kf-grid-gap,24px);grid-template-columns:repeat(var(--kf-columns,3),minmax(0,1fr))}
+@media(max-width:900px){.kf-style-reference .kf-gallery{grid-template-columns:1fr}}

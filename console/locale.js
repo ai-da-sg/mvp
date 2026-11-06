@@ -1,5 +1,87 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+联系表单|Contact form
+深主色|Dark primary
+页面背景|Page background
+卡片背景|Card background
+次要文字|Secondary text
+深色背景|Dark background
+上移|Move up
+下移|Move down
+移除|Remove
+风格模板|Style templates
+基础行业（未选择风格模板时使用）|Base industry (when no style template is selected)
+模板状态|Template status
+已启用|Enabled
+新建模板|Create template
+导入模板|Import template
+模板预览|Template preview
+预览宽度|Preview width
+桌面|Desktop
+手机|Mobile
+关闭预览|Close preview
+本地示例内容，用于检查布局与配色，不代表已生成的网站。|Local sample content for checking layout and colors; this is not a generated website.
+基础行业|Base industry
+标签（逗号分隔）|Tags (comma-separated)
+高级视觉参数|Advanced visual settings
+按钮圆角（px）|Button radius (px)
+图片遮罩（0–1）|Image overlay (0–1)
+页面结构与特殊要求|Page structure and special requirements
+调整首页区块的顺序；结构与生成指导会随模板版本保存并发送给建站模型。|Arrange homepage sections. The structure and generation guidance are versioned with the template and sent to the website model.
+区块类型|Section type
+添加区块|Add section
+高级 JSON 编辑|Advanced JSON editor
+可编辑完整模板参数；应用前会校验格式、范围和文字对比度。|Edit the full template settings. Format, ranges and text contrast are validated before applying.
+应用 JSON|Apply JSON
+从表单更新 JSON|Update JSON from form
+预览当前修改|Preview changes
+风格模板预览|Style template preview
+模板 JSON|Template JSON
+使用|Use
+预览|Preview
+导出|Export
+复制|Duplicate
+正文字体|Body font
+正文字号（px）|Body size (px)
+首屏标题字号（px）|Hero heading size (px)
+标题字重|Heading weight
+正文行高|Body line height
+内容宽度（px）|Content width (px)
+网格间距（px）|Grid gap (px)
+桌面列数|Desktop columns
+手机区块间距（px）|Mobile section spacing (px)
+首屏布局|Hero layout
+导航定位|Header position
+卡片样式|Card style
+图片比例|Image ratio
+左右分栏|Split layout
+居中|Centered
+编辑式布局|Editorial
+极简|Minimal
+吸顶|Sticky
+随页面滚动|Static
+描边|Bordered
+平面|Flat
+阴影|Elevated
+卡片|Cards
+图文分栏|Text and image
+统计|Statistics
+行动引导|Call to action
+横幅|Banner
+图库|Gallery
+评价|Testimonials
+表格|Table
+列表|List
+富文本|Rich text
+尚无匹配模板。可新建模板或调整筛选条件。|No matching templates. Create a template or adjust your filters.
+尚有未保存的模板修改，继续离开？|You have unsaved template changes. Leave anyway?
+最多添加 20 个区块|Add up to 20 sections
+JSON 已应用，保存后生效|JSON applied. Save to keep these changes.
+模板文件不能超过 100 KB|Template files must not exceed 100 KB
+高级风格参数包含未知字段|Advanced settings contain unknown fields
+行业配置无效|Invalid industry
+最多设置 12 个模板标签|Use up to 12 template tags
+页面结构需要由最多 20 个受支持的区块组成|Page structure must contain up to 20 supported sections
 新建站点|Create site
 搜索站点|Search sites
 站点、客户或域名|Site, customer or domain

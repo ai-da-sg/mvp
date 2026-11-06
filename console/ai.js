@@ -191,15 +191,20 @@ async function styleLoad(){
  const previous=$('#aiStyleTemplate').value;
  STYLE_LIBRARY=await aiRequest('/api/ai/styles');
  STYLE_LIBRARY.templates=STYLE_LIBRARY.templates||[];
- $('#aiStyleTemplate').innerHTML='<option value="">保持站点当前风格</option>'+(STYLE_ANALYSIS?'<option value="@analysis">刚分析的参考风格</option>':'')+STYLE_LIBRARY.templates.filter(t=>t.enabled).map(t=>`<option value="${esc(t.id)}">${esc(t.name)} · v${Number(t.version)}</option>`).join('');
+ const oldIndustry=$('#styleIndustry').value;
+ $('#styleIndustry').innerHTML=(STYLE_LIBRARY.industries||['tech','restaurant','preschool','law','trading','littlegems']).map(v=>`<option value="${esc(v)}">${esc((STATE.industries||[]).find(([id])=>id===v)?.[1]||v)}</option>`).join('');
+ if(oldIndustry)$('#styleIndustry').value=oldIndustry;
+ $('#aiStyleTemplate').innerHTML='<option value="">保持站点当前风格</option>'+(STYLE_ANALYSIS?'<option value="@analysis">刚分析的参考风格</option>':'')+STYLE_LIBRARY.templates.filter(t=>t.enabled).map(t=>`<option data-user-content value="${esc(t.id)}">${esc(t.name)} · v${Number(t.version)}</option>`).join('');
  if([...$('#aiStyleTemplate').options].some(o=>o.value===previous))$('#aiStyleTemplate').value=previous;
  $('#aiStyleSaveAnalysis').classList.toggle('hidden',!STYLE_LIBRARY.can_manage);
  styleRender();
 }
 function styleRender(){
  const q=$('#styleSearch').value.trim().toLowerCase();
- const items=STYLE_LIBRARY.templates.filter(t=>(t.name+' '+t.category).toLowerCase().includes(q));
- $('#styleLibrary').innerHTML=items.length?items.map(t=>`<div class="share-row"><span class="u">${esc(t.name)} · ${esc(t.category)} · v${Number(t.version)}${t.enabled?'':' · 已停用'}</span><button type="button" data-style-use="${esc(t.id)}" ${t.enabled?'':'disabled'}>使用</button>${STYLE_LIBRARY.can_manage?`<button type="button" data-style-edit="${esc(t.id)}">编辑</button><button type="button" data-style-copy="${esc(t.id)}">复制</button><button type="button" data-style-delete="${esc(t.id)}">删除</button>`:''}</div>`).join(''):'<p class="hint">尚无匹配模板。分析参考网站后可保存为模板。</p>';
+ const state=$('#styleStatus').value;
+ const items=STYLE_LIBRARY.templates.filter(t=>(t.name+' '+t.category+' '+(t.tags||[]).join(' ')).toLowerCase().includes(q)&&(!state||(state==='enabled')===t.enabled));
+ $('#styleNew').hidden=!STYLE_LIBRARY.can_manage;$('#styleImport').hidden=!STYLE_LIBRARY.can_manage;
+ $('#styleLibrary').innerHTML=items.length?items.map(t=>`<article class="style-card"><div class="style-card-art" style="background:${styleColor(t.tokens.palette.bg)};color:${styleColor(t.tokens.palette.ink)}"><span class="style-mini-line" style="background:${styleColor(t.tokens.palette.primary)}"></span><b data-user-content>${esc(t.name)}</b><div class="style-mini-grid">${[1,2,3].map(()=>`<span style="background:${styleColor(t.tokens.palette.accent)};border-radius:${Number.parseInt(t.tokens.shape.radius)||0}px"></span>`).join('')}</div></div><div class="style-card-body"><h3 data-user-content>${esc(t.name)}</h3><p class="hint" data-user-content>${esc(t.category)} · v${Number(t.version)}</p><p class="style-description" data-user-content>${esc(t.summary)}</p>${t.enabled?'':'<span class="pill">已停用</span>'}<div class="style-card-actions"><button type="button" data-style-use="${esc(t.id)}" ${t.enabled?'':'disabled'}>使用</button><button type="button" class="ghost" data-style-preview="${esc(t.id)}">预览</button><button type="button" class="ghost" data-style-export="${esc(t.id)}">导出</button>${STYLE_LIBRARY.can_manage?`<button type="button" class="ghost" data-style-edit="${esc(t.id)}">编辑</button><button type="button" class="ghost" data-style-copy="${esc(t.id)}">复制</button><button type="button" class="ghost danger" data-style-delete="${esc(t.id)}">删除</button>`:''}</div></div></article>`).join(''):'<p class="hint">尚无匹配模板。可新建模板或调整筛选条件。</p>';
 }
 function styleShow(item){
  $('#aiStyleResult').classList.toggle('hidden',!item);
@@ -233,24 +238,29 @@ $('#aiAnalyzeStyle').onclick=async()=>{
  finally{button.disabled=false;}
 };
 $('#aiStyleTemplate').onchange=()=>styleShow($('#aiStyleTemplate').value==='@analysis'?STYLE_ANALYSIS:STYLE_LIBRARY.templates.find(t=>t.id===$('#aiStyleTemplate').value));
-$('#aiStyleManage').onclick=()=>{$('#styleManager').open=true;$('#styleManager').scrollIntoView({block:'start'});};
+$('#aiStyleManage').onclick=()=>navigateTo('styles');
 function styleEdit(item){
+ if(!styleCanLeave())return;
+ navigateTo('styles');
  STYLE_EDIT=JSON.parse(JSON.stringify(item));
  for(const [id,key] of Object.entries({styleName:'name',styleCategory:'category',styleSource:'source_url',styleSummary:'summary',styleGuidance:'guidance'}))$('#'+id).value=item[key]||'';
  $('#styleEnabled').checked=item.enabled!==false;
  $('#styleHeading').value=item.tokens.type.heading;$('#styleRadius').value=parseInt(item.tokens.shape.radius);$('#stylePad').value=parseInt(item.tokens.layout.pad);
  $('#styleColors').innerHTML=Object.entries(STYLE_LABELS).map(([key,label])=>`<div class="field"><label for="styleColor-${key}">${label}</label><input type="color" id="styleColor-${key}" value="${esc(item.tokens.palette[key])}"></div>`).join('');
- $('#styleEditForm').classList.remove('hidden');$('#styleManager').open=true;$('#styleEditForm').scrollIntoView({block:'start'});
+ styleEditExtras(item);STYLE_DIRTY=false;
+ $('#styleEditForm').classList.remove('hidden');$('#styleEditForm').scrollIntoView({block:'start'});
 }
 $('#aiStyleSaveAnalysis').onclick=()=>{if(STYLE_ANALYSIS)styleEdit({...STYLE_ANALYSIS,name:(STYLE_ANALYSIS.title||'参考网站').slice(0,70)+' 风格'});};
-$('#styleCancel').onclick=()=>{$('#styleEditForm').classList.add('hidden');STYLE_EDIT=null;};
+$('#styleCancel').onclick=()=>{if(!styleCanLeave())return;$('#styleEditForm').classList.add('hidden');STYLE_EDIT=null;STYLE_DIRTY=false;};
 $('#styleSearch').oninput=styleRender;
 $('#styleRefresh').onclick=async()=>{try{await styleLoad();aiMessage('#styleManageMsg','模板已刷新');}catch(e){aiMessage('#styleManageMsg',e.message,true);}};
 $('#styleLibrary').onclick=async e=>{
  const button=e.target.closest('button');if(!button)return;
- const id=button.dataset.styleUse||button.dataset.styleEdit||button.dataset.styleCopy||button.dataset.styleDelete;
+ const id=button.dataset.styleUse||button.dataset.styleEdit||button.dataset.styleCopy||button.dataset.styleDelete||button.dataset.stylePreview||button.dataset.styleExport;
  const item=STYLE_LIBRARY.templates.find(t=>t.id===id);if(!item)return;
- if(button.dataset.styleUse){$('#aiStyleTemplate').value=id;styleShow(item);aiMessage('#aiStyleMsg','已选择 '+item.name);$('#aiStyleTemplate').scrollIntoView({block:'center'});return;}
+ if(button.dataset.stylePreview){try{await stylePreview(item);}catch(e){aiMessage('#styleManageMsg',e.message,true);}return;}
+ if(button.dataset.styleExport){styleExport(item);return;}
+ if(button.dataset.styleUse){if(!navigateTo('ai'))return;$('#aiStyleTemplate').value=id;styleShow(item);aiMessage('#aiStyleMsg','已选择 '+item.name);$('#aiStyleTemplate').scrollIntoView({block:'center'});return;}
  if(button.dataset.styleEdit){styleEdit(item);return;}
  if(button.dataset.styleDelete&&!confirm('删除此风格模板？已生成的网站和任务快照会保留。'))return;
  button.disabled=true;
@@ -260,12 +270,12 @@ $('#styleLibrary').onclick=async e=>{
 $('#styleEditForm').onsubmit=async e=>{
  e.preventDefault();const button=e.submitter;button.disabled=true;
  try{
-  const body=JSON.parse(JSON.stringify(STYLE_EDIT));
+  const body=styleReadForm();
   for(const [id,key] of Object.entries({styleName:'name',styleCategory:'category',styleSource:'source_url',styleSummary:'summary',styleGuidance:'guidance'}))body[key]=$('#'+id).value.trim();
   body.enabled=$('#styleEnabled').checked;body.action='save';
   for(const key of Object.keys(STYLE_LABELS))body.tokens.palette[key]=$('#styleColor-'+key).value;
   body.tokens.type.heading=$('#styleHeading').value;body.tokens.shape.radius=$('#styleRadius').value+'px';body.tokens.layout.pad=$('#stylePad').value+'px';
-  const data=await aiRequest('/api/ai/styles',body);await styleLoad();
+  const data=await aiRequest('/api/ai/styles',body);STYLE_DIRTY=false;await styleLoad();
   $('#aiStyleTemplate').value=data.item.enabled?data.item.id:'';styleShow(data.item.enabled?data.item:null);
   $('#styleEditForm').classList.add('hidden');STYLE_EDIT=null;aiMessage('#styleManageMsg','风格模板已保存，可用于后续建站');
  }catch(e){aiMessage('#styleManageMsg',e.message,true);}finally{button.disabled=false;}
@@ -278,3 +288,58 @@ function renderAIContext(){
 }
 $('#aiContextList').onclick=e=>{const b=e.target.closest('[data-context-remove]');if(!b)return;window.aiContextActions=(window.aiContextActions||[]).filter(id=>id!==b.dataset.contextRemove);renderAIContext();};
 $('#aiChooseContext').onclick=()=>navigateTo('automation');
+
+// Independent style library: visual controls and JSON share the same bounded schema.
+let STYLE_DIRTY=false;
+const STYLE_ADV_LABELS={body_font:'正文字体',body_size:'正文字号（px）',heading_size:'首屏标题字号（px）',heading_weight:'标题字重',line_height:'正文行高',content_width:'内容宽度（px）',grid_gap:'网格间距（px）',columns:'桌面列数',mobile_pad:'手机区块间距（px）',hero:'首屏布局',header:'导航定位',card_style:'卡片样式',image_ratio:'图片比例'};
+const STYLE_OPTION_LABELS={sans:'无衬线',serif:'衬线',rounded:'圆润',mono:'等宽',split:'左右分栏',center:'居中',editorial:'编辑式布局',minimal:'极简',sticky:'吸顶',static:'随页面滚动',bordered:'描边',flat:'平面',elevated:'阴影'};
+const STYLE_BLOCKS={hero:'首屏',cards:'卡片',split:'图文分栏',stats:'统计',cta:'行动引导',band:'横幅',gallery:'图库',quotes:'评价',table:'表格',list:'列表',rich:'富文本',form:'联系表单'};
+function styleColor(value){return /^#[0-9a-f]{6}$/i.test(value)?value:'#ffffff';}
+function styleCanLeave(){if(!STYLE_DIRTY)return true;if(!confirm('尚有未保存的模板修改，继续离开？'))return false;STYLE_DIRTY=false;return true;}
+function styleEditExtras(item){
+ $('#styleIndustry').value=item.industry||'tech';$('#styleTags').value=(item.tags||[]).join(', ');
+ $('#styleButtonRadius').value=parseInt(item.tokens.shape.button);$('#styleOverlay').value=item.tokens.photos.overlay;
+ $('#styleAdvanced').innerHTML=Object.entries(STYLE_LIBRARY.advanced_schema||{}).map(([key,spec])=>{
+  const value=item.tokens.advanced?.[key]??spec[0];
+  const control=typeof spec[0]==='string'?`<select id="styleAdv-${key}">${spec.slice(1).map(v=>`<option value="${esc(v)}" ${value===v?'selected':''}>${esc(STYLE_OPTION_LABELS[v]||v)}</option>`).join('')}</select>`:`<input id="styleAdv-${key}" type="number" min="${spec[1]}" max="${spec[2]}" step="${key==='line_height'?'.05':'1'}" value="${Number(value)}" required>`;
+  return `<div class="field"><label for="styleAdv-${key}">${esc(STYLE_ADV_LABELS[key]||key)}</label>${control}</div>`;
+ }).join('');
+ STYLE_EDIT.blueprint=[...(item.blueprint||[])];styleBlueprint();
+ $('#styleBlockType').innerHTML=Object.entries(STYLE_BLOCKS).map(([key,label])=>`<option value="${key}">${label}</option>`).join('');
+ $('#styleJSON').value=JSON.stringify(item,null,2);
+}
+function styleReadForm(){
+ const body=JSON.parse(JSON.stringify(STYLE_EDIT||{}));body.tokens=body.tokens||{};
+ for(const [id,key] of Object.entries({styleName:'name',styleCategory:'category',styleSource:'source_url',styleSummary:'summary',styleGuidance:'guidance'}))body[key]=$('#'+id).value.trim();
+ body.industry=$('#styleIndustry').value;body.tags=$('#styleTags').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean);body.enabled=$('#styleEnabled').checked;
+ body.tokens.palette=Object.fromEntries(Object.keys(STYLE_LABELS).map(key=>[key,$('#styleColor-'+key).value]));
+ body.tokens.type={heading:$('#styleHeading').value};body.tokens.shape={radius:$('#styleRadius').value+'px',button:$('#styleButtonRadius').value+'px'};
+ body.tokens.layout={pad:$('#stylePad').value+'px'};body.tokens.photos={overlay:$('#styleOverlay').value};
+ body.tokens.advanced=Object.fromEntries(Object.entries(STYLE_LIBRARY.advanced_schema||{}).map(([key,spec])=>[key,typeof spec[0]==='string'?$('#styleAdv-'+key).value:Number($('#styleAdv-'+key).value)]));
+ return body;
+}
+function styleBlueprint(){
+ $('#styleBlueprint').innerHTML=(STYLE_EDIT?.blueprint||[]).map((type,i)=>`<div class="share-row"><span>${i+1}. <span>${esc(STYLE_BLOCKS[type]||type)}</span></span><button type="button" class="ghost" data-style-block="up" data-index="${i}" ${i===0?'disabled':''}>上移</button><button type="button" class="ghost" data-style-block="down" data-index="${i}" ${i===STYLE_EDIT.blueprint.length-1?'disabled':''}>下移</button><button type="button" class="ghost" data-style-block="remove" data-index="${i}">移除</button></div>`).join('');
+}
+async function stylePreview(item){
+ const result=await aiRequest('/api/ai/styles/preview',item);
+ $('#stylePreviewFrame').srcdoc=result.html;$('#stylePreviewPanel').classList.remove('hidden');$('#stylePreviewPanel').scrollIntoView({block:'start'});
+}
+function styleExport(item){
+ const data={...item};delete data.id;delete data.version;delete data.updated;delete data.origin;
+ const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+ const a=document.createElement('a');a.href=url;a.download='style-template.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$('#styleEditForm').addEventListener('input',()=>{STYLE_DIRTY=true;});
+window.addEventListener('beforeunload',e=>{if(STYLE_DIRTY){e.preventDefault();e.returnValue='';}});
+$('#styleNew').onclick=()=>styleEdit({name:'',category:'',industry:'tech',tags:[],blueprint:['hero','cards','split','cta'],enabled:true,tokens:{palette:{primary:'#315e57',primaryDark:'#203e39',accent:'#92512e',bg:'#fafaf7',surface:'#ffffff',ink:'#202b29',muted:'#53615d',deep:'#203e39'},shape:{radius:'16px',button:'8px'},type:{heading:'sans'},layout:{pad:'72px'},photos:{overlay:'0.46'}}});
+$('#styleStatus').onchange=styleRender;
+$('#stylePreviewWidth').onchange=()=>{$('#stylePreviewFrame').style.width=$('#stylePreviewWidth').value;};
+$('#stylePreviewClose').onclick=()=>{$('#stylePreviewPanel').classList.add('hidden');$('#stylePreviewFrame').srcdoc='';};
+$('#stylePreviewEdit').onclick=async()=>{try{await stylePreview(styleReadForm());}catch(e){aiMessage('#styleManageMsg',e.message,true);}};
+$('#styleAddBlock').onclick=()=>{if(STYLE_EDIT.blueprint.length>=20){aiMessage('#styleManageMsg','最多添加 20 个区块',true);return;}STYLE_EDIT.blueprint.push($('#styleBlockType').value);STYLE_DIRTY=true;styleBlueprint();};
+$('#styleBlueprint').onclick=e=>{const button=e.target.closest('[data-style-block]');if(!button)return;const i=Number(button.dataset.index),items=STYLE_EDIT.blueprint;const action=button.dataset.styleBlock;if(action==='remove')items.splice(i,1);else{const j=i+(action==='up'?-1:1);if(j>=0&&j<items.length)[items[i],items[j]]=[items[j],items[i]];}STYLE_DIRTY=true;styleBlueprint();};
+$('#styleSyncJSON').onclick=()=>{$('#styleJSON').value=JSON.stringify(styleReadForm(),null,2);};
+$('#styleApplyJSON').onclick=async()=>{try{const parsed=JSON.parse($('#styleJSON').value);const item={...parsed,id:STYLE_EDIT?.id,version:STYLE_EDIT?.version};const checked=await aiRequest('/api/ai/styles/preview',item);item.tokens=checked.tokens;Object.assign(item,checked.recipe);STYLE_DIRTY=false;styleEdit(item);STYLE_DIRTY=true;aiMessage('#styleManageMsg','JSON 已应用，保存后生效');}catch(e){aiMessage('#styleManageMsg',e.message,true);}};
+$('#styleImport').onclick=()=>$('#styleImportFile').click();
+$('#styleImportFile').onchange=async()=>{const file=$('#styleImportFile').files[0];if(!file)return;try{if(file.size>100000)throw Error('模板文件不能超过 100 KB');const item=JSON.parse(await file.text());delete item.id;delete item.version;delete item.origin;delete item.updated;const checked=await aiRequest('/api/ai/styles/preview',item);item.tokens=checked.tokens;Object.assign(item,checked.recipe);styleEdit(item);STYLE_DIRTY=true;}catch(e){aiMessage('#styleManageMsg',e.message,true);}finally{$('#styleImportFile').value='';}};

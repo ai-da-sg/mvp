@@ -11,6 +11,7 @@ async function scan(label,selector='body'){await settle();findings[label]=await 
 await scan('static');const tabs=await page.locator('[data-t]').evaluateAll(es=>es.map(e=>e.dataset.t));
 for(const key of tabs){const b=page.locator(`[data-t="${key}"]`);await b.evaluate(e=>e.closest('details').open=true);await b.click();await page.locator('#p-'+key).waitFor();await settle();await scan(key,'#p-'+key);
 if(key==='automation'){for(const v of ['build','dns','mail','maintenance']){await page.selectOption('#autoPurpose',v);await settle();for(const tool of await page.locator('#autoTool option').evaluateAll(es=>es.map(e=>e.value))){await page.selectOption('#autoTool',tool);await scan('tool-'+tool,'#p-automation');}}}
+if(key==='styles'){await page.locator('#styleNew').click();await scan('styles-editor','#styleEditForm');await page.locator('#styleCancel').click();}
 if(key==='providers'){await page.locator('#providerNew').click();for(const value of await page.locator('#providerKind option').evaluateAll(es=>es.map(e=>e.value))){await page.selectOption('#providerKind',value);await scan('provider-'+value,'#providerForm');}}
 if(key==='mcp'){await page.locator('#mcpNew').click();await scan('mcp-form','#mcpForm');}
 }

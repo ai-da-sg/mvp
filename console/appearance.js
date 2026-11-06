@@ -27,6 +27,16 @@
  :where(button,input,select,textarea,summary,a):focus-visible{outline:2px solid var(--acc);outline-offset:3px}
  @media(max-width:600px){.ui-preferences{justify-content:flex-start}.ui-preferences select{font-size:16px;min-height:44px}}
 
+
+ .style-library{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:20px;margin-top:24px}
+ .style-card{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--card)}
+ .style-card-art{padding:24px;min-height:170px;display:flex;flex-direction:column;gap:16px;overflow:hidden}.style-card-art b{font-family:Georgia,serif;font-size:24px;line-height:1.2}
+ .style-mini-line{width:40px;height:4px;display:block}.style-mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.style-mini-grid span{height:44px;opacity:.7}
+ .style-card-body{padding:20px}.style-card-body h3{margin:0 0 6px!important}.style-description{font-size:14px;line-height:1.6;overflow-wrap:anywhere;min-height:4.8em}
+ .style-card-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.style-card-actions button{min-width:0;white-space:nowrap;padding:8px 6px!important;font-size:12px!important}
+ #stylePreviewPanel{margin-top:24px;border:1px solid var(--line);padding:16px;background:var(--card);border-radius:6px}
+ #stylePreviewWidth{width:auto}#stylePreviewFrame{display:block;width:100%;max-width:100%;height:650px;border:1px solid var(--line);margin:16px auto 0;background:#fff}
+ #styleAdvanced .field{flex:1 1 210px}#styleColors .field{flex:1 1 100px;min-width:100px}#styleEditForm input[type=color]{width:100%;height:44px}
  /* Shared console system: quiet surfaces, readable controls, task-first navigation. */
  html{--brand:#f48120;--control-border:#8993a3;--action:#005bd3;--action-hover:#0044a0}
  html[data-theme=dark]{--control-border:#687589;--action:#176bd7;--action-hover:#247deb}
