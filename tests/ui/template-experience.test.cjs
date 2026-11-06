@@ -8,6 +8,8 @@ const {ConsolePage}=require('./pages/console.cjs');
  try{
   const cfg=JSON.parse((await once(readline.createInterface({input:child.stdout}),'line'))[0]);
   browser=await chromium.launch();const page=await browser.newPage({viewport:{width:1440,height:1000}}),ui=new ConsolePage(page,cfg.origin);
+  await page.addInitScript(()=>{window.pendingRequests=0;const original=window.fetch;window.fetch=async(...args)=>{window.pendingRequests++;try{return await original(...args)}finally{window.pendingRequests--}}});
+  async function settle(){await page.waitForFunction(()=>window.pendingRequests===0);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
   await ui.login('admin',cfg.password);await ui.ready();
   await page.locator('[data-t=styles]').evaluate(e=>e.closest('details').open=true);await page.locator('[data-t=styles]').click();
   await page.waitForFunction(()=>document.querySelectorAll('.style-card').length===28);
@@ -48,7 +50,7 @@ const {ConsolePage}=require('./pages/console.cjs');
   await page.locator('#p-ai').waitFor();assert.equal(await page.locator('#aiStyleTemplate').inputValue(),first.id);
   // Version restoration writes a new version and retains the old snapshot.
   await page.evaluate(async id=>{const old=STYLE_LIBRARY.templates.find(t=>t.id===id);await aiRequest('/api/ai/styles',{...old,name:'Edited template',action:'save'});await styleLoad();},first.id);
-  await page.locator('[data-t=styles]').click();
+  await page.locator('[data-t=styles]').click();await settle();
   const menu=page.locator(`[data-style-history="${first.id}"]`);await menu.evaluate(e=>e.closest('details').open=true);await menu.click();await page.locator('#styleHistoryPanel').waitFor();
   assert.equal(await page.locator('[data-style-restore]').count(),2);
   page.once('dialog',d=>d.accept());await page.locator('[data-style-restore="1"]').click();
