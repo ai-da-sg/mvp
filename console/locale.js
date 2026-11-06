@@ -1,5 +1,34 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+搜索域名|Search domains
+域名、客户、机构或账号|Domain, customer, provider or account
+到期状态|Expiry status
+30 天内到期|Due within 30 days
+未设置到期日|No expiry date
+新增域名|Add domain
+编辑域名|Edit domain
+保存域名|Save domain
+独立登记|Independent record
+未登记|Not registered
+即将到期|Expiring soon
+管理账号|Management accounts
+管理机构|Provider
+管理后台|Management portal
+客户 / 站点|Customer / site
+匹配域名|Matching domains
+上一页|Previous
+下一页|Next
+已关联站点，域名及客户名称由站点维护。|Linked to a site. The site controls the domain and customer name.
+仅登记管理信息，不会购买域名或修改 DNS。|Records management information only. No domain purchase or DNS changes.
+删除此域名管理记录？不会注销域名、停止网站或删除 DNS 记录。|Delete this management record? The domain registration, website and DNS records will be retained.
+域名管理记录已删除|Domain management record deleted
+域名记录不存在，请刷新|Domain record not found. Refresh to retry.
+请先删除该域名关联的管理机构账号，再删除域名记录|Delete the associated provider accounts before deleting this domain record.
+域名已登记，请编辑现有记录|Domain already registered here. Edit the existing record.
+已关联站点的域名不能在登记表中更改|A linked site's domain cannot be changed in this registry.
+域名归属或续费设置无效|Invalid ownership or renewal settings
+最多登记 1000 个独立域名|Register up to 1,000 independent domains
+
 手动开通已取消，请使用 AI 建站|Manual site creation has been removed. Use AI Builder.
 归档时间|Archived at
 归档人|Archived by

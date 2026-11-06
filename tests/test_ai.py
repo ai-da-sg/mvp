@@ -184,6 +184,51 @@ class ConsoleTests(unittest.TestCase):
         except ValueError: body = raw.decode()
         return r.status, body
 
+    def test_registered_domain_links_to_new_site_without_duplicate_or_lost_accounts(self):
+        body={'domain':'future.sg','registrar':'Existing registrar'}
+        code,data=self.request('/api/domain/records',body);self.assertEqual(code,200)
+        ident=data['item']['slug']
+        self.assertEqual(self.request('/api/domain/accounts',{'slug':ident,'provider':'Existing account','password':'secret'})[0],200)
+        target=self.base/'sites/future-site';target.mkdir()
+        ai.atomic_json(target/'meta.json',{'domain':'future.sg','company':'New site'})
+        rows=[v for v in self.request('/api/domains')[1]['items'] if v['domain']=='future.sg']
+        self.assertEqual(len(rows),1);self.assertEqual(rows[0]['slug'],ident)
+        self.assertEqual(rows[0]['site_slug'],'future-site');self.assertEqual(rows[0]['manage']['registrar'],'Existing registrar')
+        update=dict(body,id=ident,version=rows[0]['version'],registrar='Updated registrar')
+        self.assertEqual(self.request('/api/domain/records',update)[0],200)
+        self.assertEqual(self.m.read_domain('future-site')['registrar'],'Updated registrar')
+        self.assertEqual(self.request('/api/domain/accounts')[1]['items'][0]['slug'],ident)
+
+    def test_domain_registry_crud_binding_accounts_and_concurrency(self):
+        body=dict(domain='independent.sg',company='Independent',registrar='Name.com',expires='2027-01-01',owner='client',auto_renew=False,note='Registry only')
+        self.assertEqual(self.request('/api/domain/records',body,user='finance-test')[0],403)
+        for bad in [dict(body,domain='https://bad.sg'),dict(body,expires='2027-02-30'),dict(body,owner='unknown')]:
+            self.assertEqual(self.request('/api/domain/records',bad)[0],400)
+        code,data=self.request('/api/domain/records',body,user='ops-test');self.assertEqual(code,200,data)
+        item=data['item'];ident=item['slug'];self.assertFalse(item['site_slug'])
+        self.assertEqual(self.request('/api/domain/records',body)[0],400)
+        changed=dict(body,id=ident,version=item['version'],registrar='Updated')
+        code,data=self.request('/api/domain/records',changed);self.assertEqual(code,200)
+        self.assertEqual(self.request('/api/domain/records',changed)[0],409)
+        item=data['item'];account=dict(slug=ident,provider='Registrar',username='user',password='vault-test-password')
+        code,data=self.request('/api/domain/accounts',account);self.assertEqual(code,200,data)
+        account=data['item']
+        deletion=dict(action='delete',id=ident,version=item['version'])
+        self.assertEqual(self.request('/api/domain/records',deletion)[0],400)
+        self.assertEqual(self.request('/api/domain/accounts',dict(action='delete',id=account['id'],version=account['version']))[0],200)
+        self.assertEqual(self.request('/api/domain/records',deletion)[0],200)
+        self.assertNotIn(ident,[i['slug'] for i in self.request('/api/domains')[1]['items']])
+        linked=next(i for i in self.request('/api/domains')[1]['items'] if i['slug']=='demo')
+        before=(self.base/'sites/demo/meta.json').read_bytes()
+        self.assertEqual(self.request('/api/domain/records',dict(body,id='demo',version=linked['version']))[0],400)
+        self.assertEqual(self.request('/api/domain/records',dict(action='delete',id='demo',version=linked['version']))[0],200)
+        self.assertNotIn('demo',[i['slug'] for i in self.request('/api/domains')[1]['items']])
+        code,data=self.request('/api/domain/records',dict(body,domain=linked['domain']))
+        self.assertEqual(code,200,data);self.assertEqual(data['item']['site_slug'],'demo')
+        self.assertEqual((self.base/'sites/demo/meta.json').read_bytes(),before)
+        self.assertEqual(self.m.read_domain('demo')['registrar'],'Name.com')
+        self.assertEqual(self.request('/api/domain/records',dict(action='delete',id='demo',version=linked['version']))[0],409)
+
     def test_site_archive_restore_permissions_and_data_preservation(self):
         site=self.base/'sites/demo'
         before={p.name:p.read_bytes() for p in site.iterdir() if p.is_file()}

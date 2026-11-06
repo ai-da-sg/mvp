@@ -54,7 +54,7 @@ print(json.dumps(result))
    data={items:mcpItems};
   }
   if(p==='/api/mcp/test')data={result:{server:'Fixture MCP',version:'1',protocol:'2025-06-18',tools:[{name:'search',description:'Search fixture data'}],resources:[],prompts:[]}};
-  if(p==='/api/domains')data={items:[{slug:'demo',domain:'demo.example',company:'演示工作室',manage:{}}]};
+  if(p==='/api/domains')data={can_manage:role!=='finance',items:[{slug:'demo',domain:'demo.example',company:'演示工作室',manage:{}}]};
   if(p==='/api/domain/accounts'){
    if(req.method()==='POST'){
     const b=req.postDataJSON();
@@ -239,13 +239,13 @@ print(json.dumps(result))
  page.once('dialog',d=>d.accept());await page.locator('[data-provider-delete]').click();await page.waitForFunction(()=>!document.querySelector('[data-provider-edit]'));
  console.log('PASS Singapore provider capability boundaries, cPanel account, read-only probe success/failure and DNS account selection');
 
- await nav('domain');await page.locator('[data-domain-add]').click();
+ await nav('domain');await page.locator('[data-domain-view]').click();await page.locator('[data-domain-add]').click();
  await page.locator('#domainAccountProvider').fill('Registrar fixture');await page.locator('#domainAccountUrl').fill('https://registrar.example/');
  await page.locator('#domainAccountUsername').fill('operator@example.com');await page.locator('#domainAccountPassword').fill('fixture-password-only');await page.locator('#domainAccountConfig').fill('NS: ns1.example.com');
  await page.locator('#domainAccountForm button[type=submit]').click();await page.waitForSelector('[data-domain-reveal]');
  assert.equal(await page.locator('#domainAccountPassword').inputValue(),'');assert.ok(!(await page.locator('#dList').textContent()).includes('fixture-password-only'));
- await page.locator('#domainSearch').fill('ns1.example');assert.equal(await page.locator('[data-domain-edit]').count(),1);
- await page.locator('#domainSearch').fill('no-matching-provider');assert.equal(await page.locator('[data-domain-edit]').count(),0);await page.locator('#domainSearch').fill('');
+ await page.locator('#domainDetailClose').click();await page.locator('#domainSearch').fill('ns1.example');assert.equal(await page.locator('[data-domain-view]').count(),1);
+ await page.locator('#domainSearch').fill('no-matching-provider');assert.equal(await page.locator('[data-domain-view]').count(),0);await page.locator('#domainSearch').fill('');await page.locator('[data-domain-view]').click();
  await page.locator('[data-domain-edit]').click();assert.equal(await page.locator('#domainAccountPassword').inputValue(),'');await page.locator('#domainAccountProvider').fill('Updated registrar');
  await page.locator('#domainAccountForm button[type=submit]').click();await page.waitForSelector('#domainAccountForm.hidden',{state:'attached'});
  await page.locator('[data-domain-reveal]').click();await page.locator('#domainRevealCode').fill('000000');await page.locator('#domainRevealSubmit').click();
@@ -258,6 +258,7 @@ print(json.dumps(result))
  await page.setViewportSize({width:1440,height:1000});await page.locator('[data-domain-reveal]').click();await page.locator('#domainRevealCode').fill('123456');await page.locator('#domainRevealSubmit').click();await page.waitForSelector('#domainSecretWrap:not(.hidden)');
  await page.waitForFunction(()=>document.querySelector('#domainSecretValue').value==='',null,{timeout:35000});
  await page.locator('#domainRevealClose').click();page.once('dialog',d=>d.accept());await page.locator('[data-domain-delete]').click();await page.waitForFunction(()=>!document.querySelector('[data-domain-edit]'));
+ await page.locator('#domainDetailClose').click();
  console.log('PASS domain account create, search, edit, TOTP reveal, mobile layout, automatic hiding and delete');
  await nav('sites');role='finance';await page.reload();await page.waitForSelector('#rows');await page.waitForFunction(()=>document.querySelector('[data-t=layout]').style.display==='none');
  assert.equal(await page.locator('.nav-group').last().isVisible(),false);

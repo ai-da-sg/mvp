@@ -194,7 +194,7 @@ DEFAULT_ROLES = {
     "ops": {"label": "运营", "write": [
         "/api/spec", "/api/design", "/api/media/", "/api/dns/", "/api/domain/manage",
         "/api/clients/save", "/api/shares", "/api/publish", "/api/create", "/api/suspend", "/api/site/archive",
-        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login", "/api/domain/accounts", "/api/automation/",
+        "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login", "/api/domain/accounts", "/api/domain/records", "/api/automation/",
     ]},
     "finance": {"label": "财务", "write": [
         "/api/ledger", "/api/invoice", "/api/renew", "/api/clients/save",
@@ -1348,7 +1348,91 @@ def read_domain(slug):
 def write_domain(slug, data):
     b = read_billing(slug)
     b["domain"] = data
-    (SITES / slug / "billing.json").write_text(json.dumps(b, ensure_ascii=False, indent=1))
+    kf_ai.atomic_json(SITES / slug / "billing.json", b)
+
+
+def domain_records(include_hidden=False):
+    registry = _read(CONSOLE / 'domain-registry.json', {'items': [], 'hidden': []})
+    items = list(registry.get('items', []))
+    if SITES.exists():
+        for site in sorted(SITES.iterdir()):
+            if not site.is_dir() or not (site / 'meta.json').is_file(): continue
+            meta = load_meta(site.name)
+            domain = str(meta.get('domain', '')).strip().lower()
+            if not DOMAIN_RE.fullmatch(domain): continue
+            manual = next((v for v in items if v['domain'] == domain and not v.get('site_slug')), None)
+            linked = {'slug': site.name, 'site_slug': site.name, 'domain': domain,
+                      'company': meta.get('company', site.name), 'manage': read_domain(site.name), 'url': 'https://' + domain}
+            if manual:
+                linked['slug'] = manual['slug']  # Keep credential bindings stable after provisioning.
+                if 'domain' not in read_billing(site.name): linked['manage'] = manual['manage']
+                items[items.index(manual)] = linked
+            else:
+                items.append(linked)
+    result=[]
+    for item in items:
+        if not include_hidden and item['slug'] in registry.get('hidden', []): continue
+        item = dict(item, revision=registry.get('revisions', {}).get(item['slug'], 0))
+        result.append(dict(item, version=kf_tool_runtime.fingerprint(item)))
+    return result
+
+
+def change_domain_record(body, user):
+    vault = kf_domain_vault.DomainVault(BASE)
+    with vault.locked():
+        registry = _read(CONSOLE / 'domain-registry.json', {'items': [], 'hidden': []})
+        items = domain_records()
+        ident = kf_ai.text(body.get('id', ''), '记录 ID', 40)
+        old = next((v for v in items if v['slug'] == ident), None)
+        if ident and not old: raise kf_ai.AIError('域名记录不存在，请刷新')
+        if old and body.get('version') != old['version']:
+            raise kf_domain_vault.VaultConflict('资料已被其他操作更新，请刷新后重试')
+        action = body.get('action', 'save')
+        if action == 'delete':
+            if not old: raise kf_ai.AIError('域名记录不存在，请刷新')
+            if any(a['slug'] in (ident, old.get('site_slug')) for a in vault.public()):
+                raise kf_ai.AIError('请先删除该域名关联的管理机构账号，再删除域名记录')
+            if old.get('site_slug'): registry['hidden'] = list(set(registry.get('hidden', []) + [ident]))
+            else: registry['items'] = [v for v in registry.get('items', []) if v['slug'] != ident]
+            registry.setdefault('revisions', {})[ident] = registry.get('revisions', {}).get(ident, 0) + 1
+            kf_ai.atomic_json(CONSOLE / 'domain-registry.json', registry)
+            audit(user, 'domain_record_delete', ident)
+            return old
+        if action != 'save': raise kf_ai.AIError('操作无效')
+        domain = kf_ai.text(body.get('domain', ''), '域名', 253, True).lower().rstrip('.')
+        if not DOMAIN_RE.fullmatch(domain) or any(len(label)>63 for label in domain.split('.')):
+            raise kf_ai.AIError('域名格式不对，示例 example.sg')
+        if any(v['domain'] == domain and v['slug'] != ident for v in items):
+            raise kf_ai.AIError('域名已登记，请编辑现有记录')
+        if old and old.get('site_slug') and domain != old['domain']:
+            raise kf_ai.AIError('已关联站点的域名不能在登记表中更改')
+        if not old:
+            # Re-registering a removed linked domain restores its original site binding.
+            old = next((v for v in domain_records(True) if v['domain'] == domain and v['slug'] in registry.get('hidden', [])), None)
+        expires = kf_ai.text(body.get('expires', ''), '到期日', 10)
+        if expires:
+            try:
+                if datetime.strptime(expires, '%Y-%m-%d').strftime('%Y-%m-%d') != expires: raise ValueError()
+            except ValueError: raise kf_ai.AIError('到期日期格式应为 YYYY-MM-DD') from None
+        if body.get('owner', 'us') not in ('us', 'client') or not isinstance(body.get('auto_renew', True), bool):
+            raise kf_ai.AIError('域名归属或续费设置无效')
+        manage = {'registrar': kf_ai.text(body.get('registrar', ''), '注册商', 40), 'expires': expires,
+                  'owner': body.get('owner', 'us'), 'auto_renew': body.get('auto_renew', True),
+                  'note': kf_ai.text(body.get('note', ''), '备注', 120)}
+        if old and old.get('site_slug'):
+            ident = old['slug']; write_domain(old['site_slug'], manage)
+            registry['hidden'] = [v for v in registry.get('hidden', []) if v != ident]
+        else:
+            if not old and len(registry.get('items', [])) >= 1000: raise kf_ai.AIError('最多登记 1000 个独立域名')
+            import uuid
+            ident = ident or 'dm-' + uuid.uuid4().hex[:16]
+            item = {'slug': ident, 'site_slug': '', 'domain': domain, 'company': kf_ai.text(body.get('company', ''), '客户名称', 120),
+                    'manage': manage, 'url': 'https://' + domain}
+            registry['items'] = [v for v in registry.get('items', []) if v['slug'] != ident] + [item]
+        registry.setdefault('revisions', {})[ident] = registry.get('revisions', {}).get(ident, 0) + 1
+        kf_ai.atomic_json(CONSOLE / 'domain-registry.json', registry)
+        audit(user, 'domain_record_save', ident)
+        return next(v for v in domain_records() if v['slug'] == ident)
 
 
 def domain_days_left(slug):
@@ -2687,10 +2771,12 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-domain" class="hidden">
-<p class="hint">密码查看需 TOTP 验证。</p>
-<div class="formrow"><div class="field"><label for="domainSearch">搜索域名、机构、用户名或配置</label><input id="domainSearch" type="search"></div><button id="domainRefresh" type="button" class="ghost">刷新</button></div>
-<div id="dList" style="margin-top:14px"></div>
+<div class="site-toolbar domain-toolbar"><div class="search-field"><label for="domainSearch">搜索域名</label><input id="domainSearch" type="search" placeholder="域名、客户、机构或账号"></div><div class="status-field"><label for="domainExpiryFilter">到期状态</label><select id="domainExpiryFilter"><option value="">全部状态</option><option value="soon">30 天内到期</option><option value="expired">已过期</option><option value="unset">未设置到期日</option></select></div><button id="domainNew" type="button">新增域名</button><button id="domainRefresh" type="button" class="ghost">刷新</button></div>
+<p id="domainCount" class="hint" role="status"></p><div id="dList"></div><div class="domain-pagination"><button id="domainPrev" type="button" class="ghost">上一页</button><span id="domainPage" role="status"></span><button id="domainNext" type="button" class="ghost">下一页</button></div>
 <div class="msg" id="dMsg" role="status"></div>
+<dialog id="domainRecordDialog" class="domain-dialog" aria-labelledby="domainRecordTitle"><form id="domainRecordForm"><h3 id="domainRecordTitle">新增域名</h3><div class="formrow"><div class="field"><label for="domainRecordName">域名</label><input id="domainRecordName" required maxlength="253" placeholder="example.sg"></div><div class="field"><label for="domainRecordCompany">客户名称</label><input id="domainRecordCompany" maxlength="120"></div></div><p id="domainRecordBinding" class="hint"></p><div class="formrow"><div class="field"><label for="domainRecordRegistrar">注册商</label><input id="domainRecordRegistrar" maxlength="40"></div><div class="field"><label for="domainRecordExpiry">到期日</label><input id="domainRecordExpiry" type="date"></div><div class="field"><label for="domainRecordOwner">归属</label><select id="domainRecordOwner"><option value="us">在我们账户（代管）</option><option value="client">在客户账户</option></select></div></div><label><input id="domainRecordRenew" type="checkbox">自动续费</label><div class="field"><label for="domainRecordNote">备注</label><textarea id="domainRecordNote" maxlength="120" rows="3"></textarea></div><div class="domain-form-actions"><button type="submit">保存域名</button><button type="button" class="ghost" id="domainRecordCancel">取消</button></div><div id="domainRecordMsg" class="msg" role="status"></div></form></dialog>
+<dialog id="domainDetailDialog" class="domain-dialog" aria-labelledby="domainDetailTitle"><div class="domain-dialog-heading"><h3 id="domainDetailTitle" data-user-content></h3><button id="domainDetailClose" type="button" class="ghost">关闭</button></div><div id="domainDetailMeta"></div><div class="domain-dialog-heading"><h4>管理机构账号</h4><button id="domainDetailAdd" type="button">添加管理机构</button></div><p class="hint">密码查看需 TOTP 验证。</p><div id="domainAccountsList"></div><div id="domainDetailMsg" class="msg" role="status"></div></dialog>
+<dialog id="domainAccountDialog" class="domain-dialog" aria-labelledby="domainAccountTitle">
 <form id="domainAccountForm" class="hidden" style="margin-top:20px">
 <h3 id="domainAccountTitle">管理机构账号</h3>
 <div class="formrow"><div class="field"><label for="domainAccountSite">所属域名</label><select id="domainAccountSite" required></select></div><div class="field"><label for="domainAccountCategory">机构类型</label><select id="domainAccountCategory"><option value="registrar">域名注册商</option><option value="dns">DNS 服务商</option><option value="hosting">托管服务商</option><option value="other">其他机构</option></select></div></div>
@@ -2699,9 +2785,9 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <label><input id="domainAccountClear" type="checkbox">清除已保存的密码</label>
 <div class="fld"><label for="domainAccountConfig">配置信息</label><textarea id="domainAccountConfig" rows="6" maxlength="12000" placeholder="记录 DNS 地址、NS 服务器、解析配置、账号归属和操作说明"></textarea><p class="hint">配置信息可直接查询，请勿在此填写密码、API 密钥或恢复码。</p></div>
 <button type="submit">保存管理账号</button><button type="button" class="ghost" id="domainAccountCancel">取消</button><span id="domainAccountMsg" class="msg" role="status"></span>
-</form>
-<dialog id="domainRevealDialog" style="width:min(480px,calc(100vw - 32px));border:1px solid var(--line);border-radius:14px;padding:24px;background:var(--card);color:var(--fg)">
-<form id="domainRevealForm"><h3>验证 TOTP 后显示密码</h3><p id="domainRevealLabel"></p>
+</form></dialog>
+<dialog id="domainRevealDialog" class="domain-dialog" style="max-width:480px" aria-labelledby="domainRevealTitle">
+<form id="domainRevealForm"><h3 id="domainRevealTitle">验证 TOTP 后显示密码</h3><p id="domainRevealLabel"></p>
 <label for="domainRevealCode">当前 MVP 账号的 6 位 TOTP 验证码</label><input id="domainRevealCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required style="width:100%;margin:10px 0">
 <p class="hint">恢复码不能用于显示密码。同一枚验证码只能成功使用一次。</p>
 <button type="submit" id="domainRevealSubmit">验证并显示</button><button type="button" class="ghost" id="domainRevealClose">关闭</button>
@@ -4800,11 +4886,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"password": password, "expires_in": 30}, extra={"Pragma": "no-cache"})
             if path != "/api/domain/accounts":
                 return self._send(404, {"error": "not found"})
-            if body.get("action") != "delete":
-                slug = body.get("slug", "")
-                if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug) or not (SITES / slug / "meta.json").is_file():
-                    raise kf_ai.AIError("请选择有效站点域名")
-            item = vault.change(body, self.user)
+            with vault.locked():
+                if body.get("action") != "delete":
+                    slug = body.get("slug", "")
+                    if not any(slug in (v['slug'], v.get('site_slug')) for v in domain_records()):
+                        raise kf_ai.AIError("请选择有效站点域名")
+                item = vault.change(body, self.user)
             audit(self.user, "domain_account_" + str(body.get("action", "save")), item["id"], item["slug"])
             return self._send(200, {"item": item})
         except kf_domain_vault.VaultLimited as exc:
@@ -5045,17 +5132,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"items": kf_domain_vault.DomainVault(BASE).public(),
                 "mfa_enabled": bool((load_users().get(self.user) or {}).get("mfa_secret"))})
         if path == "/api/domains":
-            hm = host_map()
-            seen = {}
-            for host, e in hm.items():
-                if host.startswith("www."):
-                    continue
-                seen[e["slug"]] = {"domain": host, "www": "www." + host,
-                                   "port": e["port"], "slug": e["slug"],
-                                   "https_port": HTTPS_PORT, "http_port": PORT,
-                                   "company": load_meta(e["slug"]).get("company", e["slug"]),
-                                   "url": "https://" + host, "manage": read_domain(e["slug"])}
-            return self._send(200, {"items": list(seen.values())})
+            return self._send(200, {"items": domain_records(), "can_manage": self.user_role in ("admin", "ops") and can_write(self.user_role, "/api/domain/records")})
 
         m = re.match(r"^/api/dns/([a-z0-9-]+)$", path)
         if m:
@@ -5381,6 +5458,16 @@ class Handler(BaseHTTPRequestHandler):
             if not SLUG_RE.match(slug) or not (SITES / slug).exists():
                 return self._send(400, {"error": "站点不存在"})
             return self._send(200, dns_delegation(slug))
+        if path == "/api/domain/records":
+            if self.user_role not in ("admin", "ops"):
+                return self._send(403, {"error": "当前角色无权执行此操作"})
+            try:
+                item = change_domain_record(body, self.user)
+                return self._send(200, {"item": item})
+            except kf_domain_vault.VaultConflict as exc:
+                return self._send(409, {"error": str(exc)})
+            except kf_ai.AIError as exc:
+                return self._send(400, {"error": str(exc)})
         if path == "/api/domain/manage":
             slug = str(body.get("slug", "")).strip().lower()
             if not SLUG_RE.match(slug) or not (SITES / slug).exists():

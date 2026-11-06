@@ -28,6 +28,7 @@ if(key==='styles'){await page.locator('#styleNew').evaluate(e=>{const d=e.closes
  await scan('styles-library-switched','#styleLibrary');
 }
 if(key==='providers'){await page.locator('#providerNew').click();for(const value of await page.locator('#providerKind option').evaluateAll(es=>es.map(e=>e.value))){await page.selectOption('#providerKind',value);await scan('provider-'+value,'#providerForm');}}
+if(key==='domain'){await page.locator('#domainNew').click();await scan('domain-record-form','#domainRecordDialog');await page.locator('#domainRecordCancel').click();await page.locator('[data-domain-view]').first().click();await scan('domain-detail','#domainDetailDialog');await page.locator('#domainDetailClose').click();}
 if(key==='mcp'){await page.locator('#mcpNew').click();await scan('mcp-form','#mcpForm');}
 }
 
