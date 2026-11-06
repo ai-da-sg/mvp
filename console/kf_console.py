@@ -118,6 +118,44 @@ def totp_verify(secret, code, window=1):
     return False
 
 
+def consume_totp(user, secret, code, purpose):
+    """Called inside auth_transaction: verification and replay state are atomic."""
+    import hashlib
+    if not secret or not re.fullmatch(r"[0-9]{6}", code or ""):
+        return False
+    now = int(time.time() // 30)
+    counter = next((i for i in (now, now-1, now+1) if _h.compare_digest(_totp(secret, i), code)), None)
+    if counter is None: return False
+    path = CONSOLE / "login-mfa.json"
+    data = kf_ai.read_json(path, {})
+    key = purpose + ":" + user
+    version = hashlib.sha256(secret.encode()).hexdigest()
+    old = data.get(key, {})
+    if old.get("secret_version") == version and counter <= old.get("counter", -1):
+        return False
+    data[key] = {"secret_version": version, "counter": counter}
+    kf_ai.atomic_json(path, data)
+    return True
+
+
+def auth_transaction(fn):
+    from functools import wraps
+    @wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        with kf_domain_vault.DomainVault(BASE).locked():
+            # Recovery consumption, MFA changes and password changes share a lock.
+            load_fails(); load_ipfails()
+            return fn(self, *args, **kwargs)
+    return wrapped
+
+
+def revoke_other_sessions(user, cookie_header=None):
+    keep = (cookie_value(cookie_header, "kf_sid") or "").split(".")[0]
+    for sid in [sid for sid, value in SESSIONS.items() if value.get("user") == user and sid != keep]:
+        SESSIONS.pop(sid, None)
+    save_sessions()
+
+
 def gen_recovery(n=10):
     import secrets as _s
     return ["%s-%s" % (_s.token_hex(2), _s.token_hex(2)) for _ in range(n)]
@@ -201,6 +239,18 @@ def can_write(role, path):
     if allowed is None:
         return True
     return any(path == a or path.startswith(a) for a in allowed)
+
+
+def can_read(role, path):
+    if role == "admin": return True
+    if role not in ("ops", "finance"): return False
+    if path in ("/api/users", "/api/security", "/api/smtp", "/api/updates", "/health/ip") or path.startswith("/api/audit"):
+        return False
+    if role == "ops": return True
+    return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
+                     "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
+            or path.startswith(("/api/ledger/", "/api/invoice/"))
+            or path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -438,6 +488,15 @@ def session_user(cookie_header):
         return None
     s["exp"] = time.time() + SESSION_TTL      # 滑动续期
     return s["user"]
+
+
+def csrf_token(cookie_header):
+    """Session-bound token, never an authentication credential by itself."""
+    import hashlib
+    value = cookie_value(cookie_header, "kf_sid") or ""
+    if not session_user(cookie_header):
+        return ""
+    return _h.new(portal_secret(), ("csrf:" + value).encode(), hashlib.sha256).hexdigest()
 
 
 def safe_next(value):
@@ -774,6 +833,38 @@ def design_vars(slug, tokens=None):
         "--kf-font-body": fonts["sans"],
     }
     return ":root{" + "".join(f"{k}:{val};" for k, val in v.items()) + "}"
+
+
+# Untrusted previews/assets must never execute with the console's origin privileges.
+PREVIEW_HEADERS = {"Content-Security-Policy":
+    "sandbox allow-popups allow-popups-to-escape-sandbox; default-src 'none'; "
+    "img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+    "script-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"}
+
+
+def preview_asset(slug, rel):
+    """Fixed theme CSS or an image strictly within uploads, including after symlinks."""
+    root = (SITES / slug / "html").resolve()
+    if rel == "style.css":
+        parent = root / "wp-content" / "themes" / "kampong"
+        f = parent / "style.css"
+        ctype = "text/css; charset=utf-8"
+    else:
+        from urllib.parse import unquote
+        rel = unquote(rel)
+        if not rel.startswith("uploads/") or "\\" in rel or any(part in (".", "..", "") for part in rel.split("/")):
+            raise FileNotFoundError()
+        parent = root / "wp-content" / "uploads"
+        f = parent / rel[len("uploads/"):]
+        ctype = {".jpg":"image/jpeg", ".jpeg":"image/jpeg", ".png":"image/png",
+                 ".webp":"image/webp", ".gif":"image/gif", ".svg":"image/svg+xml"}.get(f.suffix.lower())
+        if not ctype:
+            raise FileNotFoundError()
+    parent = parent.resolve()
+    f = f.resolve()
+    if root not in parent.parents or parent not in f.parents or not f.is_file():
+        raise FileNotFoundError()
+    return f, ctype
 
 
 def preview_html(slug, page_slug, base=None, asset=None, public=False):
@@ -2041,6 +2132,27 @@ def invoice_pdf(inv):
 
 # ---------------------------------------------------------------- 页面
 PAGE = r"""<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="kf-csrf" content="__KF_CSRF__">
+<script>
+// Every same-origin mutation carries the server-issued session token.
+const kfFetch = window.fetch.bind(window);
+window.fetch = (input, init={}) => {
+  const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+  const method = (init.method || input.method || 'GET').toUpperCase();
+  if(url.origin === location.origin && !['GET','HEAD','OPTIONS'].includes(method)){
+    const headers = new Headers(init.headers || input.headers || {});
+    headers.set('X-KF-CSRF', document.querySelector('meta[name="kf-csrf"]').content);
+    init = {...init, headers};
+  }
+  return kfFetch(input, init);
+};
+document.addEventListener('click', async event => {
+  if(!event.target.closest('a[href="/logout"]')) return;
+  event.preventDefault();
+  const r=await fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  if(r.ok) location.href='/login';
+});
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KampongFlow 控制台</title>
 <script src="/locale.js"></script><script src="/appearance.js"></script>
@@ -3193,7 +3305,7 @@ async function userAct(user,act){
   $('#tmMsg').textContent=r.ok?(act==='reset'?('新密码：'+d.password):'已更新'):('失败：'+(d.error||''));
   loadTeam();
 }
-function initTeam(){ loadTeam(); loadSecurity(); loadMfa(); loadRoles(); loadAudit(); }
+function initTeam(){ loadMfa(); if(STATE.role==='admin'){ loadTeam(); loadSecurity(); loadRoles(); loadAudit(); } }
 
 
 // ---------------- 维护 ----------------
@@ -4339,6 +4451,27 @@ def workflow_store():
 class Handler(BaseHTTPRequestHandler):
     server_version = "KFConsole/0.2"
 
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(20)
+
+    def _origin_ok(self):
+        from urllib.parse import urlsplit
+        origin = self.headers.get("Origin")
+        if origin is None:
+            referer = self.headers.get("Referer")
+            if not referer:
+                return self.headers.get("Sec-Fetch-Site", "") not in ("cross-site", "same-site")
+            p = urlsplit(referer)
+            origin = p.scheme + "://" + p.netloc
+        expected = ("https" if self._is_secure() else "http") + "://" + self.headers.get("Host", "")
+        return origin == expected
+
+    def _csrf_ok(self):
+        expected = csrf_token(self.headers.get("Cookie"))
+        return bool(expected and self._origin_ok() and _h.compare_digest(
+            self.headers.get("X-KF-CSRF", ""), expected))
+
     def log_message(self, fmt, *a):
         pass
 
@@ -4347,7 +4480,8 @@ class Handler(BaseHTTPRequestHandler):
         if FORCE_HTTPS:
             return True
         proto = (self.headers.get("X-Forwarded-Proto") or "").lower()
-        if proto == "https":
+        if (proto == "https" and self.client_address[0] in TRUSTED_PROXIES
+                and proxy_secret() and _h.compare_digest(self.headers.get("X-KF-Proxy-Secret", ""), proxy_secret())):
             return True
         return bool(getattr(self, "is_https", False))
 
@@ -4357,26 +4491,8 @@ class Handler(BaseHTTPRequestHandler):
             self.user = u
             self.user_role = (load_users().get(u) or {}).get("role", "ops")
             return True
-        h = self.headers.get("Authorization", "")
-        if not h.startswith("Basic "):
-            return False
-        try:
-            uu, _, p = base64.b64decode(h[6:]).decode().partition(":")
-        except Exception:
-            return False
-        if not check_login(uu, p):
-            return False
-        if (load_users().get(uu) or {}).get("mfa_secret"):
-            self.send_response(401)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("WWW-Authenticate", 'Basic realm="KampongFlow"')
-            self.end_headers()
-            self.wfile.write(json.dumps(
-                {"error": "该账号已开启两步验证，请使用登录页"}, ensure_ascii=False).encode())
-            return False
-        self.user = uu
-        self.user_role = (load_users().get(uu) or {}).get("role", "ops")
-        return True
+        # Password-only Basic cannot share the browser's MFA and revocation guarantees.
+        return False
 
     def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
         if isinstance(body, (dict, list)):
@@ -4398,7 +4514,7 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if self.path.startswith("/api/"):
             self.send_response(401)
-            self.send_header("WWW-Authenticate", 'Basic realm="KampongFlow"')
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", "0")
             self.end_headers()
         else:
@@ -4410,10 +4526,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length", "0"))
-        try:
-            return json.loads(self.rfile.read(n) or b"{}")
-        except Exception:
-            return {}
+        return json.loads(self.rfile.read(n) or b"{}")
 
     # ------------------------------------------------------------ GET
     def _maybe_site(self):
@@ -4717,15 +4830,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(303, "", extra={"Location": safe_next(nxt)})
             return self._send(200, login_page(next_url=safe_next(nxt)), "text/html; charset=utf-8")
         if raw == "/logout":
-            sid = (cookie_value(self.headers.get("Cookie"), "kf_sid") or "").split(".")[0]
-            SESSIONS.pop(sid, None)
-            save_sessions()
-            self.send_response(303)
-            self.send_header("Location", "/login")
-            self.send_header("Set-Cookie", "kf_sid=; Path=/; Max-Age=0; HttpOnly")
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
+            if not self._guard(): return
+            token = csrf_token(self.headers.get("Cookie"))
+            page = '<!doctype html><meta charset="utf-8"><button id="logout">确认退出</button><script>'
+            page += 'document.getElementById("logout").onclick=async()=>{const r=await fetch("/logout",{method:"POST",headers:{"Content-Type":"application/json","X-KF-CSRF":'+json.dumps(token)+'},body:"{}"});if(r.ok)location.href="/login"};</script>'
+            return self._send(200, page, "text/html; charset=utf-8")
         if raw.startswith("/portal/"):
             return self._send(410, "<h1>客户门户已停用</h1><p>客户无需登录，一切由我们代管。</p>",
                               "text/html; charset=utf-8")
@@ -4736,8 +4845,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard():
             return
         path = raw.rstrip("/") or "/"
+        if not can_read(self.user_role, path):
+            return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
-            return self._send(200, PAGE, "text/html; charset=utf-8")
+            return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
         if path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
@@ -4770,7 +4881,7 @@ class Handler(BaseHTTPRequestHandler):
             pub["smtp"] = sm
             return self._send(200, {"role": getattr(self, "user_role", "ops"),
                                     "me": getattr(self, "user", ""),
-                                    "staff": sorted(load_users().keys()),
+                                    "staff": sorted(load_users().keys()) if self.user_role == "admin" else [self.user],
                                     "sites": site_list(), "invoices": invoices(),
                                     "plans": plans(), "settings": pub,
                                     "industries": sorted(INDUSTRIES.items()),
@@ -4806,29 +4917,12 @@ class Handler(BaseHTTPRequestHandler):
             slug, page = m.group(1), (m.group(2) or "home")
             if not (SITES / slug).exists():
                 return self._send(404, {"error": "站点不存在"})
-            return self._send(200, preview_html(slug, page), "text/html; charset=utf-8")
+            return self._send(200, preview_html(slug, page), "text/html; charset=utf-8", PREVIEW_HEADERS)
 
         m = re.match(r"^/pa/([a-z0-9-]+)/(.+)$", path)
         if m:
             slug, rel = m.group(1), m.group(2)
-            root = (SITES / slug / "html").resolve()
-            if rel == "style.css":
-                f = root / "wp-content" / "themes" / "kampong" / "style.css"
-            elif rel.startswith("uploads/"):
-                f = root / "wp-content" / rel
-            else:
-                return self._send(404, {"error": "not found"})
-            try:
-                f = f.resolve()
-                if not str(f).startswith(str(root)) or not f.is_file():
-                    return self._send(404, {"error": "not found"})
-            except Exception:
-                return self._send(404, {"error": "not found"})
-            ctype = {".css": "text/css; charset=utf-8", ".jpg": "image/jpeg",
-                     ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
-                     ".gif": "image/gif", ".svg": "image/svg+xml"}.get(f.suffix.lower(),
-                                                                      "application/octet-stream")
-            return self._send(200, f.read_bytes(), ctype)
+            return self._preview_asset(slug, rel)
 
         if path == "/api/domain/accounts":
             if self.user_role not in ("admin", "ops") or not can_write(self.user_role, "/api/domain/accounts"):
@@ -5058,6 +5152,19 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ POST
     def do_POST(self):
+        raw_path = self.path.split("?")[0]
+        limit = (MAX_UPLOAD + 65536 if raw_path == "/api/upload" else
+                 8192 if raw_path in ("/login", "/api/wordpress/callback") else
+                 1024 * 1024 if raw_path == "/api/spec" else 65536)
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) > 1 or not 0 <= length <= limit:
+                raise ValueError()
+        except ValueError:
+            self.close_connection = True
+            return self._send(413, {"error": "请求长度无效或超过限制"})
+        if raw_path != "/api/wordpress/callback" and not self._origin_ok():
+            return self._send(403, {"error": "请求来源不匹配，请从管理后台操作"})
         if self.path.split("?")[0] == "/api/wordpress/callback":
             return self._wordpress_callback()
         if self.path.split("?")[0] == "/login":
@@ -5070,6 +5177,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard():
             return
         path = self.path.split("?")[0]
+        if not self._csrf_ok():
+            return self._send(403, {"error": "安全令牌失效，请刷新页面后重试"})
+        if path == "/logout":
+            sid = (cookie_value(self.headers.get("Cookie"), "kf_sid") or "").split(".")[0]
+            SESSIONS.pop(sid, None); save_sessions()
+            return self._send(200, {"ok": True}, extra={"Set-Cookie": "kf_sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax" + ("; Secure" if self._is_secure() else "")})
+        if path != "/api/upload" and self.headers.get_content_type() != "application/json":
+            return self._send(415, {"error": "请使用 JSON 请求"})
         is_prompt_preview = path in ("/api/ai/prompts/preview", "/api/ai/styles/analyze") and self.user_role in ("admin", "ops")
         if not is_prompt_preview and not can_write(getattr(self, "user_role", "ops"), path):
             audit(getattr(self, "user", "-"), "denied", path)
@@ -5087,7 +5202,11 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 <= content_length <= 65536:
                 self.close_connection = True
                 return self._send(413, {"error": "请求超过 64KB 限制"})
-        body = self._body()
+        try:
+            body = self._body()
+            if not isinstance(body, dict): raise ValueError()
+        except (ValueError, TypeError):
+            return self._send(400, {"error": "请求必须是 JSON 对象"})
 
         if path.startswith("/api/automation/"):
             return self._automation_post(path, body)
@@ -5483,6 +5602,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def _preview_asset(self, slug, rel):
+        try:
+            f, ctype = preview_asset(slug, rel)
+            return self._send(200, f.read_bytes(), ctype, PREVIEW_HEADERS)
+        except (OSError, ValueError):
+            return self._send(404, {"error": "not found"})
+
     def _public(self, path):
         m = re.match(r"^/sa/([A-Za-z0-9_-]+)/(.+)$", path)
         if m:
@@ -5490,24 +5616,7 @@ class Handler(BaseHTTPRequestHandler):
             s = share_for(token)
             if not s:
                 return self._send(404, {"error": "链接无效或已过期"})
-            root = (SITES / s["slug"] / "html").resolve()
-            if rel == "style.css":
-                f = root / "wp-content" / "themes" / "kampong" / "style.css"
-            elif rel.startswith("uploads/"):
-                f = root / "wp-content" / rel
-            else:
-                return self._send(404, {"error": "not found"})
-            try:
-                f = f.resolve()
-                if not str(f).startswith(str(root)) or not f.is_file():
-                    return self._send(404, {"error": "not found"})
-            except Exception:
-                return self._send(404, {"error": "not found"})
-            ctype = {".css": "text/css; charset=utf-8", ".jpg": "image/jpeg",
-                     ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
-                     ".gif": "image/gif", ".svg": "image/svg+xml"}.get(
-                         f.suffix.lower(), "application/octet-stream")
-            return self._send(200, f.read_bytes(), ctype)
+            return self._preview_asset(s["slug"], rel)
 
         m = re.match(r"^/s/([A-Za-z0-9_-]+)(?:/([a-z0-9-]*))?$", path)
         if m:
@@ -5521,7 +5630,7 @@ class Handler(BaseHTTPRequestHandler):
                 page = allowed[0]
             html = preview_html(s["slug"], page,
                                 base="/s/%s" % token, asset="/sa/%s" % token, public=True)
-            return self._send(200, html, "text/html; charset=utf-8")
+            return self._send(200, html, "text/html; charset=utf-8", PREVIEW_HEADERS)
         return self._send(404, {"error": "not found"})
 
     def _shares_list(self, slug):
@@ -5686,6 +5795,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "只有管理员可以改邮件设置"})
         cur = settings()
         s = dict(cur.get("smtp") or {})
+        old_target = tuple(s.get(k) for k in ("host", "port", "provider"))
         for k in ("host", "from", "provider"):
             if k in body:
                 s[k] = str(body[k]).strip()[:120]
@@ -5708,6 +5818,14 @@ class Handler(BaseHTTPRequestHandler):
         if s.get("provider") not in ("smtp", "resend", "sendgrid"):
             s["provider"] = "smtp"
         pw = str(body.get("pass", ""))
+        changed = old_target != tuple(s.get(k) for k in ("host", "port", "provider"))
+        if changed and sec.get("pass") and not (pw and pw != "********") and not body.get("clear_password"):
+            return self._send(400, {"error": "更换邮件服务器时请重新填写或清除密码"})
+        if old_target[2] != s.get("provider") and sec.get("api_key") and not body.get("api_key"):
+            return self._send(400, {"error": "更换邮件服务商时请重新填写或清除 API Key"})
+        if s.get("provider") == "smtp" and (s.get("port", 587) not in (465, 587) or not s.get("tls", True)):
+            return self._send(400, {"error": "SMTP 必须使用 TLS 465 或 STARTTLS 587"})
+        if body.get("clear_password"):sec.pop("pass", None);s.pop("pass", None)
         if pw and pw != "********":
             sec["pass"] = pw
             s["pass"] = pw
@@ -5739,6 +5857,7 @@ class Handler(BaseHTTPRequestHandler):
               "%d 条规则" % len(write) if write is not None else "全部允许")
         return self._send(200, {"ok": True, "role": role, "write": write})
 
+    @auth_transaction
     def _password_save(self, body):
         u = getattr(self, "user", "")
         users = load_users()
@@ -5769,46 +5888,48 @@ class Handler(BaseHTTPRequestHandler):
         audit(u, "password_change", "已改密，踢掉 %d 个会话" % len(drop))
         return self._send(200, {"ok": True, "killed": len(drop)})
 
+    @auth_transaction
     def _mfa_save(self, body):
-        u = getattr(self, "user", "")
+        u = self.user
         users = load_users()
-        if u not in users:
-            return self._send(400, {"error": "账号不存在"})
-        act = str(body.get("action", "enable"))
-        code = str(body.get("code", "")).strip()
-        if act == "enable":
-            sec = PENDING_MFA.get(u)
-            if not sec:
-                return self._send(400, {"error": "请先刷新页面获取密钥"})
-            if not totp_verify(sec, code):
-                return self._send(400, {"error": "验证码不正确，请确认手机时间准确"})
-            users[u]["mfa_secret"] = sec
-            codes = gen_recovery()
-            users[u]["recovery"] = hash_recovery(codes, users[u].get("salt", ""))
-            _write(USERS_F, users)
-            PENDING_MFA.pop(u, None)
-            audit(u, "mfa_enable", "")
-            return self._send(200, {"ok": True, "enabled": True, "recovery": codes})
-        if act == "regen":
-            if not totp_verify(users[u].get("mfa_secret", ""), code):
-                return self._send(400, {"error": "验证码不正确"})
-            codes = gen_recovery()
-            users[u]["recovery"] = hash_recovery(codes, users[u].get("salt", ""))
-            _write(USERS_F, users)
-            audit(u, "recovery_regen", "10 个新码")
-            return self._send(200, {"ok": True, "recovery": codes})
-
+        if u not in users: return self._send(400, {"error": "账号不存在"})
+        if locked_for(u) or ip_blocked(client_ip(self)):
+            return self._send(429, {"error": "验证失败过多，请稍后重试"})
+        act = body.get("action", "enable")
+        if act not in ("enable", "regen", "disable"):
+            return self._send(400, {"error": "未知操作"})
+        if act == "enable" and users[u].get("mfa_secret"):
+            return self._send(409, {"error": "两步验证已经启用"})
+        secret = PENDING_MFA.get(u) if act == "enable" else users[u].get("mfa_secret")
+        code = body.get("code", "")
+        if not isinstance(code, str) or not consume_totp(u, secret, code, "mfa-manage"):
+            note_fail(u); note_ip_fail(client_ip(self))
+            audit(u, "mfa_denied", "验证码无效或已使用")
+            return self._send(400, {"error": "验证码无效或已使用，请等待下一枚验证码"})
+        codes = None
         if act == "disable":
-            if not totp_verify(users[u].get("mfa_secret", ""), code):
-                return self._send(400, {"error": "验证码不正确"})
-            users[u].pop("mfa_secret", None)
-            _write(USERS_F, users)
-            audit(u, "mfa_disable", "")
-            return self._send(200, {"ok": True, "enabled": False})
-        return self._send(400, {"error": "未知操作"})
+            users[u].pop("mfa_secret", None); users[u].pop("recovery", None)
+        else:
+            users[u]["mfa_secret"] = secret
+            codes = gen_recovery()
+            users[u]["recovery"] = hash_recovery(codes, users[u].get("salt", ""))
+        _write(USERS_F, users)
+        PENDING_MFA.pop(u, None)
+        revoke_other_sessions(u, self.headers.get("Cookie"))
+        clear_fails(u)
+        audit(u, "mfa_" + act, "已撤销其他会话")
+        result = {"ok": True, "enabled": act != "disable"}
+        if codes is not None: result["recovery"] = codes
+        return self._send(200, result)
 
     def _login(self):
+        if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+            return self._send(415, {"error": "请使用登录表单"})
         form = self._form_body()
+        return self._login_form(form)
+
+    @auth_transaction
+    def _login_form(self, form):
         u = str(form.get("user", "")).strip()
         pw = str(form.get("pw", ""))
         code = str(form.get("code", "")).strip()
@@ -5837,7 +5958,7 @@ class Handler(BaseHTTPRequestHandler):
         secret = entry.get("mfa_secret")
         used_recovery = False
         if secret:
-            if totp_verify(secret, code):
+            if consume_totp(u, secret, code, "login"):
                 pass
             else:
                 idx = match_recovery(entry, code) if code else -1
@@ -5849,7 +5970,8 @@ class Handler(BaseHTTPRequestHandler):
                     used_recovery = True
                     audit(u, "recovery_used", "剩余 %d" % len(users_all[u]["recovery"]))
                 else:
-                    audit(u, "login_fail", "验证码错误")
+                    note_fail(u); note_ip_fail(ip)
+                    audit(u, "login_fail", "验证码错误或已使用")
                     return self._send(200, login_page("两步验证码不正确", nxt),
                                       "text/html; charset=utf-8")
         clear_fails(u)
@@ -5870,6 +5992,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    @auth_transaction
     def _users_save(self, body):
         if getattr(self, "user_role", "ops") != "admin":
             return self._send(403, {"error": "只有管理员可以管理账号"})
@@ -5895,6 +6018,7 @@ class Handler(BaseHTTPRequestHandler):
             if uname == getattr(self, "user", ""):
                 return self._send(400, {"error": "不能停用自己"})
             users[uname]["active"] = False
+            revoke_other_sessions(uname)
         elif act == "enable":
             users[uname]["active"] = True
         elif act == "unlock":

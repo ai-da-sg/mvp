@@ -1,8 +1,9 @@
-# 控制台运行依赖（Python 3.9+）
-reportlab>=4.0,<5       # 中文 PDF：账单、交接单
-Pillow>=10.0         # 图片转 WebP、生成 srcset
-dnspython>=2.4       # DNS 托管与解析检查
-qrcode>=7.4,<8      # 两步验证绑定二维码（本地生成）
-cryptography>=46.0.7,<47  # 域名管理密码的认证加密（Fernet）
-jsonschema>=4.25.1,<4.26  # MCP tool input validation (Python 3.9+)
-boto3>=1.40.76,<1.41  # AWS signed APIs / SDK credential chain (Python 3.9+)
+# Runtime requires Python 3.12+. Install with -c constraints.txt.
+reportlab>=5.1,<6
+Pillow>=13,<14
+dnspython>=2.9.2,<3
+qrcode>=7.4,<8
+cryptography>=50.0.2,<51
+jsonschema>=4.26,<5
+boto3>=1.43.125,<2
+nh3>=0.3.7,<0.4

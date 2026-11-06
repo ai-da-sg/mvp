@@ -14,6 +14,8 @@ LOGS="$RUN/logs"
 PIDFILE="$RUN/nginx.pid"
 CONSOLE_PORT="${KF_PORT:-18090}"
 LISTEN_PORT="${KF_PROXY_PORT:-18444}"
+LISTEN_BIND="${KF_PROXY_BIND:-127.0.0.1}"
+[[ "$LISTEN_BIND" =~ ^[0-9.]+$ ]] || { echo "Invalid proxy IPv4 bind address" >&2; exit 1; }
 CERT="$BASE/console/tls/cert.pem"
 SECRET_F="$BASE/console/proxy.secret"
 KEY="$BASE/console/tls/key.pem"
@@ -34,7 +36,7 @@ is_running() {
 case "${1:-status}" in
   status)
     if is_running; then
-      echo "反代运行中：https://0.0.0.0:$LISTEN_PORT → 127.0.0.1:$CONSOLE_PORT"
+      echo "反代运行中：https://$LISTEN_BIND:$LISTEN_PORT → 127.0.0.1:$CONSOLE_PORT"
       echo "  主进程 PID $(cat "$PIDFILE")"
       exit 0
     fi
@@ -103,7 +105,7 @@ http {
     proxy_max_temp_file_size 64m;
 
     server {
-        listen $LISTEN_PORT ssl;
+        listen $LISTEN_BIND:$LISTEN_PORT ssl;
         server_name _;
 
         ssl_certificate     $CERT;
@@ -146,7 +148,7 @@ fi
 if is_running; then
   # 已运行：重载配置即可，重复执行不应报错
   "$NGINX" -p "$RUN" -c "$CONF" -s reload >/dev/null 2>&1 \
-    && echo "反代已在运行，已重载配置：https://0.0.0.0:$LISTEN_PORT → 127.0.0.1:$CONSOLE_PORT" \
+    && echo "反代已在运行，已重载配置：https://$LISTEN_BIND:$LISTEN_PORT → 127.0.0.1:$CONSOLE_PORT" \
     || echo "反代已在运行（配置未变）"
   exit 0
 fi
@@ -160,7 +162,7 @@ fi
 sleep 1
 
 if is_running; then
-  echo "反代已启动：https://0.0.0.0:$LISTEN_PORT → 127.0.0.1:$CONSOLE_PORT"
+  echo "反代已启动：https://$LISTEN_BIND:$LISTEN_PORT → 127.0.0.1:$CONSOLE_PORT"
   echo "  证书 $CERT"
   echo "  日志 $LOGS/"
 else

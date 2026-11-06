@@ -131,14 +131,14 @@ printf '%s\n' "${C_DIM}  域名 · 建站 · DNS · 账单 · 客户代管${C_0}
 # ---------- 1. 依赖检查 ----------
 head_ "1/7 检查依赖"
 
-command -v "$PYTHON" >/dev/null 2>&1 || die "找不到 $PYTHON，请先安装 Python 3.8+"
+command -v "$PYTHON" >/dev/null 2>&1 || die "找不到 $PYTHON，请先安装 Python 3.12+"
 PYV="$("$PYTHON" -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
-"$PYTHON" -c 'import sys;sys.exit(0 if sys.version_info>=(3,8) else 1)' \
-  || die "Python 版本过低：$PYV（需要 3.8+）"
+"$PYTHON" -c 'import sys;sys.exit(0 if sys.version_info>=(3,12) else 1)' \
+  || die "Python 版本过低：$PYV（需要 3.12+）"
 ok "Python $PYV ($(command -v "$PYTHON"))"
 
 MISSING=()
-for mod in reportlab PIL dns qrcode; do
+for mod in reportlab PIL dns qrcode cryptography jsonschema boto3 nh3; do
   "$PYTHON" -c "import $mod" 2>/dev/null || MISSING+=("$mod")
 done
 if [ ${#MISSING[@]} -gt 0 ]; then
@@ -148,7 +148,7 @@ if [ ${#MISSING[@]} -gt 0 ]; then
   read -r -p "  继续安装？（功能会受限）[y/N]: " a || true
   case "$a" in y|Y) ;; *) die "已中止" ;; esac
 else
-  ok "Python 依赖齐全（reportlab / Pillow / dnspython / qrcode）"
+  ok "Python 依赖齐全（reportlab / Pillow / dnspython / qrcode / cryptography / jsonschema / boto3 / nh3）"
 fi
 
 if [ "$WITH_DOCKER" = "1" ]; then

@@ -33,22 +33,23 @@ def safe_url(v):
     return "#"
 
 
-# rich 块：允许 HTML，但剔除脚本、事件处理器与危险协议
-_RICH_DROP = re.compile(r"<(script|style|iframe|object|embed|form|meta|link)\b.*?"
-                        r"(</\1>|$)", re.I | re.S)
-_RICH_ON = re.compile(r"\son[a-z]+\s*=\s*(\"[^\"]*\"|\'[^\']*\'|[^\s>]+)", re.I)
-_RICH_JS = re.compile(r"(href|src|action)\s*=\s*(\"\'?)\s*(javascript|data|vbscript):[^\"\'>]*",
-                      re.I)
-
-
+# HTML5 parsing, not regular expressions: malformed markup follows browser rules.
 def sanitize_rich(v):
-    """rich 块允许 HTML，但必须净化掉脚本与事件处理器。"""
-    t = str(v or "")
-    t = _RICH_DROP.sub("", t)
-    t = _RICH_ON.sub("", t)
-    t = _RICH_JS.sub(r"\1=\"#\"", t)
-    t = re.sub(r"<!--.*?-->", "", t, flags=re.S)
-    return t
+    import nh3
+    return nh3.clean(str(v or ""),
+        tags={"p", "br", "hr", "div", "span", "section", "h2", "h3", "h4", "h5", "h6",
+              "strong", "b", "em", "i", "u", "s", "small", "sup", "sub", "blockquote",
+              "ul", "ol", "li", "dl", "dt", "dd", "a", "img", "figure", "figcaption",
+              "table", "thead", "tbody", "tfoot", "tr", "th", "td", "pre", "code"},
+        clean_content_tags={"script", "style", "iframe", "object", "embed", "svg", "math", "template"},
+        attributes={"*": {"class", "title"}, "a": {"href"}, "img": {"src", "alt", "width", "height"},
+                    "th": {"colspan", "rowspan", "scope"}, "td": {"colspan", "rowspan"}},
+        url_schemes={"https", "http", "mailto", "tel"}, strip_comments=True)
+
+
+def safe_class(value):
+    value = str(value or "")
+    return value if re.fullmatch(r"[A-Za-z0-9 _-]{0,200}", value) else ""
 
 # 渲染上下文：当前站点根目录（用于探测多尺寸变体）
 _CTX = {"site": None}
@@ -123,7 +124,7 @@ def img_tag(src, alt="", sizes="100vw", cls="", loading="lazy"):
         attrs = f'class="{esc(cls)}" ' + attrs
     ss = _srcset(src)
     if ss:
-        attrs += f' srcset="{ss}" sizes="{sizes}"'
+        attrs += f' srcset="{esc(ss)}" sizes="{esc(sizes)}"'
     site = _CTX.get("site")
     if site:
         sp = _safe_site_path(src)
@@ -136,6 +137,7 @@ def img_tag(src, alt="", sizes="100vw", cls="", loading="lazy"):
 
 # ---------------------------------------------------------------- 基础标记
 def hx(level, text, cls=""):
+    cls = safe_class(cls)
     attr = {"level": level}
     if cls:
         attr["className"] = cls
@@ -145,12 +147,14 @@ def hx(level, text, cls=""):
 
 
 def pp(text, cls=""):
+    cls = safe_class(cls)
     attr = json.dumps({"className": cls}) if cls else "{}"
     c = f' class="{cls}"' if cls else ""
     return f'<!-- wp:paragraph {attr} -->\n<p{c}>{esc(text)}</p>\n<!-- /wp:paragraph -->\n'
 
 
 def grp(cls, inner):
+    cls = safe_class(cls)
     return (f'<!-- wp:group {json.dumps({"className": cls})} -->\n'
             f'<div class="wp-block-group {cls}">\n{inner}</div>\n<!-- /wp:group -->\n')
 
@@ -164,6 +168,7 @@ def btn(label, url):
 
 
 def ul(items, cls="kf-list"):
+    cls = safe_class(cls)
     lis = "".join(f"<li>{esc(i)}</li>" for i in items)
     return f'<!-- wp:list {json.dumps({"className": cls})} -->\n<ul class="wp-block-list {cls}">{lis}</ul>\n<!-- /wp:list -->\n'
 
@@ -434,11 +439,41 @@ MIN_HTML = 400          # 渲染结果低于这个长度视为异常
 KEEP_RATIO = 0.6        # 写入后长度不得低于写入前这个比例
 
 
+def field_errors(sec):
+    """Manual editing uses the same typed fields that the editor exposes."""
+    t = sec["type"]
+    fields = {f["k"]: f for f in SCHEMAS[t]["fields"]}
+    fields.pop("table", None)
+    fields.update(bg={"type":"select"}, alt={"type":"text"})
+    if t == "table": fields.update(headers={"type":"strings"}, rows={"type":"rows"})
+    errors = []
+    def string(v, limit=12000): return isinstance(v, str) and len(v) <= limit
+    def strings(v): return isinstance(v, list) and len(v) <= 100 and all(string(x) for x in v)
+    for k, v in sec.items():
+        if k == "type": continue
+        if k not in fields:
+            errors.append("不支持的字段：" + k); continue
+        f = fields[k]; kind = f["type"]
+        valid = False
+        if kind in ("text", "textarea", "image", "html"):
+            valid = string(v, 200000 if kind == "html" else 12000)
+        elif kind == "bool": valid = isinstance(v, bool)
+        elif kind == "select": valid = v in ("", "alt", "tight")
+        elif kind == "strings": valid = strings(v)
+        elif kind == "rows": valid = isinstance(v, list) and len(v) <= 100 and all(strings(row) for row in v)
+        elif kind == "cta": valid = isinstance(v, dict) and set(v) <= {"label", "href"} and all(string(x) for x in v.values()) and bool(v.get("label"))
+        elif kind == "items":
+            keys = {item["k"] for item in f["itemFields"]}
+            valid = isinstance(v, list) and len(v) <= 100 and all(isinstance(row, dict) and set(row) <= keys and all(string(x) for x in row.values()) for row in v)
+        if not valid: errors.append("字段格式无效：" + k)
+    return errors
+
+
 def validate_sections(sections):
     """结构校验：类型必须已知、必填字段不能全空。"""
     errs = []
-    if not isinstance(sections, list) or not sections:
-        return ["区块列表为空"]
+    if not isinstance(sections, list) or not 1 <= len(sections) <= 100:
+        return ["区块数量必须为 1–100"]
     for i, sec in enumerate(sections, 1):
         if not isinstance(sec, dict):
             errs.append(f"第 {i} 块不是对象")
@@ -447,6 +482,7 @@ def validate_sections(sections):
         if t not in RENDERERS:
             errs.append(f"第 {i} 块类型未知：{t}")
             continue
+        errs.extend("第 %d 块：%s" % (i, err) for err in field_errors(sec))
         need = {
             "hero": ["title"], "cards": ["items"], "table": ["headers", "rows"],
             "quotes": ["items"], "gallery": ["items"], "band": ["src"],

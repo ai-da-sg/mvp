@@ -207,7 +207,7 @@ def answer(query):
 def serve_udp(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(("0.0.0.0", port))
+    s.bind((os.environ.get("KF_DNS_BIND", "127.0.0.1"), port))
     print("DNS UDP on %d" % port, flush=True)
     while True:
         try:
@@ -226,7 +226,7 @@ MAX_DNS_MSG = 65535        # DNS over TCP 消息长度上限
 def serve_tcp(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(("0.0.0.0", port))
+    s.bind((os.environ.get("KF_DNS_BIND", "127.0.0.1"), port))
     s.listen(16)
     print("DNS TCP on %d" % port, flush=True)
     while True:

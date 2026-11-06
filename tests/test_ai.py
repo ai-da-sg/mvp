@@ -149,7 +149,9 @@ class ConsoleTests(unittest.TestCase):
 
     def request(self, path, data=None, user='admin'):
         headers = {'Content-Type':'application/json'}
-        if user: headers['Cookie'] = self.cookies[user]
+        if user:
+            headers['Cookie'] = self.cookies[user]
+            headers['X-KF-CSRF'] = self.m.csrf_token(self.cookies[user])
         req = urllib.request.Request('http://127.0.0.1:%d%s' % (self.server.server_port,path),
                                      data=json.dumps(data).encode() if data is not None else None, headers=headers)
         try:
@@ -393,7 +395,7 @@ class ConsoleTests(unittest.TestCase):
         body = b'--testboundary\r\nContent-Disposition: form-data; name="file"; filename="photo.png"\r\nContent-Type: image/png\r\n\r\n' + buf.getvalue() + b'\r\n--testboundary--\r\n'
         def upload():
             req = urllib.request.Request('http://127.0.0.1:%d/api/upload?slug=demo' % self.server.server_port,
-                data=body, headers={'Content-Type':'multipart/form-data; boundary=testboundary', 'Cookie':self.cookies['admin']})
+                data=body, headers={'Content-Type':'multipart/form-data; boundary=testboundary', 'Cookie':self.cookies['admin'], 'X-KF-CSRF':self.m.csrf_token(self.cookies['admin'])})
             try: response = urllib.request.urlopen(req)
             except urllib.error.HTTPError as e: response = e
             with response:

@@ -60,6 +60,16 @@ def text(value, label, limit=2000, required=False):
     return value.strip()
 
 
+def validate_transport(base):
+    import ipaddress
+    p = urllib.parse.urlsplit(base)
+    if p.scheme == "https": return
+    try: loopback = ipaddress.ip_address(p.hostname).is_loopback
+    except ValueError: loopback = p.hostname == "localhost"
+    if p.scheme != "http" or not loopback:
+        raise AIError("远程模型接口必须使用 HTTPS；HTTP 仅用于本机模型")
+
+
 def profile_config(body):
     pid = text(body.get("id", ""), "配置 ID", 40, True)
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", pid) or pid == "mock":
@@ -72,6 +82,7 @@ def profile_config(body):
     if (parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username
             or parsed.password or parsed.query or parsed.fragment or any(c.isspace() for c in base)):
         raise AIError("API 地址必须是 HTTP(S) 地址，不能包含账号、密钥、查询参数或片段")
+    validate_transport(base)
     try:
         timeout, tokens = int(body.get("timeout", 120)), int(body.get("max_tokens", 8192))
         if not 5 <= timeout <= 300 or not 256 <= tokens <= 32768:
@@ -100,6 +111,7 @@ def endpoint(base, suffix):
 def complete(profile, key, system, prompt):
     protocol, model = profile["protocol"], profile["model"]
     base = profile["base_url"]
+    validate_transport(base)
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     tokens = profile["max_tokens"]
     if protocol == "openai_chat":
@@ -376,6 +388,10 @@ class AIStore:
                 key = text(body.get("api_key", ""), "API Key", 4096)
                 if any(c in key for c in "\r\n"):
                     raise AIError("API Key 不能包含换行")
+                old = next((v for v in cfg["profiles"] if v["id"] == pid), None)
+                if (old and (old["base_url"], old["protocol"]) != (p["base_url"], p["protocol"])
+                        and keys.get(pid) and (not key or key == "********") and not body.get("clear_key")):
+                    raise AIError("更换模型接口地址或协议时请重新填写或清除 API Key")
                 if body.get("clear_key") is True:
                     keys.pop(pid, None)
                 elif key and key != "********":

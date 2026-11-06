@@ -99,7 +99,7 @@ chmod +x install.sh
 ## 环境要求
 
 - Linux（systemd 可选）
-- Python 3.9+（CI 验证 3.9 / 3.12）
+- Python 3.12+（CI 验证 3.12 / 3.13）
 - Docker + Docker Compose（启用容器站点时）
 - 端口：控制台 18090、站点 18080 起、DNS 5354
 

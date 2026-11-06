@@ -78,6 +78,7 @@ def send(to,subject,body,smtp,request_id=''):
     if provider!='smtp':raise AIError('邮件服务商不支持')
     host=smtp.get('host','');port=int(smtp.get('port') or 587)
     if not host:raise AIError('SMTP 未配置')
+    if port not in (465,587) or not smtp.get('tls',True):raise AIError('SMTP 必须使用 TLS 465 或 STARTTLS 587')
     msg=EmailMessage();msg['From']=frm;msg['To']=msgdata['to'];msg['Subject']=msgdata['subject']
     msg['Message-ID']=make_msgid();msg.set_content(msgdata['body'])
     conn=smtplib.SMTP_SSL(host,port,timeout=20,context=ssl.create_default_context()) if port==465 else smtplib.SMTP(host,port,timeout=20)
