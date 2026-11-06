@@ -4,11 +4,15 @@
 
 ## 持续集成
 
-- Ubuntu 24.04，Python 3.9 / 3.12：安装 requirements + constraints，执行 AI 接口与发布回滚测试。
-- Chromium 浏览器回归：恢复码输入、二级导航与权限、编辑保留、保存失败重试、预览/发布顺序、提示词组合/版本恢复、主题/语言持久化及移动布局；使用隔离的模拟 API，不连接生产。
+- Ubuntu 24.04，Python 3.12 / 3.13：安装 requirements + constraints，执行接口、业务一致性与发布回滚测试；独立执行依赖审计。
+- Chromium 浏览器回归：认证与角色权限、二级导航、编辑保留、发布恢复、提示词版本、供应商/MCP、运营待办、线索、账单、主题/语言及移动布局。既有模拟 API 布局测试，也有启动隔离 Python 服务的真实 HTTP 测试；不连接生产。真实 HTTP 不代表外部 WordPress、LLM 或供应商接口均为真实调用。
 - 检查 Python、控制台内联 JavaScript、独立 JavaScript、Bash、PHP 语法。
 - 所有检查通过后，按 Git 提交打包代码，保存 14 天的 release artifact。包内有提交号、逐文件 SHA256，旁附包校验和。
 - 白名单仅包含应用代码、主题、模板和依赖清单；不包含账号、密钥、证书、站点数据、数据库或本机环境文件。
+- 打包后还需通过 `preproduction`：下载该提交的发布包，校验并解包，在解包代码上运行同一提交的完整浏览器回归。生产工作流等待此门禁成功，避免源代码测试通过但发布包漏文件。
+- 源代码浏览器测试失败时上传 `browser-failure-<SHA>`；预发布始终上传 `preproduction-<SHA>`（结果、日志及测试生成的截图/追踪），保留 7 天。证据来自隔离测试，不收集生产登录会话。
+
+公共表格、表单和消息优先使用 `console/admin-ui.js`，公共文字使用 `ADMIN_TEXT`；运营待办、AI 分步流程、线索和账单使用各模块的明确翻译键。新增反馈应使用可随语言切换的消息接口，避免只在首次显示时翻译。旧页面保留兼容翻译，随模块修改渐进迁移。双语回归需覆盖空结果、确认弹窗、分页及切换语言后的已显示消息，并检查输入与筛选保留。
 
 ## 配置生产部署
 
@@ -21,7 +25,7 @@
 | Secret | DEPLOY_SSH_KEY | 此账号的专用 SSH 私钥 |
 | Secret | DEPLOY_KNOWN_HOSTS | 经独立核验的 SSH 主机公钥记录；非 22 端口使用 `[host]:port` 格式 |
 | Variable | DEPLOY_BASE | 当前 `/home/ec2-user/mvp/.venv/kampongflow` |
-| Variable | DEPLOY_PYTHON | 当前 `/home/ec2-user/mvp/.venv/bin/python` |
+| Variable | DEPLOY_PYTHON | 经验证、与 constraints.txt 一致的 Python 3.12+ 虚拟环境解释器绝对路径 |
 | Variable | DEPLOY_PORT | SSH 端口，缺省 22 |
 
 服务器需要已初始化的安装、用户服务 kf-console/kf-dns/kf-proxy，以及与 constraints.txt 完全一致的虚拟环境。健康检查使用当前默认端口 18090/5354/18444；其他端口需调整部署脚本参数。SSH 会话需能运行 `systemctl --user`（持久用户服务通常需要 linger）。

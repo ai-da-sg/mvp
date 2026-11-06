@@ -17,6 +17,9 @@ const OPS_TEXT={
  mail_delivery_unknown:['邮件投递尚未确认','Email delivery is unconfirmed'],
  inspection_attention:['上次检查有 {checks} 项需关注','Last inspection has {checks} items needing attention']
 };
+const OPS_UI={item:['事项','Item'],customer:['客户 / 站点','Customer / site'],priority:['优先级','Priority'],actions:['操作','Actions'],ack:['已知悉','Acknowledged'],restore:['恢复提醒','Restore reminder'],critical:['紧急','Critical'],warning:['需关注','Needs attention'],info:['提示','Info'],open:['处理','Review'],title:['运营待办','Operations inbox'],search:['搜索待办','Search tasks'],all:['全部优先级','All priorities'],archived:['包含归档站点','Include archived sites'],acknowledged:['包含已知悉','Include acknowledged'],refresh:['刷新待办','Refresh tasks'],hint:['检查结果来自最近一次记录。内容快照不代表数据库备份。','Checks reflect the latest recorded results. Content snapshots are not database backups.'],confirmAck:['从我的待办中隐藏这条记录？不会改变原任务结果，可通过“包含已知悉”恢复提醒。','Hide this item from my inbox? The original task result stays unchanged. Use "Include acknowledged" to restore the reminder.']};
+function operationUI(key){return AdminUI.text(...OPS_UI[key]);}
+function translateOperations(){document.querySelectorAll('[data-operation-text]').forEach(node=>node.textContent=operationUI(node.dataset.operationText));renderOperations();}
 let OPS_ITEMS=[],OPS_LOADING=false,OPS_LAST=0,OPS_SIGNATURE='',OPS_OPENED=false;
 function operationText(item){
  let key=item.code;if(item.details.days<0&&['domain_expiry','service_expiry'].includes(key))key=key.replace('expiry','expired');
@@ -28,7 +31,7 @@ function renderOperations(){
  const items=OPS_ITEMS.filter(x=>(!severity||x.severity===severity)&&[x.company,x.domain,operationText(x)].join(' ').toLocaleLowerCase().includes(query));
  const signature=JSON.stringify([items,document.documentElement.lang]);if(signature===OPS_SIGNATURE)return;OPS_SIGNATURE=signature;
  $('#operationCount').textContent=String(OPS_ITEMS.filter(x=>!x.acknowledged).length);
- AdminUI.table('operationList',items,['事项','客户 / 站点','优先级','操作'],x=>`<tr><td>${esc(operationText(x))}${x.acknowledged?'<p class="hint">已知悉</p>':''}</td><td><span data-user-content>${esc(x.company)}</span><p class="hint" data-user-content>${esc(x.domain)}</p></td><td>${x.severity==='critical'?'紧急':x.severity==='warning'?'需关注':'提示'}</td><td><div class="domain-row-actions"><button type="button" data-operation-open="${esc(x.id)}">处理</button>${x.acknowledge?`<button type="button" class="ghost" data-operation-ack="${esc(x.id)}">${x.acknowledged?'恢复提醒':'已知悉'}</button>`:''}</div></td></tr>`);
+ AdminUI.table('operationList',items,['item','customer','priority','actions'].map(operationUI),x=>`<tr><td>${esc(operationText(x))}${x.acknowledged?`<p class="hint">${operationUI('ack')}</p>`:''}</td><td><span data-user-content>${esc(x.company)}</span><p class="hint" data-user-content>${esc(x.domain)}</p></td><td>${operationUI(x.severity==='critical'?'critical':x.severity==='warning'?'warning':'info')}</td><td><div class="domain-row-actions"><button type="button" data-operation-open="${esc(x.id)}">${operationUI('open')}</button>${x.acknowledge?`<button type="button" class="ghost" data-operation-ack="${esc(x.id)}">${operationUI(x.acknowledged?'restore':'ack')}</button>`:''}</div></td></tr>`);
 }
 async function refreshOperations(force=false){
  if(!['admin','ops'].includes(ROLE)||OPS_LOADING||(!force&&Date.now()-OPS_LAST<30000))return;
@@ -48,7 +51,7 @@ $('#operationList').onclick=async e=>{
  b.disabled=true;
  try{
   if(b.dataset.operationAck){
-   if(!item.acknowledged&&!confirm('从我的待办中隐藏这条记录？不会改变原任务结果，可通过“包含已知悉”恢复提醒。'))return;
+   if(!item.acknowledged&&!confirm(operationUI('confirmAck')))return;
    await aiRequest('/api/operations/ack',{id:item.id,revision:item.revision,action:item.acknowledged?'restore':'ack'});await refreshOperations(true);return;
   }
   const tab=CURRENT_TAB;let pending=null;
@@ -64,7 +67,7 @@ $('#operationList').onclick=async e=>{
   if(!navigateTo(item.route)){SiteContext.save(previous);window.OPERATION_TARGET=null;window.autoPendingAction=null;window.aiEditorTarget=null;window.aiContextTarget=null;}
  }catch(err){aiMessage('#operationMsg',err.message,true);}finally{b.disabled=false;}
 };
-new MutationObserver(()=>{if(OPS_ITEMS.length)renderOperations();}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+new MutationObserver(translateOperations).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});translateOperations();
 
 function focusOperationTarget(kind,selector){
  const target=window.OPERATION_TARGET;if(!target||target.kind!==kind||CURRENT_TAB!==target.route)return;

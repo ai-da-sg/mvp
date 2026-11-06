@@ -26,6 +26,15 @@ const fs=require('node:fs');
   await page.selectOption('#uiLanguage','en');await page.waitForFunction(()=>document.documentElement.lang==='en');
   await page.waitForFunction(()=>document.querySelector('#operationList').textContent.includes('Site generation failed'));
   assert(!/[\u3400-\u9fff]/u.test(await page.locator('#operationInbox').innerText()));
+  const confirmation=page.waitForEvent('dialog');
+  const clicking=ack.click();const dialog=await confirmation;
+  assert.match(dialog.message(),/Hide this item from my inbox/);assert(!/[\u3400-\u9fff]/u.test(dialog.message()));await dialog.dismiss();await clicking;
+  await page.getByLabel('Search tasks',{exact:true}).fill('no-matching-task');
+  await page.selectOption('#uiLanguage','zh');await page.waitForFunction(()=>document.querySelector('#operationList').textContent.includes('没有匹配记录'));
+  assert.equal(await page.locator('#operationSearch').inputValue(),'no-matching-task');
+  await page.selectOption('#uiLanguage','en');await page.waitForFunction(()=>document.querySelector('#operationList').textContent.includes('No matching records'));
+  assert.equal(await page.locator('#operationList [data-admin-page="-1"]').innerText(),'Previous');
+  await page.getByLabel('Search tasks',{exact:true}).fill('');await ack.waitFor();
   await page.setViewportSize({width:375,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   if(process.env.E2E_OUTPUT){fs.mkdirSync(process.env.E2E_OUTPUT,{recursive:true});await page.screenshot({path:path.join(process.env.E2E_OUTPUT,'operations-mobile.png'),fullPage:true});}
   await page.setViewportSize({width:1440,height:1000});await page.selectOption('#uiLanguage','zh');
