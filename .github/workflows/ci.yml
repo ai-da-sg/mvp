@@ -33,6 +33,7 @@ jobs:
         with:
           node-version: '22'
       - run: php --version && python3 tools/kf_check.py
+      - run: php tests/wp_security_test.php
   ui:
     runs-on: ubuntu-24.04
     steps:

@@ -28,6 +28,7 @@ function kf_mvp_call($action, $fields) {
 add_filter('authenticate', function () { return new WP_Error('mvp_only', '请通过 MVP 统一登录。'); }, PHP_INT_MAX, 3);
 add_filter('wp_is_application_passwords_available', '__return_false', PHP_INT_MAX);
 add_filter('xmlrpc_enabled', '__return_false', PHP_INT_MAX);
+add_filter('xmlrpc_methods', '__return_empty_array', PHP_INT_MAX);
 add_filter('pre_option_users_can_register', '__return_zero', PHP_INT_MAX);
 add_filter('allow_password_reset', '__return_false', PHP_INT_MAX);
 add_filter('login_url', function () { return kf_mvp_url('/login'); }, PHP_INT_MAX);

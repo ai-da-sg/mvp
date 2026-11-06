@@ -94,6 +94,8 @@ fi
 docker run --rm --user 0:0 -e KF_MEDIA_OWNER="$(id -u):$(id -g)" \
   -v "$SITE/html:/var/www/html" "$REG/wordpress:cli-php8.3" sh -c \
   'mkdir -p /var/www/html/wp-content/uploads/kampong && chown "$KF_MEDIA_OWNER" /var/www/html/wp-content/uploads/kampong && chmod 755 /var/www/html/wp-content/uploads/kampong'
+# Apply the same policy to new sites before exposing their management interface.
+python3 "$BASE/tools/kf_wp_harden.py" --base "$BASE" --slug "$SLUG" >/dev/null
 CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/")
 python3 - "$SITE/meta.json" "$PLAN" "$COMPANY" "$DOMAIN" "$SLUG" "$PORT" "$CODE" <<'PYJSON'
 import json, sys
@@ -113,9 +115,7 @@ cat > "$SITE/handover.md" <<EOF
 
 ## 网站
 - 网址：http://127.0.0.1:$PORT/（正式域名待解析）
-- 后台：http://127.0.0.1:$PORT/wp-admin
-- 账号：admin
-- 密码：$ADMINPW
+- 后台：通过 MVP 统一登录；正式 HTTPS 地址接入前独立登录已关闭。
 
 ## 数据库
 - 库名：wordpress　用户：wpuser
