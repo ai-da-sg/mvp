@@ -67,7 +67,6 @@ WordPress 快照格式无效|Invalid WordPress snapshot
 恢复仅涉及本次发布的页面、设计和导航，草稿保留。|Recovery covers only this publication’s pages, design and navigation. Drafts are retained.
 恢复到本次发布前的页面、设计和导航？本次新建的页面将移除，草稿保留。|Restore the pages, design and navigation from before this publication? Newly created pages will be removed. Drafts will be retained.
 已恢复发布前内容，草稿保留。|Pre-publication content restored. Drafts retained.
-包含归档站点|Include archived sites
 没有可选站点|No available sites
 认证方式|Authentication
 授权站点|Authorized sites

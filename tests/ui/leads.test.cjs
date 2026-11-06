@@ -18,8 +18,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');const {Con
   assert.match(await page.locator('#ldCount').innerText(),/104/,'Saving must retain the loaded pages');
   await page.locator('#ldStatus').selectOption('contacted');await page.locator('[data-lead-open="demo:102"]').click();assert.match(await page.locator('#leadHistory').innerText(),/Call tomorrow/);await page.locator('#leadCancel').click();
   await page.reload();await page.locator('#ldSlug').waitFor();await page.locator('#ldStatus').selectOption('contacted');await page.locator('[data-lead-open="demo:102"]').waitFor();
-  await page.locator('#ldStatus').selectOption('');await page.locator('#ldArchived').check();await page.locator('#ldSlug').selectOption('archived');await page.locator('[data-lead-open="archived:1"]').waitFor();
-  await page.selectOption('#uiLanguage','en');await page.waitForFunction(()=>document.documentElement.lang==='en');await page.locator('[data-lead-open="archived:1"]').click();
+  await page.locator('#ldStatus').selectOption('');assert.equal(await page.locator('#ldArchived').count(),0);assert.equal(await page.locator('#ldSlug option[value="archived"]').count(),0);await page.locator('#ldSlug').selectOption('demo');await page.locator('[data-lead-open="demo:102"]').waitFor();
+  await page.selectOption('#uiLanguage','en');await page.waitForFunction(()=>document.documentElement.lang==='en');await page.locator('[data-lead-open="demo:102"]').click();
   await page.setViewportSize({width:375,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   if(process.env.E2E_OUTPUT){fs.mkdirSync(process.env.E2E_OUTPUT,{recursive:true});await page.screenshot({path:path.join(process.env.E2E_OUTPUT,'leads-mobile.png'),fullPage:true});}
   assert(!/[\u3400-\u9fff]/.test(await page.locator('#leadFormDialog').innerText()));await page.locator('#leadCancel').click();

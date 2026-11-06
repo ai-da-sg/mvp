@@ -53,6 +53,7 @@ const output=path.resolve(__dirname,'../../output/e2e-real/readability');
      await page.setViewportSize({width,height:1000});
      for(const tab of tabs){
       await navigate(tab);
+      assert.equal(await page.locator('.site-archive-toggle,#ldArchived,#billArchived,#operationArchived').count(),0,'Removed archive toggles must not return');
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
       if(overflow){console.log(await page.locator('body *').evaluateAll(es=>es.filter(e=>e.getBoundingClientRect().right>innerWidth&&e.getBoundingClientRect().width).map(e=>({tag:e.tagName,id:e.id,cls:e.className,width:e.getBoundingClientRect().width})).slice(-15)));await page.screenshot({path:path.join(output,'overflow.png'),fullPage:true});}
       assert.equal(overflow,false,`${language}/${theme}/${width}/${tab}: horizontal overflow`);

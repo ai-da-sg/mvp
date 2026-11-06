@@ -17,7 +17,7 @@ const OPS_TEXT={
  mail_delivery_unknown:['邮件投递尚未确认','Email delivery is unconfirmed'],
  inspection_attention:['上次检查有 {checks} 项需关注','Last inspection has {checks} items needing attention']
 };
-const OPS_UI={item:['事项','Item'],customer:['客户 / 站点','Customer / site'],priority:['优先级','Priority'],actions:['操作','Actions'],ack:['已知悉','Acknowledged'],restore:['恢复提醒','Restore reminder'],critical:['紧急','Critical'],warning:['需关注','Needs attention'],info:['提示','Info'],open:['处理','Review'],title:['运营待办','Operations inbox'],search:['搜索待办','Search tasks'],all:['全部优先级','All priorities'],archived:['包含归档站点','Include archived sites'],acknowledged:['包含已知悉','Include acknowledged'],refresh:['刷新待办','Refresh tasks'],hint:['检查结果来自最近一次记录。内容快照不代表数据库备份。','Checks reflect the latest recorded results. Content snapshots are not database backups.'],confirmAck:['从我的待办中隐藏这条记录？不会改变原任务结果，可通过“包含已知悉”恢复提醒。','Hide this item from my inbox? The original task result stays unchanged. Use "Include acknowledged" to restore the reminder.']};
+const OPS_UI={item:['事项','Item'],customer:['客户 / 站点','Customer / site'],priority:['优先级','Priority'],actions:['操作','Actions'],ack:['已知悉','Acknowledged'],restore:['恢复提醒','Restore reminder'],critical:['紧急','Critical'],warning:['需关注','Needs attention'],info:['提示','Info'],open:['处理','Review'],title:['运营待办','Operations inbox'],search:['搜索待办','Search tasks'],all:['全部优先级','All priorities'],acknowledged:['包含已知悉','Include acknowledged'],refresh:['刷新待办','Refresh tasks'],hint:['检查结果来自最近一次记录。内容快照不代表数据库备份。','Checks reflect the latest recorded results. Content snapshots are not database backups.'],confirmAck:['从我的待办中隐藏这条记录？不会改变原任务结果，可通过“包含已知悉”恢复提醒。','Hide this item from my inbox? The original task result stays unchanged. Use "Include acknowledged" to restore the reminder.']};
 function operationUI(key){return AdminUI.text(...OPS_UI[key]);}
 function translateOperations(){document.querySelectorAll('[data-operation-text]').forEach(node=>node.textContent=operationUI(node.dataset.operationText));renderOperations();}
 let OPS_ITEMS=[],OPS_LOADING=false,OPS_LAST=0,OPS_SIGNATURE='',OPS_OPENED=false;
@@ -37,13 +37,13 @@ async function refreshOperations(force=false){
  if(!['admin','ops'].includes(ROLE)||OPS_LOADING||(!force&&Date.now()-OPS_LAST<30000))return;
  OPS_LOADING=true;$('#operationRefresh').disabled=true;$('#operationList').setAttribute('aria-busy','true');
  try{
-  const data=await aiRequest('/api/operations/overview?archived='+Number($('#operationArchived').checked)+'&ack='+Number($('#operationAcknowledged').checked));OPS_ITEMS=data.items||[];OPS_LAST=Date.now();renderOperations();
+  const data=await aiRequest('/api/operations/overview?archived=0&ack='+Number($('#operationAcknowledged').checked));OPS_ITEMS=data.items||[];OPS_LAST=Date.now();renderOperations();
   if(!OPS_OPENED){$('#operationInbox').open=OPS_ITEMS.some(x=>x.severity==='critical');OPS_OPENED=true;}
   aiMessage('#operationMsg','');
  }catch(e){aiMessage('#operationMsg',e.message,true);}finally{OPS_LOADING=false;$('#operationRefresh').disabled=false;$('#operationList').removeAttribute('aria-busy');}
 }
 $('#operationRefresh').onclick=()=>refreshOperations(true);
-$('#operationArchived').onchange=$('#operationAcknowledged').onchange=()=>refreshOperations(true);
+$('#operationAcknowledged').onchange=()=>refreshOperations(true);
 $('#operationSearch').oninput=$('#operationSeverity').onchange=()=>{AdminUI.pages.set('operationList',0);renderOperations();};
 $('#operationList').onclick=async e=>{
  const b=e.target.closest('[data-operation-open],[data-operation-ack]');if(!b)return;

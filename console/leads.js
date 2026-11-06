@@ -1,5 +1,5 @@
 /* Enquiries across sites; original submissions stay in WordPress. */
-const LEAD_TEXT={search:['搜索姓名、联系方式或内容','Search name, contact or message'],site:['站点','Site'],all:['全部站点','All sites'],status:['处理状态','Status'],any:['全部状态','All statuses'],new:['待处理','New'],contacted:['已联系','Contacted'],won:['已转化','Converted'],closed:['已关闭','Closed'],archived:['包含归档站点','Include archived sites'],refresh:['刷新','Refresh'],retry:['重试未完成读取','Retry incomplete results'],more:['读取更多线索','Load more enquiries'],detail:['线索详情与跟进','Enquiry and follow-up'],note:['新增跟进备注','Add a follow-up note'],save:['保存跟进','Save follow-up'],close:['关闭','Close'],history:['跟进历史','Follow-up history'],none:['暂无跟进记录','No follow-up history'],contact:['联系人','Contact'],date:['提交时间','Submitted'],action:['操作','Actions'],view:['查看 / 跟进','View / follow up'],loaded:['已读取 {count} 条，当前显示 {shown} 条','{count} loaded; {shown} shown'],partial:['以下站点读取失败，结果不完整：','Results are incomplete. Could not read:'],limit:['每次读取每站点最多 100 条；可继续读取更多。','Each request reads up to 100 enquiries per site. Load more to continue.'],saved:['跟进已保存','Follow-up saved'],mail:['原提交邮件未发送','Original submission email was not sent'],loading:['正在读取线索…','Loading enquiries…']};
+const LEAD_TEXT={search:['搜索姓名、联系方式或内容','Search name, contact or message'],site:['站点','Site'],all:['全部站点','All sites'],status:['处理状态','Status'],any:['全部状态','All statuses'],new:['待处理','New'],contacted:['已联系','Contacted'],won:['已转化','Converted'],closed:['已关闭','Closed'],refresh:['刷新','Refresh'],retry:['重试未完成读取','Retry incomplete results'],more:['读取更多线索','Load more enquiries'],detail:['线索详情与跟进','Enquiry and follow-up'],note:['新增跟进备注','Add a follow-up note'],save:['保存跟进','Save follow-up'],close:['关闭','Close'],history:['跟进历史','Follow-up history'],none:['暂无跟进记录','No follow-up history'],contact:['联系人','Contact'],date:['提交时间','Submitted'],action:['操作','Actions'],view:['查看 / 跟进','View / follow up'],loaded:['已读取 {count} 条，当前显示 {shown} 条','{count} loaded; {shown} shown'],partial:['以下站点读取失败，结果不完整：','Results are incomplete. Could not read:'],limit:['每次读取每站点最多 100 条；可继续读取更多。','Each request reads up to 100 enquiries per site. Load more to continue.'],saved:['跟进已保存','Follow-up saved'],mail:['原提交邮件未发送','Original submission email was not sent'],loading:['正在读取线索…','Loading enquiries…']};
 const LEAD_ERRORS={
  'Invalid enquiry update':['线索更新参数无效','Invalid enquiry update'],
  'Follow-up note must be at most 2000 characters':['跟进备注最多 2000 字','Follow-up note must be at most 2000 characters'],
@@ -19,7 +19,7 @@ function leadTranslate(){
 }
 function leadSites(){
  const sel=$('#ldSlug'),old=sel.value;
- sel.innerHTML=`<option value="">${esc(leadText('all'))}</option>`+(STATE.sites||[]).filter(s=>$('#ldArchived').checked||!s.archived).map(s=>`<option value="${esc(s.slug)}" data-user-content>${esc(s.company+' / '+s.slug)}</option>`).join('');
+ sel.innerHTML=`<option value="">${esc(leadText('all'))}</option>`+(STATE.sites||[]).filter(s=>!s.archived).map(s=>`<option value="${esc(s.slug)}" data-user-content>${esc(s.company+' / '+s.slug)}</option>`).join('');
  if([...sel.options].some(o=>o.value===old))sel.value=old;
 }
 function renderLeads(){
@@ -33,12 +33,12 @@ function renderLeads(){
  $('#ldMore').textContent=leadText(failures.length?'retry':'more');$('#ldMore').hidden=!LEAD_MORE;$('#ldMore').title=leadText('limit');
 }
 async function loadLeads(reset=true,force=false){
- const scope=JSON.stringify([$('#ldSlug').value,$('#ldArchived').checked]);
+ const scope=JSON.stringify([$('#ldSlug').value]);
  if(scope!==LEAD_SCOPE){LEAD_SCOPE=scope;LEAD_ITEMS=[];LEAD_SOURCES=[];LEAD_MORE=false;renderLeads();}
  const epoch=++LEAD_EPOCH,page=reset?1:LEAD_PAGE+1;
  $('#ldRefresh').disabled=$('#ldMore').disabled=true;$('#ldList').setAttribute('aria-busy','true');leadMessage('#ldMsg','loading');
  try{
-  const query=new URLSearchParams({slug:$('#ldSlug').value,page:String(page),archived:Number($('#ldArchived').checked),refresh:Number(force||LEAD_SOURCES.some(x=>x.error))});
+  const query=new URLSearchParams({slug:$('#ldSlug').value,page:String(page),archived:0,refresh:Number(force||LEAD_SOURCES.some(x=>x.error))});
   const data=await aiRequest('/api/leads?'+query);if(epoch!==LEAD_EPOCH)return;
   LEAD_ITEMS=[...new Map((reset?data.items:[...LEAD_ITEMS,...data.items]).map(x=>[x.slug+':'+x.id,x])).values()];
   LEAD_SOURCES=data.sources;const partial=data.sources.some(x=>x.error);LEAD_PAGE=partial?page-1:page;LEAD_MORE=partial||data.has_more;renderLeads();leadMessage('#ldMsg','');
@@ -59,8 +59,7 @@ $('#leadForm').onsubmit=async e=>{
  catch(error){leadMessage('#leadMsg',error,true);}finally{$('#leadSave').disabled=false;}
 };
 $('#ldSearch').oninput=$('#ldStatus').onchange=()=>{AdminUI.pages.set('ldList',0);renderLeads();};
-$('#ldSlug').onchange=()=>{if($('#ldSlug').value)SiteContext.save({slug:$('#ldSlug').value,archived:$('#ldArchived').checked});LEAD_CONTEXT=JSON.stringify(SiteContext.read());loadLeads();};
-$('#ldArchived').onchange=()=>{SiteContext.save({archived:$('#ldArchived').checked});LEAD_CONTEXT=JSON.stringify(SiteContext.read());leadSites();loadLeads();};
+$('#ldSlug').onchange=()=>{if($('#ldSlug').value)SiteContext.save({slug:$('#ldSlug').value});LEAD_CONTEXT=JSON.stringify(SiteContext.read());loadLeads();};
 $('#ldRefresh').onclick=()=>loadLeads(true,true);$('#ldMore').onclick=()=>loadLeads(false);
-function initLeads(){const context=SiteContext.read(),changed=JSON.stringify(context)!==LEAD_CONTEXT;if(!LEAD_READY||changed){$('#ldArchived').checked=!!context.archived;leadSites();if([...$('#ldSlug').options].some(o=>o.value===context.slug&&o.value))$('#ldSlug').value=context.slug;else if(context.slug==='')$('#ldSlug').value=$('#ldSlug').options[1]?.value||'';if($('#ldSlug').value)SiteContext.save({slug:$('#ldSlug').value,archived:$('#ldArchived').checked});LEAD_READY=true;LEAD_CONTEXT=JSON.stringify(SiteContext.read());}else leadSites();loadLeads();}
+function initLeads(){const context=SiteContext.read(),changed=JSON.stringify(context)!==LEAD_CONTEXT;if(!LEAD_READY||changed){leadSites();if([...$('#ldSlug').options].some(o=>o.value===context.slug&&o.value))$('#ldSlug').value=context.slug;else if(context.slug==='')$('#ldSlug').value=$('#ldSlug').options[1]?.value||'';if($('#ldSlug').value)SiteContext.save({slug:$('#ldSlug').value});LEAD_READY=true;LEAD_CONTEXT=JSON.stringify(SiteContext.read());}else leadSites();loadLeads();}
 new MutationObserver(leadTranslate).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});leadTranslate();

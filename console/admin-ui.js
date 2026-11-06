@@ -1,5 +1,5 @@
 /* Shared administration controls. Never persist form values or credentials. */
-const ADMIN_TEXT={close:['关闭','Close'],previous:['上一页','Previous'],next:['下一页','Next'],empty:['没有匹配记录','No matching records'],loading:['读取中…','Loading…'],discard:['有未保存的修改，放弃修改？','Discard unsaved changes?'],archived:['包含归档站点','Include archived sites']};
+const ADMIN_TEXT={close:['关闭','Close'],previous:['上一页','Previous'],next:['下一页','Next'],empty:['没有匹配记录','No matching records'],loading:['读取中…','Loading…'],discard:['有未保存的修改，放弃修改？','Discard unsaved changes?']};
 const AdminUI={
  str(key){return this.text(...ADMIN_TEXT[key]);},
  translate(){document.querySelectorAll('[data-admin-text]').forEach(node=>node.textContent=this.str(node.dataset.adminText));},
@@ -50,21 +50,16 @@ new MutationObserver(()=>{AdminUI.translate();for(const [id,{pair,bad}] of Admin
 /* Share a site selection between operational pages, without changing access scopes. */
 const SiteContext={
  key(){return 'kf-site-context:'+String(STATE.me||'');},
- read(){try{return JSON.parse(sessionStorage.getItem(this.key())||'{}');}catch(_){return {};}},
- save(value){try{sessionStorage.setItem(this.key(),JSON.stringify({...this.read(),...value}));}catch(_){}},
+ read(){try{const value=JSON.parse(sessionStorage.getItem(this.key())||'{}');return {slug:value.slug};}catch(_){return {};}},
+ save(value){try{sessionStorage.setItem(this.key(),JSON.stringify({slug:value.slug??this.read().slug}));}catch(_){}},
  fill(sel,preferred){
   if(!sel.dataset.siteContext){
    sel.dataset.siteContext='1';
-   const label=document.createElement('label');label.className='site-archive-toggle';
-   label.innerHTML=`<input type="checkbox"> <span data-admin-text="archived">${AdminUI.str('archived')}</span>`;sel.after(label);
-   const checkbox=label.querySelector('input');sel._archiveToggle=checkbox;
-   checkbox.onchange=()=>{this.save({archived:checkbox.checked});this.fill(sel);sel.dispatchEvent(new Event('change',{bubbles:true}));};
    sel.addEventListener('change',()=>this.save({slug:sel.value}),true);
   }
   let context=this.read();
-  if(preferred){const site=(STATE.sites||[]).find(s=>s.slug===preferred);if(site){this.save({slug:preferred,archived:context.archived||!!site.archived});context=this.read();}}
-  sel._archiveToggle.checked=!!context.archived;
-  const sites=(STATE.sites||[]).filter(s=>context.archived||!s.archived);
+  if(preferred){const site=(STATE.sites||[]).find(s=>s.slug===preferred);if(site){this.save({slug:preferred});context=this.read();}}
+  const sites=(STATE.sites||[]).filter(s=>!s.archived);
   const selected=preferred||context.slug||sel.value;
   sel.innerHTML=sites.map(s=>`<option value="${esc(s.slug)}" data-user-content>${esc(s.company+' / '+s.slug)}${s.archived?' ('+AdminUI.text('已归档','Archived')+')':''}</option>`).join('')||`<option value="">${AdminUI.text('没有可选站点','No available sites')}</option>`;
   if(sites.some(s=>s.slug===selected))sel.value=selected;

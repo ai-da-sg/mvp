@@ -27,9 +27,10 @@ const {ConsolePage}=require('./pages/console.cjs');
   await page.locator('[data-mcp-view]').click();assert.match(await page.locator('#adminDetailDialog').innerText(),/Saved description/);await page.locator('#adminDetailDialog button').click();
   await page.setViewportSize({width:375,height:900});await page.locator('[data-mcp-edit]').click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.equal(await page.locator('#mcpFormDialog').evaluate(e=>e.scrollWidth<=e.clientWidth),true);if(output)await page.screenshot({path:path.join(output,'mcp-mobile.png')});await page.locator('#mcpCancel').click();await page.setViewportSize({width:1440,height:1000});
   await page.evaluate(async()=>{await aiRequest('/api/site/archive',{slug:'demo',archived:true,version:0});await load();});
-  await ui.navigate('客户管理');assert.equal(await page.locator('#clSlug').inputValue(),'');await page.locator('#clSlug + label input').check();assert.equal(await page.locator('#clSlug').inputValue(),'demo');
-  await ui.navigate('咨询线索');assert.equal(await page.locator('#ldSlug').inputValue(),'demo');assert.equal(await page.locator('#ldArchived').isChecked(),true);
-  await page.locator('#ldArchived').uncheck();assert.equal(await page.locator('#ldSlug').inputValue(),'');await page.reload();await page.waitForFunction(()=>STATE.sites.length>0);await ui.navigate('客户管理');assert.equal(await page.locator('#clSlug').inputValue(),'');
+  await page.evaluate(()=>sessionStorage.setItem(SiteContext.key(),JSON.stringify({slug:'demo',archived:true})));
+  await ui.navigate('客户管理');assert.equal(await page.locator('#clSlug').inputValue(),'');assert.equal(await page.locator('.site-archive-toggle').count(),0);
+  await ui.navigate('咨询线索');assert.equal(await page.locator('#ldSlug option[value="demo"]').count(),0);assert.equal(await page.locator('#ldArchived').count(),0);
+  await page.reload();await page.waitForFunction(()=>STATE.sites.length>0);await ui.navigate('客户管理');assert.equal(await page.locator('#clSlug').inputValue(),'');
   await page.evaluate(async()=>{await aiRequest('/api/site/archive',{slug:'demo',archived:false,version:1});await load();});await ui.navigate('咨询线索');assert.equal(await page.locator('#ldSlug').inputValue(),'demo');
   assert.deepEqual(errors,[]);console.log('PASS real provider/MCP CRUD, pagination, details, dirty Escape protection, secret clearing, mobile modal and shared archive context');
  }finally{if(browser)await browser.close();child.stdin.end('\n');await once(child,'exit');}
