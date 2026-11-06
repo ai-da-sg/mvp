@@ -173,9 +173,9 @@ print(json.dumps(result))
  await nav('styles');await page.locator(`[data-style-edit="${style.id}"]`).click();await page.locator('#styleName').fill('已修改风格');await page.locator('#styleEnabled').uncheck();
  await page.locator('#styleEditForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#styleEditForm').classList.contains('hidden'));
  assert.equal(styleAPI('read').templates.find(t=>t.id===style.id).version,2);assert.equal(await page.locator('#aiStyleTemplate').inputValue(),'');
- await page.locator(`[data-style-copy="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===10);
- page.once('dialog',d=>d.accept());await page.locator(`[data-style-delete="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===9);
- assert.equal(styleAPI('read').templates.length,9);
+ await page.locator(`[data-style-copy="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===30);
+ page.once('dialog',d=>d.accept());await page.locator(`[data-style-delete="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===29);
+ assert.equal(styleAPI('read').templates.length,29);
  console.log('PASS reference analysis, save, selection, edit, disable, copy and delete');
  await nav('prompts');await page.waitForSelector('#promptLibraryList .dom-row');
  page.once('dialog',d=>d.accept());await page.locator('[data-toggle-prompt="company"]').click();

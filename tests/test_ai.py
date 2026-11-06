@@ -185,7 +185,7 @@ class ConsoleTests(unittest.TestCase):
     def test_local_style_preview_permissions_and_publish_tokens(self):
         status, library = self.request('/api/ai/styles')
         self.assertEqual(status, 200)
-        self.assertEqual(len(library['templates']), 8)
+        self.assertEqual(len(library['templates']), 28)
         item = library['templates'][0]
         status, result = self.request('/api/ai/styles/preview', item, user='ops-test')
         self.assertEqual(status, 200, result)

@@ -1,9 +1,11 @@
-"""Original local style recipes informed by public Squarespace/Wix galleries.
+"""Original local style recipes informed by public galleries and design awards.
 No remote theme code, third-party images or hosted assets are required.
 """
 import copy
 
-CATALOG_VERSION = 1
+from kf_style_catalog_v2 import SECTORS, LEGACY_SECTORS, SECTOR_SAMPLES, new_catalog
+
+CATALOG_VERSION = 2
 INDUSTRIES = ('tech', 'restaurant', 'preschool', 'law', 'trading', 'littlegems')
 ADVANCED = {
     'body_font': ('sans', 'sans', 'serif', 'rounded', 'mono'),
@@ -58,10 +60,11 @@ def catalog():
     output=[]
     for ident,name,category,industry,primary,bg,surface,ink,muted,accent,font,radius,pad,advanced,source,summary,sections,guidance in recipes:
         output.append(dict(id='local-'+ident,name=name,category=category,industry=industry,
+            sector=LEGACY_SECTORS[ident],introduced_version=1,
             source_url=source,summary=summary,guidance=guidance,
             tags=[category.lower(),'local','classic'], blueprint=sections,
             tokens=dict(palette=dict(primary=primary,primaryDark=primary,deep=primary,bg=bg,surface=surface,ink=ink,muted=muted,accent=accent),
                         type=dict(heading=font),shape=dict(radius=str(radius)+'px',button=str(min(radius,24))+'px'),
                         layout=dict(pad=str(pad)+'px'),photos=dict(overlay='0.46'),advanced=advanced),
             enabled=True,version=1,updated=0,origin='local-catalog'))
-    return copy.deepcopy(output)
+    return copy.deepcopy(output + new_catalog())

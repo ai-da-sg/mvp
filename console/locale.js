@@ -1,5 +1,127 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+模板行业|Template industry
+全部行业|All industries
+风格标签|Style label
+例如：编辑式、极简、现代|For example: editorial, minimal, modern
+参考作品|Reference work
+模板行业分类无效|Invalid template industry
+通用|General
+创意与设计|Creative & design
+摄影|Photography
+餐厅与咖啡馆|Restaurants & cafes
+康养与水疗|Wellness & spa
+法律与咨询|Legal & consulting
+教育与培训|Education & training
+建筑与室内|Architecture & interiors
+科技与产品|Technology & products
+酒店与旅游|Hotels & travel
+医疗服务|Healthcare
+文化与博物馆|Culture & museums
+公益与社区|Nonprofit & community
+金融服务|Financial services
+时尚与零售|Fashion & retail
+运动与健身|Sports & fitness
+美妆与护理|Beauty & personal care
+地产与物业|Real estate
+活动与娱乐|Events & entertainment
+工业与工程|Industry & engineering
+汽车与出行|Automotive & mobility
+环保与自然|Environment & nature
+食品与饮品|Food & beverages
+访问网站|Visit website
+尚未登记匹配的管理机构账号。|No matching management accounts registered.
+完整执行参数|Full operation arguments
+修改前后|Before and after
+我已核对上述目标与具体内容，确认执行此操作|I have reviewed the target and details and confirm this operation
+取消此操作|Cancel operation
+人工核实结果|Manual verification result
+外部服务已完成|Completed by the external service
+已确认未完成|Confirmed incomplete
+记录核实结果|Record verification result
+DNS 执行配置已保存|DNS execution settings saved
+MCP 连接成功，能力列表已更新|MCP connected. Capabilities updated.
+MCP 配置已保存|MCP settings saved
+MCP 配置已更新|MCP settings updated
+中断待核实|Interrupted; verification required
+交付流程已创建，点击“开始 / 继续”执行。|Delivery workflow created. Select Start / Resume to run it.
+使用下方独立 Token|Use the separate token below
+供应商账号已保存；未执行 DNS 修改或邮件发送。|Provider account saved. No DNS changes or emails were sent.
+供应商账号认证|Provider account authentication
+修改前|Before
+修改后|After
+分析完成，已选择本次参考风格。可直接生成，也可先编辑保存为模板。|Analysis complete. The reference style is selected. Generate now or edit and save it as a template.
+删除此 MCP 服务配置及凭据？|Delete this MCP server configuration and credentials?
+删除此管理机构账号及保存的密码？此操作不会删除域名或网站。|Delete this management account and saved password? The domain and website will be retained.
+删除此风格模板？已生成的网站和任务快照会保留。|Delete this style template? Generated websites and task snapshots will be retained.
+删除账号会使引用它的 DNS、邮件与 MCP 配置不可用，继续删除？|Deleting this account will disable DNS, email and MCP configurations that use it. Continue?
+参考网址已修改，请重新分析后生成|The reference URL changed. Analyze it again before generating.
+参考网站|Reference website
+处理中|Processing
+密码已隐藏|Password hidden
+密码已隐藏，再次显示需要新的 TOTP 验证码。|Password hidden. Enter a new TOTP code to reveal it again.
+工具|Tools
+工具或提示词参数（JSON 对象；资源读取留空）|Tool or prompt arguments (JSON object; leave blank for resources)
+已加入待保存白名单，请设置用途、站点范围和执行规则后保存。|Added to the pending allowlist. Set purposes, site scope and execution rules, then save.
+已取消|Cancelled
+已完成|Completed
+已暂停|Paused
+已配置发件人|Configured sender
+异常|Error
+当前账号的 6 位 TOTP|Current account's 6-digit TOTP
+待处理|Pending
+待开始|Not started
+待执行|Ready to run
+待确认|Awaiting confirmation
+执行中|Running
+执行查询 / 生成草稿|Run query / Generate draft
+提示词|Prompts
+操作预览已生成，请核对内容。|Operation preview ready. Review the details.
+新的操作参数（JSON 对象）|New operation arguments (JSON object)
+无记录|No record
+服务响应异常|Unexpected server response
+未保存|Not saved
+未填写|Not provided
+未提供|Not available
+核实依据（例如服务商记录编号）|Verification evidence (for example, the provider's record ID)
+模板已刷新|Templates refreshed
+模板已更新|Template updated
+正在读取参考网站和样式…|Reading the reference website and styles…
+正在进行只读连接测试…|Running a read-only connection test…
+正在连接 MCP 并查询能力，最多约 45 秒…|Connecting to MCP and discovering capabilities (up to 45 seconds)…
+正在验证…|Verifying…
+注册商未登记|Registrar not registered
+确认并执行|Confirm and run
+等待确认|Awaiting confirmation
+管理机构账号已保存|Management account saved
+管理账号加载失败，请刷新|Could not load management accounts. Refresh to retry.
+管理账号已删除|Management account deleted
+结果待核实|Result needs verification
+网站预览|Website preview
+请先分析参考网站|Analyze the reference website first
+请先在 AI 建站页选择同一已有站点及所需资料|Select the same existing site and required context in AI Builder first
+请等待参考风格分析完成|Wait for reference style analysis to finish
+请选择已保存的账号|Select a saved account
+资料已刷新|Information refreshed
+资源|Resources
+邮件账号绑定已保存|Email account binding saved
+需检查|Needs review
+需要处理|Action required
+预设尚未保存。请选择账号、用途和站点；通用脚本执行工具不会自动加入白名单。|Preset not saved. Select an account, purposes and sites. General script execution tools are not automatically allowlisted.
+风格模板已保存，可用于后续建站|Style template saved and available for future builds
+验证成功。密码将在 30 秒后隐藏。|Verified. The password will be hidden after 30 seconds.
+（仅显示部分资源）|(Only some resources are shown)
+加入白名单|Add to allowlist
+未提供条目|No items provided
+结果已截断，每类最多显示 100 条、读取 5 页。|Results truncated to 100 items and 5 pages per category.
+管理后台：|Management URL:
+用户名：|Username:
+密码：|Password:
+协议：|Protocol:
+状态：|Status:
+发件人：|From:
+收件人：|To:
+主题：|Subject:
 联系表单|Contact form
 深主色|Dark primary
 页面背景|Page background

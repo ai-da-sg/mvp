@@ -36,7 +36,7 @@ $('#mcpList').onclick=async e=>{
   if(b.dataset.mcpTest){
    const epoch=++MCP_EPOCH;$('#mcpResult').classList.add('hidden');aiMessage('#mcpMsg','正在连接 MCP 并查询能力，最多约 45 秒…');
    const {result:r}=await aiRequest('/api/mcp/test',{id,version:item.version});if(epoch!==MCP_EPOCH)return;
-   MCP_LAST_TEST=item.id;$('#mcpResult').innerHTML=`<h3 data-user-content>${esc(item.name)} · ${esc(r.server)} ${esc(r.version)}</h3><p>协议：${esc(r.protocol)}</p>${[['tools','工具'],['resources','资源'],['prompts','提示词']].map(([k,label])=>`<details open><summary>${label}（${r[k].length}）</summary>${r[k].map(v=>`<p data-user-content style="overflow-wrap:anywhere"><b>${esc(v.name)}</b> <button type="button" class="ghost" data-policy-kind="${k}" data-policy-name="${esc(k==='resources'?v.uri:v.name)}">加入白名单</button><br>${esc(v.description)}${v.uri?'<br>URI: '+esc(v.uri):''}</p>${v.inputSchema?'<details><summary>参数定义</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(v.inputSchema,null,2))+'</pre></details>':''}`).join('')||'<p class="hint">未提供条目</p>'}</details>`).join('')}${r.truncated?'<p class="hint">结果已截断，每类最多显示 100 条、读取 5 页。</p>':''}`;
+   renderMCPCapabilities(item,r);
    $('#mcpResult').classList.remove('hidden');aiMessage('#mcpMsg','MCP 连接成功，能力列表已更新');
   }else{
    await aiRequest('/api/mcp/servers',b.dataset.mcpDelete?{action:'delete',id,version:item.version}:{...item,action:'save',enabled:!item.enabled});
@@ -75,3 +75,7 @@ $('#mcpUsePreset').onclick=()=>{
  aiMessage('#mcpFormMsg','预设尚未保存。请选择账号、用途和站点；通用脚本执行工具不会自动加入白名单。');
 };
 $('#mcpAccount').onchange=()=>{if($('#mcpAccount').value)$('#mcpToken').value='';};
+
+function renderMCPCapabilities(item,r){
+ MCP_LAST_TEST=item.id;$('#mcpResult').innerHTML=`<h3 data-user-content>${esc(item.name)} · ${esc(r.server)} ${esc(r.version)}</h3><p>协议：${esc(r.protocol)}</p>${[['tools','工具'],['resources','资源'],['prompts','提示词']].map(([k,label])=>`<details open><summary>${label}（${r[k].length}）</summary>${r[k].map(v=>`<p style="overflow-wrap:anywhere"><b data-user-content>${esc(v.name)}</b> <button type="button" class="ghost" data-policy-kind="${k}" data-policy-name="${esc(k==='resources'?v.uri:v.name)}">加入白名单</button><br><span data-user-content>${esc(v.description)}</span>${v.uri?'<br>URI: '+esc(v.uri):''}</p>${v.inputSchema?'<details><summary>参数定义</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(v.inputSchema,null,2))+'</pre></details>':''}`).join('')||'<p class="hint">未提供条目</p>'}</details>`).join('')}${r.truncated?'<p class="hint">结果已截断，每类最多显示 100 条、读取 5 页。</p>':''}`;
+}

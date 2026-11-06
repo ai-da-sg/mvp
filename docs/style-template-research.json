@@ -1,0 +1,1196 @@
+{
+  "research_scope": "20 original local templates informed by officially listed international design-award works. This is a curated cross-industry sample, not an exhaustive or numerical global ranking.",
+  "method": "Reviewed official award detail pages, listed recognition, categories, descriptions and design tags. Original layouts adapt those concepts to the existing static section renderer; full interactive source experiences were not reproduced.",
+  "limitations": [
+    "Awwwards gallery timed out during research; no unverifiable Awwwards award claims are made.",
+    "Some reference works belong to an adjacent field; those adaptations are explicitly described per item.",
+    "Reference awards belong to the cited works, not to our local templates.",
+    "No reference logos, remote theme code or third-party images are bundled."
+  ],
+  "principles": [
+    "Readable body text and 4.5:1 validated text contrast.",
+    "One clear primary action and short, factual content.",
+    "Responsive layouts, reduced-motion support and no scroll hijacking.",
+    "Industry-specific page order, typography, image proportions and grid density.",
+    "No simulated checkout, bookings or unsupported business claims.",
+    "Use only licensed or supplied media; local preview artwork is original and labeled as sample content."
+  ],
+  "templates": [
+    {
+      "template_id": "local-tidal-retreat",
+      "template_name": "Tidal Retreat",
+      "sector": "hospitality",
+      "reference_title": "The Pop-Up Hotel",
+      "source_url": "https://www.cssdesignawards.com/sites/the-pop-up-hotel/49686/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Special Kudos",
+      "recognition_date": "2026-07-06",
+      "credited_studio_country": "UK",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "Event hospitality presented through prominent photography.",
+      "original_interpretation": "A coastal hospitality journal: wide room imagery, quiet serif type and a two-column stay guide.",
+      "content_guidance": "Build a stay-planning journey: atmosphere, rooms, experiences, practical arrival details, enquiry. Use wide landscape images with brief captions. Keep the booking action visible but link only to a supplied booking service. Do not invent availability, rates, star ratings or amenities.",
+      "blueprint": [
+        "hero",
+        "band",
+        "cards",
+        "gallery",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#204e59",
+          "primaryDark": "#204e59",
+          "deep": "#204e59",
+          "bg": "#f5f0e7",
+          "surface": "#ffffff",
+          "ink": "#20363c",
+          "muted": "#4f6266",
+          "accent": "#b16839"
+        },
+        "type": {
+          "heading": "serif"
+        },
+        "shape": {
+          "radius": "2px",
+          "button": "2px"
+        },
+        "layout": {
+          "pad": "112px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "editorial",
+          "heading_size": 84,
+          "heading_weight": 400,
+          "columns": 2,
+          "content_width": 1240,
+          "grid_gap": 40,
+          "image_ratio": "16 / 9",
+          "header": "static",
+          "card_style": "flat"
+        }
+      }
+    },
+    {
+      "template_id": "local-market-cantina",
+      "template_name": "Market Cantina",
+      "sector": "restaurant",
+      "reference_title": "Burrito Madre",
+      "source_url": "https://www.cssdesignawards.com/sites/burrito-madre/49666/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Special Kudos",
+      "recognition_date": "2026-06-30",
+      "credited_studio_country": "Serbia",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "Illustrated, colorful restaurant presentation.",
+      "original_interpretation": "A lively neighborhood dining layout with bold menu tiles, compact rhythm and warm illustrated accents.",
+      "content_guidance": "Use a short energetic headline and three food categories before the readable menu table. Put dietary details and opening hours near contact. Illustrations must be original. Show prices and allergen information only when supplied; ordering remains an enquiry unless configured.",
+      "blueprint": [
+        "hero",
+        "cards",
+        "table",
+        "band",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#8a3022",
+          "primaryDark": "#8a3022",
+          "deep": "#8a3022",
+          "bg": "#fff3dc",
+          "surface": "#fffaf0",
+          "ink": "#38231b",
+          "muted": "#685041",
+          "accent": "#c66b2f"
+        },
+        "type": {
+          "heading": "rounded"
+        },
+        "shape": {
+          "radius": "20px",
+          "button": "20px"
+        },
+        "layout": {
+          "pad": "64px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "split",
+          "heading_size": 88,
+          "heading_weight": 900,
+          "columns": 3,
+          "content_width": 1200,
+          "grid_gap": 16,
+          "image_ratio": "1 / 1",
+          "card_style": "flat"
+        }
+      }
+    },
+    {
+      "template_id": "local-clearcare-clinic",
+      "template_name": "Clearcare Clinic",
+      "sector": "healthcare",
+      "reference_title": "TLC Healthcare",
+      "source_url": "https://www.cssdesignawards.com/sites/tlc-healthcare/46069/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2024-10-17",
+      "credited_studio_country": "Australia",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A consolidated care platform emphasizing a clear service journey.",
+      "original_interpretation": "An accessible care directory with large body text, service signposts and straightforward patient steps.",
+      "content_guidance": "Organize by patient need: services, appointment steps, clinician information and location. Use calm photographs and plain labels, with generous line spacing. No fabricated clinician credentials or treatment outcomes. Enquiry forms must not request medical records; emergency information must be locally verified.",
+      "blueprint": [
+        "hero",
+        "cards",
+        "list",
+        "split",
+        "table",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#235878",
+          "primaryDark": "#235878",
+          "deep": "#235878",
+          "bg": "#f1f7fa",
+          "surface": "#ffffff",
+          "ink": "#1e3542",
+          "muted": "#4d6471",
+          "accent": "#397b78"
+        },
+        "type": {
+          "heading": "sans"
+        },
+        "shape": {
+          "radius": "12px",
+          "button": "12px"
+        },
+        "layout": {
+          "pad": "72px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "split",
+          "heading_size": 56,
+          "heading_weight": 600,
+          "columns": 3,
+          "content_width": 1160,
+          "grid_gap": 24,
+          "body_size": 18,
+          "line_height": 1.75,
+          "card_style": "bordered"
+        }
+      }
+    },
+    {
+      "template_id": "local-archive-museum",
+      "template_name": "Archive Museum",
+      "sector": "culture",
+      "reference_title": "De Gaspe Beaubien Museum",
+      "source_url": "https://www.cssdesignawards.com/sites/de-gaspe-beaubien-museum/45209/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2024-05-30",
+      "credited_studio_country": "Canada",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "An illustrated historical narrative about a family across generations.",
+      "original_interpretation": "A digital collection with museum-label captions, archival typography and deliberate visual pauses.",
+      "content_guidance": "Lead with the exhibition proposition and collection gallery, then an editorial story and visit details. Label dates, provenance and image rights from supplied records. Keep chronology readable without scroll-triggered effects. Do not fabricate artifacts, ticket availability or institutional affiliations.",
+      "blueprint": [
+        "hero",
+        "gallery",
+        "rich",
+        "band",
+        "table",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#593c43",
+          "primaryDark": "#593c43",
+          "deep": "#593c43",
+          "bg": "#f2eee5",
+          "surface": "#fcfaf5",
+          "ink": "#30282c",
+          "muted": "#65575a",
+          "accent": "#9b5d3e"
+        },
+        "type": {
+          "heading": "serif"
+        },
+        "shape": {
+          "radius": "0px",
+          "button": "0px"
+        },
+        "layout": {
+          "pad": "104px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "minimal",
+          "heading_size": 92,
+          "heading_weight": 400,
+          "columns": 2,
+          "content_width": 1320,
+          "grid_gap": 48,
+          "header": "static",
+          "card_style": "flat",
+          "image_ratio": "3 / 2"
+        }
+      }
+    },
+    {
+      "template_id": "local-openpath-academy",
+      "template_name": "Openpath Academy",
+      "sector": "education",
+      "reference_title": "The Quaker School at Horsham",
+      "source_url": "https://www.cssdesignawards.com/sites/the-quaker-school-at-horsham/50093/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-09-20",
+      "credited_studio_country": "Australia",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "An accessible school experience focused on individual learning and support.",
+      "original_interpretation": "A welcoming learning journey with an editorial introduction, program cards and clear admissions steps.",
+      "content_guidance": "Write for learners and families: learning approach, programs, student support, admissions steps and a visit enquiry. Favor real classroom context over decorative statistics. Protect student identities and use authorized images only. Fees, accreditation and testimonials require supplied evidence.",
+      "blueprint": [
+        "hero",
+        "split",
+        "cards",
+        "list",
+        "quotes",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#39564c",
+          "primaryDark": "#39564c",
+          "deep": "#39564c",
+          "bg": "#f4f5eb",
+          "surface": "#ffffff",
+          "ink": "#283b32",
+          "muted": "#596357",
+          "accent": "#a36c32"
+        },
+        "type": {
+          "heading": "sans"
+        },
+        "shape": {
+          "radius": "16px",
+          "button": "16px"
+        },
+        "layout": {
+          "pad": "80px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "editorial",
+          "heading_size": 68,
+          "heading_weight": 600,
+          "columns": 3,
+          "content_width": 1180,
+          "grid_gap": 28,
+          "body_size": 18,
+          "card_style": "elevated"
+        }
+      }
+    },
+    {
+      "template_id": "local-common-ground",
+      "template_name": "Common Ground",
+      "sector": "nonprofit",
+      "reference_title": "Half the Sky",
+      "source_url": "https://www.cssdesignawards.com/sites/half-the-sky/50250/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-10-24",
+      "credited_studio_country": "USA",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A minimal memorial grid centered on individual women and their stories. Adapted here to community storytelling, not represented as a nonprofit reference business.",
+      "original_interpretation": "A people-first community narrative with warm paper tones, program stories and transparent impact space.",
+      "content_guidance": "Explain the mission, whom the programs serve, how work happens and how to participate. Use consented portraits and preserve dignity. Impact metrics need dates and sources; omit unsupported numbers. A donation CTA must use a verified payment destination, otherwise use an enquiry or volunteer contact.",
+      "blueprint": [
+        "hero",
+        "split",
+        "cards",
+        "stats",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#6b472e",
+          "primaryDark": "#6b472e",
+          "deep": "#6b472e",
+          "bg": "#faf1e4",
+          "surface": "#ffffff",
+          "ink": "#352a23",
+          "muted": "#69584c",
+          "accent": "#9a6238"
+        },
+        "type": {
+          "heading": "serif"
+        },
+        "shape": {
+          "radius": "4px",
+          "button": "4px"
+        },
+        "layout": {
+          "pad": "88px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "split",
+          "heading_size": 72,
+          "heading_weight": 500,
+          "columns": 2,
+          "content_width": 1080,
+          "grid_gap": 32,
+          "body_size": 18,
+          "image_ratio": "3 / 2",
+          "card_style": "flat"
+        }
+      }
+    },
+    {
+      "template_id": "local-ledger-finance",
+      "template_name": "Ledger Finance",
+      "sector": "finance",
+      "reference_title": "Grassfeld — Financial Management",
+      "source_url": "https://www.cssdesignawards.com/sites/grassfeld-financial-management/49852/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Special Kudos",
+      "recognition_date": "2026-07-29",
+      "credited_studio_country": "Netherlands",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "An illustrated finance platform that aims to make complex information understandable.",
+      "original_interpretation": "A clear financial-product explainer with comparison tables, restrained data accents and a centered introduction.",
+      "content_guidance": "Show product use cases, workflow, transparent fees and eligibility. Use illustrative financial data only when explicitly labeled as examples. Avoid returns promises, fake balances or invented regulatory approval. Keep disclosures close to the relevant claim and offer a real consultation or product link.",
+      "blueprint": [
+        "hero",
+        "cards",
+        "split",
+        "table",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#263e71",
+          "primaryDark": "#263e71",
+          "deep": "#263e71",
+          "bg": "#f2f5fc",
+          "surface": "#ffffff",
+          "ink": "#202e48",
+          "muted": "#53627c",
+          "accent": "#74629f"
+        },
+        "type": {
+          "heading": "sans"
+        },
+        "shape": {
+          "radius": "10px",
+          "button": "10px"
+        },
+        "layout": {
+          "pad": "72px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "center",
+          "heading_size": 68,
+          "heading_weight": 700,
+          "columns": 3,
+          "content_width": 1160,
+          "grid_gap": 20,
+          "card_style": "bordered",
+          "body_size": 17
+        }
+      }
+    },
+    {
+      "template_id": "local-atelier-collection",
+      "template_name": "Atelier Collection",
+      "sector": "fashion",
+      "reference_title": "AOI",
+      "source_url": "https://www.ecomdesignawards.com/websites/aoi",
+      "award_platform": "Ecommerce Design Awards",
+      "reference_recognition": "Store of the Month",
+      "recognition_date": "2026-09",
+      "credited_studio_country": "",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A fashion design house foregrounding materials and craft. Listed on Ecommerce Design Awards with Shopify as its platform.",
+      "original_interpretation": "An understated fashion lookbook with a broad four-column gallery, fine serif headings and material stories.",
+      "content_guidance": "Curate a collection gallery, an editorial campaign and concise material/care information. Use authentic product photography and supplied sizing, stock and pricing. Do not imitate the reference brand or implement fake checkout. Connect purchase actions only to an actual configured shop; otherwise offer collection enquiries.",
+      "blueprint": [
+        "hero",
+        "gallery",
+        "band",
+        "cards",
+        "rich",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#35302e",
+          "primaryDark": "#35302e",
+          "deep": "#35302e",
+          "bg": "#f4f1ec",
+          "surface": "#ffffff",
+          "ink": "#292522",
+          "muted": "#625951",
+          "accent": "#987251"
+        },
+        "type": {
+          "heading": "serif"
+        },
+        "shape": {
+          "radius": "0px",
+          "button": "0px"
+        },
+        "layout": {
+          "pad": "112px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "minimal",
+          "heading_size": 84,
+          "heading_weight": 400,
+          "columns": 4,
+          "content_width": 1440,
+          "grid_gap": 16,
+          "header": "static",
+          "card_style": "flat",
+          "image_ratio": "3 / 2"
+        }
+      }
+    },
+    {
+      "template_id": "local-cedar-spa",
+      "template_name": "Cedar Spa",
+      "sector": "wellness",
+      "reference_title": "Fitosauna",
+      "source_url": "https://www.cssdesignawards.com/sites/fitosauna/49669/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-07-20",
+      "credited_studio_country": "Ukraine",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A photographic wellbeing product presentation using layered motion. Adapted to a static spa service narrative, not a copy of its video effects.",
+      "original_interpretation": "A quiet spa retreat with a narrow reading width, soft surfaces and a spacious service ritual.",
+      "content_guidance": "Arrange an invitation, the space, treatment descriptions, preparation guidance and booking enquiry. Write sensory but factual copy; avoid medical efficacy claims. Publish session durations, prices and accessibility details only if provided. Never imply appointment slots are live without a real booking integration.",
+      "blueprint": [
+        "hero",
+        "band",
+        "split",
+        "table",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#4b583d",
+          "primaryDark": "#4b583d",
+          "deep": "#4b583d",
+          "bg": "#f1f0e5",
+          "surface": "#fafaf3",
+          "ink": "#30392a",
+          "muted": "#5c6552",
+          "accent": "#936645"
+        },
+        "type": {
+          "heading": "serif"
+        },
+        "shape": {
+          "radius": "28px",
+          "button": "24px"
+        },
+        "layout": {
+          "pad": "104px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "center",
+          "heading_size": 60,
+          "heading_weight": 400,
+          "columns": 2,
+          "content_width": 960,
+          "grid_gap": 40,
+          "body_size": 18,
+          "line_height": 1.8,
+          "image_ratio": "4 / 3",
+          "card_style": "flat"
+        }
+      }
+    },
+    {
+      "template_id": "local-rally-sport",
+      "template_name": "Rally Sport",
+      "sector": "sports",
+      "reference_title": "CCO Padel",
+      "source_url": "https://www.cssdesignawards.com/sites/cco-padel/50608/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Special Kudos",
+      "recognition_date": "2026-11-03",
+      "credited_studio_country": "UK",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A minimal sports product brand emphasizing function and precision. Adapted here to club and coaching information.",
+      "original_interpretation": "A confident club website with oversized athletic type, crisp court-like grids and a readable session guide.",
+      "content_guidance": "Prioritize sport level, sessions, facilities and joining steps. Use a simple timetable instead of animation-heavy booking controls. Confirm coach qualifications, schedule and pricing. Do not invent membership availability or health promises. Make trial-session contact the single primary action.",
+      "blueprint": [
+        "hero",
+        "cards",
+        "table",
+        "gallery",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#285442",
+          "primaryDark": "#285442",
+          "deep": "#285442",
+          "bg": "#f0f6e9",
+          "surface": "#ffffff",
+          "ink": "#21382a",
+          "muted": "#52664f",
+          "accent": "#8f632e"
+        },
+        "type": {
+          "heading": "sans"
+        },
+        "shape": {
+          "radius": "6px",
+          "button": "6px"
+        },
+        "layout": {
+          "pad": "64px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "split",
+          "heading_size": 92,
+          "heading_weight": 900,
+          "columns": 3,
+          "content_width": 1280,
+          "grid_gap": 16,
+          "card_style": "bordered",
+          "image_ratio": "16 / 9",
+          "line_height": 1.5
+        }
+      }
+    },
+    {
+      "template_id": "local-petal-laboratory",
+      "template_name": "Petal Laboratory",
+      "sector": "beauty",
+      "reference_title": "E-commerce — Beauty In Stem",
+      "source_url": "https://www.cssdesignawards.com/sites/e-commerce-beauty-in-stem/49449/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Special Kudos",
+      "recognition_date": "2026-05-27",
+      "credited_studio_country": "Ukraine",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "Editorial presentation with ingredient/science storytelling and motion.",
+      "original_interpretation": "A soft clinical beauty layout balancing rounded product cards, ingredient stories and legible routines.",
+      "content_guidance": "Structure collections, ingredients, usage steps and product enquiries. Separate documented ingredients from marketing language. Do not invent certifications, dermatologist approval or before/after results. Prices and purchasing links must be verified; never simulate a cart or payment flow.",
+      "blueprint": [
+        "hero",
+        "cards",
+        "split",
+        "gallery",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#78445a",
+          "primaryDark": "#78445a",
+          "deep": "#78445a",
+          "bg": "#fff3f4",
+          "surface": "#ffffff",
+          "ink": "#422a36",
+          "muted": "#765864",
+          "accent": "#a75848"
+        },
+        "type": {
+          "heading": "sans"
+        },
+        "shape": {
+          "radius": "24px",
+          "button": "24px"
+        },
+        "layout": {
+          "pad": "88px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "editorial",
+          "heading_size": 72,
+          "heading_weight": 500,
+          "columns": 3,
+          "content_width": 1120,
+          "grid_gap": 32,
+          "card_style": "elevated",
+          "image_ratio": "1 / 1",
+          "body_size": 17
+        }
+      }
+    },
+    {
+      "template_id": "local-courtyard-residences",
+      "template_name": "Courtyard Residences",
+      "sector": "real-estate",
+      "reference_title": "Bedford Square",
+      "source_url": "https://www.cssdesignawards.com/sites/bedford-square/50478/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Special Kudos",
+      "recognition_date": "2026-10-25",
+      "credited_studio_country": "UK",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "Minimal photographic real-estate presentation.",
+      "original_interpretation": "A property brochure with panoramic settings, measured typography and practical residence comparisons.",
+      "content_guidance": "Present location, residence types, floor-plan facts, amenities and viewing enquiries. Distinguish renders from completed-property photos. Use only supplied dimensions, prices, tenure and availability; no invented investment returns or travel times. Keep agent registration and contact details factual.",
+      "blueprint": [
+        "hero",
+        "band",
+        "cards",
+        "table",
+        "gallery",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#514939",
+          "primaryDark": "#514939",
+          "deep": "#514939",
+          "bg": "#f6f1e7",
+          "surface": "#ffffff",
+          "ink": "#312e26",
+          "muted": "#665e4f",
+          "accent": "#92734d"
+        },
+        "type": {
+          "heading": "serif"
+        },
+        "shape": {
+          "radius": "0px",
+          "button": "0px"
+        },
+        "layout": {
+          "pad": "96px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "editorial",
+          "heading_size": 80,
+          "heading_weight": 400,
+          "columns": 2,
+          "content_width": 1280,
+          "grid_gap": 36,
+          "card_style": "flat",
+          "image_ratio": "16 / 9"
+        }
+      }
+    },
+    {
+      "template_id": "local-brickline-practice",
+      "template_name": "Brickline Practice",
+      "sector": "architecture",
+      "reference_title": "Eladio Dieste",
+      "source_url": "https://www.cssdesignawards.com/sites/eladio-dieste/50305/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-10-29",
+      "credited_studio_country": "Uruguay",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A digital tribute to engineering and architectural heritage.",
+      "original_interpretation": "An architectural study in brick and paper, with technical headings, large project plates and generous gutters.",
+      "content_guidance": "Let project images establish the work; pair each with brief location, material and scope notes from real records. Use a deliberate editorial rhythm and architectural vocabulary without jargon. Do not invent commissions, licenses or awards. End with a project enquiry, not a simulated quote calculator.",
+      "blueprint": [
+        "hero",
+        "gallery",
+        "rich",
+        "split",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#743e2c",
+          "primaryDark": "#743e2c",
+          "deep": "#743e2c",
+          "bg": "#eee9e0",
+          "surface": "#f9f7f0",
+          "ink": "#342820",
+          "muted": "#66564a",
+          "accent": "#996744"
+        },
+        "type": {
+          "heading": "mono"
+        },
+        "shape": {
+          "radius": "0px",
+          "button": "0px"
+        },
+        "layout": {
+          "pad": "112px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "minimal",
+          "heading_size": 76,
+          "heading_weight": 500,
+          "columns": 2,
+          "content_width": 1400,
+          "grid_gap": 48,
+          "card_style": "flat",
+          "header": "static",
+          "image_ratio": "16 / 9",
+          "body_size": 16
+        }
+      }
+    },
+    {
+      "template_id": "local-signal-studio",
+      "template_name": "Signal Studio",
+      "sector": "creative",
+      "reference_title": "Arthur Engel — Portfolio",
+      "source_url": "https://www.cssdesignawards.com/sites/arthur-engel/50316/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-11-04",
+      "credited_studio_country": "France",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "An immersive portfolio with a separate lightweight mobile experience. The local interpretation deliberately uses static sections.",
+      "original_interpretation": "A digital studio showcase with large typographic statements, framed work and a deliberately lightweight mobile experience.",
+      "content_guidance": "Translate the reference idea of an immersive portfolio into a fast, static project narrative. No WebGPU dependency, scroll hijacking or autoplay. State project roles, process and deliverables clearly; only show supplied clients and work. Keep a single project-enquiry path.",
+      "blueprint": [
+        "hero",
+        "gallery",
+        "cards",
+        "rich",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#363d85",
+          "primaryDark": "#363d85",
+          "deep": "#363d85",
+          "bg": "#f0f0fb",
+          "surface": "#ffffff",
+          "ink": "#242747",
+          "muted": "#595d79",
+          "accent": "#8462a6"
+        },
+        "type": {
+          "heading": "mono"
+        },
+        "shape": {
+          "radius": "0px",
+          "button": "0px"
+        },
+        "layout": {
+          "pad": "96px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "center",
+          "heading_size": 88,
+          "heading_weight": 700,
+          "columns": 2,
+          "content_width": 1320,
+          "grid_gap": 24,
+          "card_style": "bordered",
+          "image_ratio": "16 / 9",
+          "header": "static"
+        }
+      }
+    },
+    {
+      "template_id": "local-afterlight-events",
+      "template_name": "Afterlight Events",
+      "sector": "events",
+      "reference_title": "Star Party Silverlake",
+      "source_url": "https://www.cssdesignawards.com/sites/star-party-silverlake/50281/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-11-01",
+      "credited_studio_country": "USA",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A community astronomy event presented with an interactive sky experience. The local template retains an event journey without simulating live data.",
+      "original_interpretation": "An event poster translated to the web: expressive headline, program-first structure and an unmistakable invitation.",
+      "content_guidance": "Lead with event purpose and verified date/location, followed by agenda, participant information, access details and registration. Use static atmospheric artwork rather than a heavy simulation. Ticket availability, lineup and prices must be real; link to an authorized registration service or offer enquiries.",
+      "blueprint": [
+        "hero",
+        "table",
+        "cards",
+        "band",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#584278",
+          "primaryDark": "#584278",
+          "deep": "#584278",
+          "bg": "#f4effc",
+          "surface": "#ffffff",
+          "ink": "#312740",
+          "muted": "#665776",
+          "accent": "#946839"
+        },
+        "type": {
+          "heading": "sans"
+        },
+        "shape": {
+          "radius": "12px",
+          "button": "12px"
+        },
+        "layout": {
+          "pad": "80px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "center",
+          "heading_size": 96,
+          "heading_weight": 800,
+          "columns": 3,
+          "content_width": 1240,
+          "grid_gap": 28,
+          "card_style": "elevated",
+          "image_ratio": "16 / 9"
+        }
+      }
+    },
+    {
+      "template_id": "local-vector-engineering",
+      "template_name": "Vector Engineering",
+      "sector": "industrial",
+      "reference_title": "Endurosat Space Service",
+      "source_url": "https://www.cssdesignawards.com/sites/endurosat-space-service/50293/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-10-31",
+      "credited_studio_country": "France",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "An immersive explanation of complex space services. Adapted to technical capability and delivery information.",
+      "original_interpretation": "A technical capabilities website with a four-column service grid, precise specification tables and process clarity.",
+      "content_guidance": "Turn a complex engineering offer into capabilities, specifications, delivery stages and an RFQ contact. Use schematic or supplied equipment images. Do not reproduce the reference WebGL scene. Specifications, tolerances, certifications and delivery claims need evidence; no fabricated compliance logos.",
+      "blueprint": [
+        "hero",
+        "cards",
+        "table",
+        "split",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#254d68",
+          "primaryDark": "#254d68",
+          "deep": "#254d68",
+          "bg": "#edf2f5",
+          "surface": "#ffffff",
+          "ink": "#203440",
+          "muted": "#526674",
+          "accent": "#936b35"
+        },
+        "type": {
+          "heading": "mono"
+        },
+        "shape": {
+          "radius": "2px",
+          "button": "2px"
+        },
+        "layout": {
+          "pad": "72px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "split",
+          "heading_size": 64,
+          "heading_weight": 600,
+          "columns": 4,
+          "content_width": 1360,
+          "grid_gap": 20,
+          "card_style": "bordered",
+          "image_ratio": "16 / 9",
+          "body_size": 16,
+          "line_height": 1.6
+        }
+      }
+    },
+    {
+      "template_id": "local-motion-motors",
+      "template_name": "Motion Motors",
+      "sector": "automotive",
+      "reference_title": "BMW Next Move - F3 RRFI",
+      "source_url": "https://www.cssdesignawards.com/sites/bmw-next-move-f3-rrfi/50331/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-11-05",
+      "credited_studio_country": "UK",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "An automotive dealership concept with immersive presentation. No reference branding or assets are reused.",
+      "original_interpretation": "A wide automotive showroom with cinematic proportions, model comparisons and a clear test-drive enquiry.",
+      "content_guidance": "Create an original dealership journey: range overview, model cards, supplied specifications, ownership support and appointment contact. Use no BMW branding or copied assets. Stock, financing, emissions and warranty claims require verified details. A test drive is an enquiry unless a real scheduler is connected.",
+      "blueprint": [
+        "hero",
+        "band",
+        "cards",
+        "table",
+        "split",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#254c70",
+          "primaryDark": "#254c70",
+          "deep": "#254c70",
+          "bg": "#f1f4f7",
+          "surface": "#ffffff",
+          "ink": "#233341",
+          "muted": "#546775",
+          "accent": "#8b553c"
+        },
+        "type": {
+          "heading": "sans"
+        },
+        "shape": {
+          "radius": "4px",
+          "button": "4px"
+        },
+        "layout": {
+          "pad": "88px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "minimal",
+          "heading_size": 92,
+          "heading_weight": 800,
+          "columns": 3,
+          "content_width": 1440,
+          "grid_gap": 24,
+          "card_style": "flat",
+          "image_ratio": "16 / 9"
+        }
+      }
+    },
+    {
+      "template_id": "local-canopy-conservation",
+      "template_name": "Canopy Conservation",
+      "sector": "sustainability",
+      "reference_title": "Bali Starling",
+      "source_url": "https://www.cssdesignawards.com/sites/bali-starling/50462/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Special Kudos",
+      "recognition_date": "2026-10-27",
+      "credited_studio_country": "Russia",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A conservation narrative connecting a bird species, a place and community action.",
+      "original_interpretation": "A nature-led editorial story with broad landscapes, measured impact reporting and practical participation routes.",
+      "content_guidance": "Explain the ecological issue, place-based work, documented progress and ways to help. Cite sources and dates for environmental claims; avoid greenwashing and invented impact metrics. Use licensed wildlife photography without disclosing sensitive species locations. Donation or volunteer actions need verified destinations.",
+      "blueprint": [
+        "hero",
+        "band",
+        "rich",
+        "cards",
+        "stats",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#34543c",
+          "primaryDark": "#34543c",
+          "deep": "#34543c",
+          "bg": "#f2f3e5",
+          "surface": "#ffffff",
+          "ink": "#293b28",
+          "muted": "#5a654e",
+          "accent": "#946c32"
+        },
+        "type": {
+          "heading": "serif"
+        },
+        "shape": {
+          "radius": "8px",
+          "button": "8px"
+        },
+        "layout": {
+          "pad": "104px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "editorial",
+          "heading_size": 80,
+          "heading_weight": 400,
+          "columns": 2,
+          "content_width": 1160,
+          "grid_gap": 40,
+          "card_style": "flat",
+          "image_ratio": "3 / 2",
+          "body_size": 18
+        }
+      }
+    },
+    {
+      "template_id": "local-form-product",
+      "template_name": "Form Product",
+      "sector": "technology",
+      "reference_title": "Numa",
+      "source_url": "https://www.cssdesignawards.com/sites/numa/50017/",
+      "award_platform": "CSS Design Awards",
+      "reference_recognition": "Website Of The Day",
+      "recognition_date": "2026-09-06",
+      "credited_studio_country": "Russia",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A device explainer centered on daily use. The local template is a general product site and carries no medical claims.",
+      "original_interpretation": "A human-centered device story with soft geometry, sequential explanations and a concise specifications section.",
+      "content_guidance": "Explain the physical product through everyday use, key features, setup steps and verified specifications. Favor readable static product views over animation. Numa is inspiration for clear device storytelling only: do not borrow medical claims or its branding. Do not invent availability, certifications or live app functions.",
+      "blueprint": [
+        "hero",
+        "split",
+        "cards",
+        "table",
+        "list",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#3c5284",
+          "primaryDark": "#3c5284",
+          "deep": "#3c5284",
+          "bg": "#f1f4fc",
+          "surface": "#ffffff",
+          "ink": "#27344d",
+          "muted": "#57667f",
+          "accent": "#8a648e"
+        },
+        "type": {
+          "heading": "sans"
+        },
+        "shape": {
+          "radius": "32px",
+          "button": "24px"
+        },
+        "layout": {
+          "pad": "88px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "split",
+          "heading_size": 72,
+          "heading_weight": 500,
+          "columns": 2,
+          "content_width": 1120,
+          "grid_gap": 40,
+          "card_style": "elevated",
+          "image_ratio": "1 / 1",
+          "body_size": 18
+        }
+      }
+    },
+    {
+      "template_id": "local-cocoa-provisions",
+      "template_name": "Cocoa Provisions",
+      "sector": "food",
+      "reference_title": "Theobroma Chocolat",
+      "source_url": "https://www.ecomdesignawards.com/websites/theobroma-chocolat",
+      "award_platform": "Ecommerce Design Awards",
+      "reference_recognition": "Store of the Day",
+      "recognition_date": "2026-10-29",
+      "credited_studio_country": "",
+      "reviewed_on": "2026-11-06",
+      "source_observation": "A craft chocolate store listed by Ecommerce Design Awards with Shopify as its platform.",
+      "original_interpretation": "A craft-food catalog with tactile cream tones, product-first cards and a concise provenance story.",
+      "content_guidance": "Present the range, ingredient/provenance story, gifting options and contact. Label allergens, storage and nutritional details only from verified product records. Show supplied prices and purchase links; never invent a checkout. Do not copy the reference packaging, product names or photography.",
+      "blueprint": [
+        "hero",
+        "cards",
+        "gallery",
+        "split",
+        "table",
+        "cta"
+      ],
+      "visual_parameters": {
+        "palette": {
+          "primary": "#633f32",
+          "primaryDark": "#633f32",
+          "deep": "#633f32",
+          "bg": "#fff4e8",
+          "surface": "#fffdfa",
+          "ink": "#38291f",
+          "muted": "#6d5848",
+          "accent": "#ae713c"
+        },
+        "type": {
+          "heading": "serif"
+        },
+        "shape": {
+          "radius": "12px",
+          "button": "12px"
+        },
+        "layout": {
+          "pad": "80px"
+        },
+        "photos": {
+          "overlay": "0.46"
+        },
+        "advanced": {
+          "hero": "center",
+          "heading_size": 76,
+          "heading_weight": 500,
+          "columns": 3,
+          "content_width": 1200,
+          "grid_gap": 24,
+          "card_style": "bordered",
+          "image_ratio": "1 / 1"
+        }
+      }
+    }
+  ]
+}

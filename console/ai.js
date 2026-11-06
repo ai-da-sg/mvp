@@ -194,17 +194,35 @@ async function styleLoad(){
  const oldIndustry=$('#styleIndustry').value;
  $('#styleIndustry').innerHTML=(STYLE_LIBRARY.industries||['tech','restaurant','preschool','law','trading','littlegems']).map(v=>`<option value="${esc(v)}">${esc((STATE.industries||[]).find(([id])=>id===v)?.[1]||v)}</option>`).join('');
  if(oldIndustry)$('#styleIndustry').value=oldIndustry;
- $('#aiStyleTemplate').innerHTML='<option value="">保持站点当前风格</option>'+(STYLE_ANALYSIS?'<option value="@analysis">刚分析的参考风格</option>':'')+STYLE_LIBRARY.templates.filter(t=>t.enabled).map(t=>`<option data-user-content value="${esc(t.id)}">${esc(t.name)} · v${Number(t.version)}</option>`).join('');
- if([...$('#aiStyleTemplate').options].some(o=>o.value===previous))$('#aiStyleTemplate').value=previous;
+ for(const id of ['styleSector','styleSectorFilter','aiStyleSector']){
+  const el=$('#'+id),selected=el.value;
+  el.innerHTML=(id==='styleSector'?'':'<option value="">全部行业</option>')+(STYLE_LIBRARY.sectors||[]).map(s=>`<option value="${esc(s.id)}">${esc(s.label)}</option>`).join('');
+  el.value=selected||(id==='styleSector'?'general':'');
+ }
+ styleBuilderOptions(previous);
  $('#aiStyleSaveAnalysis').classList.toggle('hidden',!STYLE_LIBRARY.can_manage);
  styleRender();
 }
+function styleSectorLabel(id){return (STYLE_LIBRARY.sectors||[]).find(s=>s.id===(id||'general'))?.label||'通用';}
+function styleBuilderOptions(previous=$('#aiStyleTemplate').value){
+ const sector=$('#aiStyleSector').value;
+ $('#aiStyleTemplate').innerHTML='<option value="">保持站点当前风格</option>'+(STYLE_ANALYSIS?'<option value="@analysis">刚分析的参考风格</option>':'')+STYLE_LIBRARY.templates.filter(t=>t.enabled&&(!sector||(t.sector||'general')===sector)).map(t=>`<option data-user-content value="${esc(t.id)}">${esc(t.name)} · v${Number(t.version)}</option>`).join('');
+ if([...$('#aiStyleTemplate').options].some(o=>o.value===previous))$('#aiStyleTemplate').value=previous;
+}
+$('#aiStyleSector').onchange=()=>{styleBuilderOptions();$('#aiStyleTemplate').onchange();};
+$('#styleSectorFilter').onchange=()=>styleRender();
+function styleCardArt(t){
+ const a=t.tokens.advanced||{},palette=t.tokens.palette;
+ const centered=a.hero==='center',minimal=a.hero==='minimal',columns=Math.max(1,Math.min(4,Number(a.columns)||3));
+ const font={sans:'Arial,sans-serif',serif:'Georgia,serif',mono:'monospace',rounded:'ui-rounded,Arial,sans-serif'}[t.tokens.type.heading]||'sans-serif';
+ return `<div class="style-card-art" style="background:${styleColor(palette.bg)};color:${styleColor(palette.ink)};text-align:${centered?'center':'left'};font-family:${font}"><span class="style-mini-line" style="background:${styleColor(palette.primary)};margin:${centered?'0 auto 12px':'0 0 12px'};width:${minimal?'12%':'32%'}"></span><b data-user-content style="font-weight:${Number(a.heading_weight)||700};font-size:${minimal?'24':'20'}px">${esc(t.name)}</b><div class="style-mini-grid" style="grid-template-columns:repeat(${columns},1fr)">${Array.from({length:columns},()=>`<span style="background:${styleColor(palette.accent)};border-radius:${Number.parseInt(t.tokens.shape.radius)||0}px;height:${a.image_ratio==='1 / 1'?'56':'36'}px"></span>`).join('')}</div></div>`;
+}
 function styleRender(){
  const q=$('#styleSearch').value.trim().toLowerCase();
- const state=$('#styleStatus').value;
- const items=STYLE_LIBRARY.templates.filter(t=>(t.name+' '+t.category+' '+(t.tags||[]).join(' ')).toLowerCase().includes(q)&&(!state||(state==='enabled')===t.enabled));
+ const state=$('#styleStatus').value,sector=$('#styleSectorFilter').value;
+ const items=STYLE_LIBRARY.templates.filter(t=>(t.name+' '+t.category+' '+styleSectorLabel(t.sector)+' '+((STYLE_LIBRARY.sectors||[]).find(s=>s.id===t.sector)?.label_en||'')+' '+(t.tags||[]).join(' ')).toLowerCase().includes(q)&&(!sector||(t.sector||'general')===sector)&&(!state||(state==='enabled')===t.enabled));
  $('#styleNew').hidden=!STYLE_LIBRARY.can_manage;$('#styleImport').hidden=!STYLE_LIBRARY.can_manage;
- $('#styleLibrary').innerHTML=items.length?items.map(t=>`<article class="style-card"><div class="style-card-art" style="background:${styleColor(t.tokens.palette.bg)};color:${styleColor(t.tokens.palette.ink)}"><span class="style-mini-line" style="background:${styleColor(t.tokens.palette.primary)}"></span><b data-user-content>${esc(t.name)}</b><div class="style-mini-grid">${[1,2,3].map(()=>`<span style="background:${styleColor(t.tokens.palette.accent)};border-radius:${Number.parseInt(t.tokens.shape.radius)||0}px"></span>`).join('')}</div></div><div class="style-card-body"><h3 data-user-content>${esc(t.name)}</h3><p class="hint" data-user-content>${esc(t.category)} · v${Number(t.version)}</p><p class="style-description" data-user-content>${esc(t.summary)}</p>${t.enabled?'':'<span class="pill">已停用</span>'}<div class="style-card-actions"><button type="button" data-style-use="${esc(t.id)}" ${t.enabled?'':'disabled'}>使用</button><button type="button" class="ghost" data-style-preview="${esc(t.id)}">预览</button><button type="button" class="ghost" data-style-export="${esc(t.id)}">导出</button>${STYLE_LIBRARY.can_manage?`<button type="button" class="ghost" data-style-edit="${esc(t.id)}">编辑</button><button type="button" class="ghost" data-style-copy="${esc(t.id)}">复制</button><button type="button" class="ghost danger" data-style-delete="${esc(t.id)}">删除</button>`:''}</div></div></article>`).join(''):'<p class="hint">尚无匹配模板。可新建模板或调整筛选条件。</p>';
+ $('#styleLibrary').innerHTML=items.length?items.map(t=>`<article class="style-card">${styleCardArt(t)}<div class="style-card-body"><h3 data-user-content>${esc(t.name)}</h3><p class="hint"><span>${esc(styleSectorLabel(t.sector))}</span> · <span data-user-content>${esc(t.category)}</span> · v${Number(t.version)}</p><p class="style-description" data-user-content>${esc(t.summary)}</p>${t.source_url?`<a class="style-source" href="${esc(t.source_url)}" target="_blank" rel="noopener noreferrer">参考作品</a>`:''}${t.enabled?'':'<span class="pill">已停用</span>'}<div class="style-card-actions"><button type="button" data-style-use="${esc(t.id)}" ${t.enabled?'':'disabled'}>使用</button><button type="button" class="ghost" data-style-preview="${esc(t.id)}">预览</button><button type="button" class="ghost" data-style-export="${esc(t.id)}">导出</button>${STYLE_LIBRARY.can_manage?`<button type="button" class="ghost" data-style-edit="${esc(t.id)}">编辑</button><button type="button" class="ghost" data-style-copy="${esc(t.id)}">复制</button><button type="button" class="ghost danger" data-style-delete="${esc(t.id)}">删除</button>`:''}</div></div></article>`).join(''):'<p class="hint">尚无匹配模板。可新建模板或调整筛选条件。</p>';
 }
 function styleShow(item){
  $('#aiStyleResult').classList.toggle('hidden',!item);
@@ -260,7 +278,7 @@ $('#styleLibrary').onclick=async e=>{
  const item=STYLE_LIBRARY.templates.find(t=>t.id===id);if(!item)return;
  if(button.dataset.stylePreview){try{await stylePreview(item);}catch(e){aiMessage('#styleManageMsg',e.message,true);}return;}
  if(button.dataset.styleExport){styleExport(item);return;}
- if(button.dataset.styleUse){if(!navigateTo('ai'))return;$('#aiStyleTemplate').value=id;styleShow(item);aiMessage('#aiStyleMsg','已选择 '+item.name);$('#aiStyleTemplate').scrollIntoView({block:'center'});return;}
+ if(button.dataset.styleUse){if(!navigateTo('ai'))return;$('#aiStyleSector').value=item.sector||'general';styleBuilderOptions(id);$('#aiStyleTemplate').value=id;styleShow(item);aiMessage('#aiStyleMsg','已选择 '+item.name);$('#aiStyleTemplate').scrollIntoView({block:'center'});return;}
  if(button.dataset.styleEdit){styleEdit(item);return;}
  if(button.dataset.styleDelete&&!confirm('删除此风格模板？已生成的网站和任务快照会保留。'))return;
  button.disabled=true;
@@ -276,7 +294,7 @@ $('#styleEditForm').onsubmit=async e=>{
   for(const key of Object.keys(STYLE_LABELS))body.tokens.palette[key]=$('#styleColor-'+key).value;
   body.tokens.type.heading=$('#styleHeading').value;body.tokens.shape.radius=$('#styleRadius').value+'px';body.tokens.layout.pad=$('#stylePad').value+'px';
   const data=await aiRequest('/api/ai/styles',body);STYLE_DIRTY=false;await styleLoad();
-  $('#aiStyleTemplate').value=data.item.enabled?data.item.id:'';styleShow(data.item.enabled?data.item:null);
+  $('#aiStyleSector').value='';styleBuilderOptions();$('#aiStyleTemplate').value=data.item.enabled?data.item.id:'';styleShow(data.item.enabled?data.item:null);
   $('#styleEditForm').classList.add('hidden');STYLE_EDIT=null;aiMessage('#styleManageMsg','风格模板已保存，可用于后续建站');
  }catch(e){aiMessage('#styleManageMsg',e.message,true);}finally{button.disabled=false;}
 };
@@ -297,7 +315,7 @@ const STYLE_BLOCKS={hero:'首屏',cards:'卡片',split:'图文分栏',stats:'统
 function styleColor(value){return /^#[0-9a-f]{6}$/i.test(value)?value:'#ffffff';}
 function styleCanLeave(){if(!STYLE_DIRTY)return true;if(!confirm('尚有未保存的模板修改，继续离开？'))return false;STYLE_DIRTY=false;return true;}
 function styleEditExtras(item){
- $('#styleIndustry').value=item.industry||'tech';$('#styleTags').value=(item.tags||[]).join(', ');
+ $('#styleSector').value=item.sector||'general';$('#styleIndustry').value=item.industry||'tech';$('#styleTags').value=(item.tags||[]).join(', ');
  $('#styleButtonRadius').value=parseInt(item.tokens.shape.button);$('#styleOverlay').value=item.tokens.photos.overlay;
  $('#styleAdvanced').innerHTML=Object.entries(STYLE_LIBRARY.advanced_schema||{}).map(([key,spec])=>{
   const value=item.tokens.advanced?.[key]??spec[0];
@@ -311,7 +329,7 @@ function styleEditExtras(item){
 function styleReadForm(){
  const body=JSON.parse(JSON.stringify(STYLE_EDIT||{}));body.tokens=body.tokens||{};
  for(const [id,key] of Object.entries({styleName:'name',styleCategory:'category',styleSource:'source_url',styleSummary:'summary',styleGuidance:'guidance'}))body[key]=$('#'+id).value.trim();
- body.industry=$('#styleIndustry').value;body.tags=$('#styleTags').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean);body.enabled=$('#styleEnabled').checked;
+ body.sector=$('#styleSector').value;body.industry=$('#styleIndustry').value;body.tags=$('#styleTags').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean);body.enabled=$('#styleEnabled').checked;
  body.tokens.palette=Object.fromEntries(Object.keys(STYLE_LABELS).map(key=>[key,$('#styleColor-'+key).value]));
  body.tokens.type={heading:$('#styleHeading').value};body.tokens.shape={radius:$('#styleRadius').value+'px',button:$('#styleButtonRadius').value+'px'};
  body.tokens.layout={pad:$('#stylePad').value+'px'};body.tokens.photos={overlay:$('#styleOverlay').value};

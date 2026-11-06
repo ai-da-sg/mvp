@@ -30,9 +30,10 @@
 
  .style-library{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:20px;margin-top:24px}
  .style-card{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--card)}
- .style-card-art{padding:24px;min-height:170px;display:flex;flex-direction:column;gap:16px;overflow:hidden}.style-card-art b{font-family:Georgia,serif;font-size:24px;line-height:1.2}
+ .style-card-art{padding:24px;min-height:170px;display:flex;flex-direction:column;gap:16px;overflow:hidden}.style-card-art b{font-family:inherit;font-size:24px;line-height:1.2}
  .style-mini-line{width:40px;height:4px;display:block}.style-mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.style-mini-grid span{height:44px;opacity:.7}
  .style-card-body{padding:20px}.style-card-body h3{margin:0 0 6px!important}.style-description{font-size:14px;line-height:1.6;overflow-wrap:anywhere;min-height:4.8em}
+ .style-source{display:inline-block;margin:0 0 16px;font-size:13px}
  .style-card-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.style-card-actions button{min-width:0;white-space:nowrap;padding:8px 6px!important;font-size:12px!important}
  #stylePreviewPanel{margin-top:24px;border:1px solid var(--line);padding:16px;background:var(--card);border-radius:6px}
  #stylePreviewWidth{width:auto}#stylePreviewFrame{display:block;width:100%;max-width:100%;height:650px;border:1px solid var(--line);margin:16px auto 0;background:#fff}
@@ -140,6 +141,13 @@
  `;document.head.append(css);
  const messages=window.KF_MESSAGES||{},reverse=Object.fromEntries(Object.entries(messages).map(([zh,en])=>[en,zh]));
  const patterns=[
+  [/^(工具|资源|提示词)（(\d+)）$/,(label,n)=>`${translate(label)} (${n})`],
+  [/^版本 (\d+)$/,n=>`Version ${n}`],
+  [/^到期日 (.+)$/,v=>`Expiry date ${v}`],
+  [/^协议：(.+)$/,v=>`Protocol: ${v}`],
+  [/^已保存模板 · (.+)$/,v=>`Saved template · ${translate(v)}`],
+  [/^已选择 (.+)$/,v=>`Selected ${v}`],
+  [/^请先修正工具规则 JSON：(.+)$/,v=>`Correct the tool rules JSON first: ${v}`],
   [/^(.+)（留空保留已保存值）$/,v=>`${translate(v)} (leave blank to keep existing)`],
   [/^(\d+) 个站点$/,n=>`${n} site(s)`],[/^(\d+) 个邮箱$/,n=>`${n} mailbox(es)`],
   [/^(\d+) 个账号未开两步验证$/,n=>`${n} account(s) without two-step verification`],

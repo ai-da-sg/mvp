@@ -1,7 +1,7 @@
 /* English UI audit against real HTTP handlers; no mocked responses. */
 const assert=require('node:assert/strict'),path=require('node:path');
 const {spawn}=require('node:child_process'),{once}=require('node:events'),readline=require('node:readline'),fs=require('node:fs');const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
-(async()=>{const child=spawn(process.env.PYTHON||'python3',['tests/e2e_browser_fixture.py'],{cwd:path.resolve(__dirname,'../..'),stdio:['pipe','pipe','ignore']});let browser;const findings={};
+(async()=>{const child=spawn(process.env.PYTHON||'python3',['tests/e2e_browser_fixture.py'],{cwd:path.resolve(__dirname,'../..'),stdio:['pipe','pipe','ignore'],env:{...process.env,KF_E2E_DOMAIN:'1'}});let browser;const findings={};
 try{const lines=readline.createInterface({input:child.stdout});const cfg=JSON.parse(await Promise.race([once(lines,'line').then(x=>x[0]),once(child,'exit').then(()=>{throw Error('Fixture exited')}),new Promise((_,reject)=>{const t=setTimeout(()=>reject(Error('Fixture timeout')),15000);t.unref()})]));browser=await chromium.launch();const page=await browser.newPage();await page.addInitScript(()=>{window.pendingRequests=0;const realFetch=window.fetch;window.fetch=async(...args)=>{window.pendingRequests++;try{return await realFetch(...args)}finally{window.pendingRequests--}}});
 async function settle(){await page.waitForFunction(()=>window.pendingRequests===0);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
 await page.goto(cfg.origin+'/login');await page.selectOption('#uiLanguage','en');
@@ -15,6 +15,37 @@ if(key==='styles'){await page.locator('#styleNew').click();await scan('styles-ed
 if(key==='providers'){await page.locator('#providerNew').click();for(const value of await page.locator('#providerKind option').evaluateAll(es=>es.map(e=>e.value))){await page.selectOption('#providerKind',value);await scan('provider-'+value,'#providerForm');}}
 if(key==='mcp'){await page.locator('#mcpNew').click();await scan('mcp-form','#mcpForm');}
 }
+
+// Exercise populated domain accounts through real HTTP, including empty fields.
+await page.evaluate(async()=>{
+ await domainRequest('/api/domain/accounts',{action:'save',slug:'demo',category:'registrar',provider:'English audit',url:'https://example.com',username:'',configuration:'',password:''});
+ await loadDomainRegistry();
+});
+await scan('domain-populated','#dList');
+assert.match(await page.locator('#dList').innerText(),/English audit/);
+assert.equal(await page.locator('#dList [data-user-content]').filter({hasText:'未填写'}).count(),0);
+// Renderer coverage for remote capability payloads; no external MCP calls or mocked HTTP.
+await page.evaluate(()=>renderMCPCapabilities({id:'audit',name:'Audit MCP'}, {
+ server:'Audit',version:'1',protocol:'2025-06-18',truncated:true,
+ tools:[{name:'search',description:'保留服务商原始描述',inputSchema:{type:'object'}}],resources:[],prompts:[]
+}));
+await scan('mcp-capabilities','#mcpResult');
+assert.equal(await page.locator('#mcpResult [data-policy-kind]').innerText(),'Add to allowlist');
+assert.equal(await page.locator('#mcpResult [data-user-content]').filter({hasText:'保留服务商原始描述'}).innerText(),'保留服务商原始描述');
+for(const language of ['zh','en']){
+ await page.selectOption('#uiLanguage',language);await settle();
+ assert.equal(await page.locator('#mcpResult [data-policy-kind]').innerText(),language==='en'?'Add to allowlist':'加入白名单');
+}
+// Check operation previews without executing DNS changes or sending mail.
+for(const state of ['prepared','uncertain','succeeded']){
+ await page.evaluate(state=>showAutoReview({id:'audit',summary:'DNS preview',slug:'demo',tool:'dns.change',mode:'totp',state,arguments:{before:null,after:{name:'www',type:'A',content:'192.0.2.1',ttl:300}}}),state);
+ await scan('operation-'+state,'#autoReview');
+}
+await page.evaluate(()=>showAutoReview({id:'audit',summary:'Mail preview',slug:'demo',tool:'mail.send',mode:'confirm',state:'prepared',arguments:{to:'test@example.com',subject:'Example',body:'User-authored content'}}));
+await scan('mail-preview','#autoReview');
+// Statuses and notifications appear only after operations; check the actual literals too.
+const dynamicMessages=['DNS 执行配置已保存','MCP 配置已保存','供应商账号认证','已选择 Editorial Studio','版本 3','到期日 2027-01-01','工具（12）','未填写','已暂停','待确认','结果待核实','管理机构账号已保存','密码已隐藏','风格模板已保存，可用于后续建站','请先修正工具规则 JSON：Unexpected token'];
+assert.deepEqual(await page.evaluate(messages=>messages.filter(message=>/[\u3400-\u9fff]/.test(kfText(message))),dynamicMessages),[]);
 
 await page.evaluate(()=>{const node=document.createElement('div');node.dataset.userContent='';node.id='preservedContent';node.textContent='用户填写的中文内容';document.body.append(node)});
 for(const language of ['zh','en']){await page.selectOption('#uiLanguage',language);await settle();assert.equal(await page.locator('#preservedContent').innerText(),'用户填写的中文内容');}

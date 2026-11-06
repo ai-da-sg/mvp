@@ -34,7 +34,7 @@ class StyleTests(unittest.TestCase):
             self.assertNotEqual(copied['id'], item['id'])
             self.assertEqual(copied['version'], 1)
             store.change(dict(updated, action='delete'))
-            self.assertEqual(len(styles.StyleStore(root).public(True)['templates']), 9)
+            self.assertEqual(len(styles.StyleStore(root).public(True)['templates']), 29)
             self.assertEqual(snapshot['name'], 'Studio')
             self.assertEqual(store.path.stat().st_mode & 0o777, 0o600)
 
@@ -42,7 +42,7 @@ class StyleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             store = styles.StyleStore(root)
             originals = store.public(True)['templates']
-            self.assertEqual(len(originals), 8)
+            self.assertEqual(len(originals), 28)
             for item in originals:
                 self.assertEqual(styles.normalize_tokens(item['tokens']), item['tokens'])
                 self.assertIn('--kf-heading-size:', styles.advanced_css(item['tokens']))
@@ -59,6 +59,54 @@ class StyleTests(unittest.TestCase):
                     store.change(dict(changed, tokens=dict(changed['tokens'], advanced=bad)))
             for bad in [{'industry':'unknown'}, {'tags':['x'*33]}, {'blueprint':['script']}]:
                 with self.subTest(bad=bad), self.assertRaises(AIError): store.change(dict(changed, **bad))
+
+    def test_catalog_v2_migration_preserves_edits_and_deletions(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'console' / 'ai-styles.json'
+            legacy = [v for v in styles.catalog() if v['introduced_version'] == 1]
+            deleted = legacy.pop(1)['id']
+            legacy[0].update(name='Owner edited', enabled=False, version=7)
+            for item in legacy:
+                item.pop('sector')
+                item['tokens'] = styles.normalize_tokens(item['tokens'])
+            custom = dict(legacy[0], id='custom', name='Custom recipe', enabled=True)
+            styles.atomic_json(path, legacy + [custom])
+            styles.atomic_json(path.with_name('ai-style-catalog.json'), {'version':1})
+            store = styles.StyleStore(root)
+            items = store.public(True)['templates']
+            self.assertEqual(len(items), 28)  # 7 originals + 1 custom + 20 additions
+            self.assertNotIn(deleted, [v['id'] for v in items])
+            self.assertEqual(items[0]['name'], 'Owner edited')
+            self.assertEqual(items[0]['version'], 7)
+            self.assertFalse(items[0]['enabled'])
+            self.assertEqual(items[0]['tokens'], legacy[0]['tokens'])
+            self.assertEqual(items[0]['sector'], 'creative')
+            self.assertEqual(store.resolve('custom')['sector'], 'general')
+            self.assertEqual(len([v for v in items if v.get('introduced_version') == 2]), 20)
+            self.assertEqual(styles.StyleStore(root).public(True)['templates'], items)
+            store.change(dict(items[-1], action='delete'))
+            self.assertEqual(len(styles.StyleStore(root).public(True)['templates']), 27)
+
+    def test_industry_roundtrip_and_distinct_catalog(self):
+        from kf_style_catalog_v2 import RECIPES
+        self.assertEqual(len(RECIPES), 20)
+        new = [v for v in styles.catalog() if v['introduced_version'] == 2]
+        self.assertEqual(len({v['sector'] for v in new}), 20)
+        research = json.loads((Path(__file__).resolve().parents[1] / 'docs/style-template-research.json').read_text())['templates']
+        self.assertEqual({v['template_id']:v['source_url'] for v in research}, {v['id']:v['source_url'] for v in new})
+        self.assertEqual(len({v['source_url'] for v in research}), 20)
+        self.assertEqual(len({json.dumps(v['tokens'], sort_keys=True) for v in new}), 20)
+        self.assertGreaterEqual(len({tuple(v['blueprint']) for v in new}), 15)
+        with tempfile.TemporaryDirectory() as root:
+            store = styles.StyleStore(root)
+            item = store.change(dict(new[0], id='', sector='healthcare'))
+            self.assertEqual(store.resolve(item['id'])['sector'], 'healthcare')
+            duplicate = store.change(dict(item, action='duplicate'))
+            self.assertEqual(duplicate['sector'], 'healthcare')
+            self.assertIn('healthcare', styles.guidance(duplicate))
+            for value in ['unknown', [], None, '<script>']:
+                with self.subTest(value=value), self.assertRaises(AIError):
+                    store.change(dict(item, sector=value))
 
     def test_url_and_address_boundaries(self):
         for url in ['file:///etc/passwd','https://u:p@example.com','http://example.com:3000','https://example.com/\r\nx','https://example.com\\@evil.test']:

@@ -74,7 +74,7 @@ $('#autoForm').onsubmit=async e=>{
 };
 function showAutoReview(item){
  AUTO_ITEM=item;const needs=['confirm','totp'].includes(item.mode);const prepared=item.state==='prepared';
- $('#autoReview').innerHTML=`<h3>${esc(item.summary)}</h3><p>状态：${esc(AUTO_STATES[item.state]||item.state)} · ${esc(item.slug)}</p>${autoReadablePreview(item)}<details><summary>完整执行参数 / 修改前后</summary><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(item.arguments,null,2))}</pre></details>${item.error?`<p class="msg bad">${esc(item.error)}</p>`:''}${item.result?autoReadableResult(item.result):''}
+ $('#autoReview').innerHTML=`<h3>${esc(item.summary)}</h3><p><span>状态：</span><span>${esc(AUTO_STATES[item.state]||item.state)}</span> · <span data-user-content>${esc(item.slug)}</span></p>${autoReadablePreview(item)}<details><summary>完整执行参数 / 修改前后</summary><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(item.arguments,null,2))}</pre></details>${item.error?`<p class="msg bad">${esc(item.error)}</p>`:''}${item.result?autoReadableResult(item.result):''}
  ${prepared?`<form id="autoConfirmForm">${needs?'<label><input id="autoConfirmed" type="checkbox" required>我已核对上述目标与具体内容，确认执行此操作</label>':''}${item.mode==='totp'?autoField('code','当前账号的 6 位 TOTP','text','',true):''}<button type="submit">${needs?'确认并执行':'执行查询 / 生成草稿'}</button><button id="autoCancel" type="button" class="ghost">取消此操作</button><div id="autoConfirmMsg" class="msg" role="status"></div></form>`:''}
  ${canAmendWorkflow(item)?'<details><summary>修改此步骤参数（重新确认）</summary><form id="autoAmend">'+autoText('amend','新的操作参数（JSON 对象）',JSON.stringify(item.tool==='dns.change'?{operation:item.arguments.operation,record_id:item.arguments.before?.id,record:item.arguments.after}:item.arguments,null,2),true)+'<button type="submit">更新操作预览</button></form></details>':''}
  ${item.state==='succeeded'&&item.mode==='read'&&item.arguments.purpose==='build'?'<button id="autoUseContext" type="button">用于 AI 建站资料</button>':''}
@@ -117,8 +117,8 @@ function openAutoAction(item){window.autoPendingAction=item;navigateTo('automati
 function autoReadablePreview(item){
  const a=item.arguments;
  if(item.tool==='site.publish')return '<p>请逐页查看草稿预览；确认后将发布所列页面。</p><ul>'+(item.snapshot?.pages||[{slug:'home',title:'网站预览'}]).map(p=>`<li><a href="/preview/${encodeURIComponent(item.slug)}/${encodeURIComponent(p.slug)}" target="_blank" rel="noopener">${esc(p.title)}</a></li>`).join('')+'</ul>';
- if(item.tool==='mail.send')return `<p>发件人：${esc(a.from||'已配置发件人')}<br>收件人：${esc(a.to)}<br>主题：${esc(a.subject)}</p><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(a.body)}</pre>`;
- if(item.tool==='dns.change')return '<div class="formrow">'+[['before','修改前'],['after','修改后']].map(([key,title])=>`<div class="field"><strong>${title}</strong><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${a[key]?esc(a[key].name+' '+a[key].type+' '+a[key].content+'\nTTL: '+a[key].ttl):'无记录'}</pre></div>`).join('')+'</div>';
+ if(item.tool==='mail.send')return `<p><span>发件人：</span>${a.from?`<span data-user-content>${esc(a.from)}</span>`:'<span>已配置发件人</span>'}<br><span>收件人：</span><span data-user-content>${esc(a.to)}</span><br><span>主题：</span><span data-user-content>${esc(a.subject)}</span></p><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(a.body)}</pre>`;
+ if(item.tool==='dns.change')return '<div class="formrow">'+[['before','修改前'],['after','修改后']].map(([key,title])=>`<div class="field"><strong>${title}</strong>${a[key]?`<pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(a[key].name+' '+a[key].type+' '+a[key].content+'\nTTL: '+a[key].ttl)}</pre>`:'<p>无记录</p>'}</div>`).join('')+'</div>';
  return '';
 }
 function autoReadableResult(result){

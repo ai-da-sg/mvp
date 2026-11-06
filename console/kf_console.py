@@ -863,6 +863,16 @@ def style_preview_html(body):
         'band': {'src':'/template-sample-1.svg','alt':'Original abstract sample artwork','caption':'Local placeholder artwork'},
         'cta': {'title':'Let’s begin a conversation','text':'One clear next step, in your own words.','button':'Get in touch','href':'#sample-content'},
     }
+    from kf_style_presets import SECTOR_SAMPLES
+    sample = SECTOR_SAMPLES.get(recipe['sector'])
+    if sample:
+        samples['hero']['text'] = sample['headline'] + '. Sample content for your industry.'
+        samples['cards']['title'] = sample['headline']
+        samples['cards']['items'] = [{'title':v,'text':'Replace this example with verified information about your business.'} for v in sample['offerings']]
+        samples['split']['title'] = sample['offerings'][1]
+        samples['split']['items'] = sample['offerings']
+        samples['table']['rows'] = [[v,'Add verified details'] for v in sample['offerings']]
+        samples['gallery']['title'] = sample['offerings'][0]
     sections=[dict(samples[k],type=k) for k in recipe['blueprint'] or ['hero','cards','split','cta']]
     content=ks().render_sections(sections)
     content=re.sub(r'\[kf_contact_form[^\]]*\]', '<div class="kf-form"><label>Your name<input disabled placeholder="Sample form"></label><label>Email<input disabled placeholder="you@example.com"></label><button class="kf-btn" disabled>Preview only</button></div>', content)
@@ -2472,7 +2482,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="field"><label for="aiPlan">套餐</label><select id="aiPlan"></select></div>
 <div class="field"><label for="aiIndustry">基础行业（未选择风格模板时使用）</label><select id="aiIndustry"></select></div>
 </div><p class="hint">新站会创建 WordPress、数据库和套餐账单，内容先保存为草稿。</p></div>
-<div class="formrow"><div class="field"><label for="aiStyleTemplate">本次生成使用的风格</label><select id="aiStyleTemplate"><option value="">保持站点当前风格</option></select></div><button type="button" class="ghost" id="aiStyleManage">管理风格模板</button></div>
+<div class="formrow"><div class="field"><label for="aiStyleSector">模板行业</label><select id="aiStyleSector"><option value="">全部行业</option></select></div><div class="field"><label for="aiStyleTemplate">本次生成使用的风格</label><select id="aiStyleTemplate"><option value="">保持站点当前风格</option></select></div><button type="button" class="ghost" id="aiStyleManage">管理风格模板</button></div>
 <div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求 / 额外补充</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍主营业务、目标客户和希望访客完成的操作。"></textarea></div>
 <fieldset class="prompt-composer" style="margin-top:20px;border:1px solid var(--line);border-radius:10px;padding:16px">
 <legend>提示词方案</legend>
@@ -2508,12 +2518,12 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-styles" class="hidden"><section id="styleManager">
-<div class="formrow"><div class="field"><label for="styleSearch">搜索模板名称或分类</label><input id="styleSearch" type="search"></div><div class="field"><label for="styleStatus">模板状态</label><select id="styleStatus"><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div><button type="button" id="styleNew">新建模板</button><button type="button" class="ghost" id="styleImport">导入模板</button><input id="styleImportFile" type="file" accept="application/json,.json" hidden><button type="button" class="ghost" id="styleRefresh">刷新模板</button></div>
+<div class="formrow"><div class="field"><label for="styleSearch">搜索模板名称或分类</label><input id="styleSearch" type="search"></div><div class="field"><label for="styleSectorFilter">模板行业</label><select id="styleSectorFilter"><option value="">全部行业</option></select></div><div class="field"><label for="styleStatus">模板状态</label><select id="styleStatus"><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div><button type="button" id="styleNew">新建模板</button><button type="button" class="ghost" id="styleImport">导入模板</button><input id="styleImportFile" type="file" accept="application/json,.json" hidden><button type="button" class="ghost" id="styleRefresh">刷新模板</button></div>
 <div id="styleLibrary" class="style-library"></div><section id="stylePreviewPanel" class="hidden"><div class="formrow"><h3>模板预览</h3><label for="stylePreviewWidth">预览宽度</label><select id="stylePreviewWidth"><option value="100%">桌面</option><option value="375px">手机</option></select><button type="button" class="ghost" id="stylePreviewClose">关闭预览</button></div><p class="hint">本地示例内容，用于检查布局与配色，不代表已生成的网站。</p><iframe id="stylePreviewFrame" title="风格模板预览" sandbox="" referrerpolicy="no-referrer"></iframe></section>
 <form id="styleEditForm" class="hidden" style="margin-top:16px">
 <h3>编辑风格模板</h3>
-<div class="formrow"><div class="field"><label for="styleName">模板名称</label><input id="styleName" required maxlength="80"></div><div class="field"><label for="styleCategory">分类</label><input id="styleCategory" maxlength="40" placeholder="例如：教育、科技、医疗"></div></div>
-<div class="formrow"><div class="field"><label for="styleIndustry">基础行业</label><select id="styleIndustry"></select></div><div class="field"><label for="styleTags">标签（逗号分隔）</label><input id="styleTags" maxlength="400"></div></div><div class="fld"><label for="styleSource">参考来源</label><input id="styleSource" type="url" maxlength="2000"></div>
+<div class="formrow"><div class="field"><label for="styleName">模板名称</label><input id="styleName" required maxlength="80"></div><div class="field"><label for="styleCategory">风格标签</label><input id="styleCategory" maxlength="40" placeholder="例如：编辑式、极简、现代"></div></div>
+<div class="formrow"><div class="field"><label for="styleSector">模板行业</label><select id="styleSector"></select></div><div class="field"><label for="styleIndustry">基础行业</label><select id="styleIndustry"></select></div><div class="field"><label for="styleTags">标签（逗号分隔）</label><input id="styleTags" maxlength="400"></div></div><div class="fld"><label for="styleSource">参考来源</label><input id="styleSource" type="url" maxlength="2000"></div>
 <div class="fld"><label for="styleSummary">风格说明</label><textarea id="styleSummary" maxlength="1500" rows="2"></textarea></div>
 <div class="fld"><label for="styleGuidance">内容生成指导</label><textarea id="styleGuidance" maxlength="2400" rows="3"></textarea></div>
 <div id="styleColors" class="formrow"></div>

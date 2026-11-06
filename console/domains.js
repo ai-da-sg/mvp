@@ -27,11 +27,11 @@ function renderDomainRegistry(){
   return `<section class="dom-row"><div class="h"><b class="name">${esc(site.domain)}</b><span>${esc(site.company||site.slug)}</span><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">访问网站</a>${DOMAIN_ALLOWED?`<button type="button" data-domain-add="${esc(site.slug)}">添加管理机构</button>`:''}</div>
    <p class="hint">${esc(site.manage?.registrar||'注册商未登记')}${site.manage?.expires?' · 到期日 '+esc(site.manage.expires):''}</p>
    ${accounts.map(a=>`<article style="border-top:1px solid var(--line);padding:16px 0"><div class="h"><strong>${esc(a.provider)}</strong><span class="pill">${esc(DOMAIN_CATEGORIES[a.category]||a.category)}</span><button type="button" data-domain-edit="${esc(a.id)}">编辑</button><button type="button" class="ghost" data-domain-delete="${esc(a.id)}">删除</button></div>
-    <p style="overflow-wrap:anywhere">管理后台：${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.url)}</a>`:'未填写'}</p>
-    <p style="overflow-wrap:anywhere">用户名：<span data-user-content>${esc(a.username||'未填写')}</span></p>
-    <p>密码：${a.has_password?'••••••••':'未保存'} ${a.has_password?`<button type="button" class="ghost" data-domain-reveal="${esc(a.id)}">TOTP 验证后显示</button>`:''}</p>
-    <details><summary>配置信息</summary><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit">${esc(a.configuration||'未填写')}</pre></details>
-    <p class="hint">版本 ${Number(a.version)} · ${esc(a.updated_by)} · ${esc(new Date(a.updated*1000).toLocaleString())}</p></article>`).join('')}
+    <p style="overflow-wrap:anywhere"><span>管理后台：</span>${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.url)}</a>`:'<span>未填写</span>'}</p>
+    <p style="overflow-wrap:anywhere">用户名：${a.username?`<span data-user-content>${esc(a.username)}</span>`:'<span>未填写</span>'}</p>
+    <p><span>密码：</span><span>${a.has_password?'••••••••':'未保存'}</span> ${a.has_password?`<button type="button" class="ghost" data-domain-reveal="${esc(a.id)}">TOTP 验证后显示</button>`:''}</p>
+    <details><summary>配置信息</summary>${a.configuration?`<pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit">${esc(a.configuration)}</pre>`:'<p>未填写</p>'}</details>
+    <p class="hint"><span>版本 ${Number(a.version)}</span> · <span data-user-content>${esc(a.updated_by)}</span> · ${esc(new Date(a.updated*1000).toLocaleString())}</p></article>`).join('')}
    ${!accounts.length&&DOMAIN_ALLOWED?'<p class="hint">尚未登记匹配的管理机构账号。</p>':''}</section>`;
  }).join('');
  $('#dList').innerHTML=rows||'<p class="hint">没有匹配的域名或管理账号。</p>';
