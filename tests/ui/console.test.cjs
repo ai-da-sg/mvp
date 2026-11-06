@@ -98,7 +98,7 @@ print(json.dumps(result))
  assert.equal(await page.locator('#loginCode').evaluate(e=>Math.round(e.getBoundingClientRect().width)),await page.locator('form').evaluate(e=>Math.round(e.getBoundingClientRect().width)));
  console.log('PASS recovery input, labels and login layout');
  await page.goto('http://review.invalid/');await page.waitForSelector('#rows button');
- await page.locator('#btn').click();await page.waitForSelector('#f .form-error-summary');
+ await page.locator('#newSite').click();await page.locator('#btn').click();await page.waitForSelector('#f .form-error-summary');
  assert.equal(await page.locator('#f .form-error-summary').evaluate(e=>document.activeElement===e),true);
  await page.locator('#f input[name=company]').fill('Test');await page.locator('#f input[name=domain]').fill('demo.example');
  assert.equal(await page.locator('#f input[name=slug]').inputValue(),'demo');
@@ -150,7 +150,7 @@ print(json.dumps(result))
  assert.equal(await page.locator('#aiBrief').getAttribute('required'),null);
  await page.selectOption('#uiTheme','light');await page.selectOption('#uiLanguage','en');
  await page.waitForFunction(()=>document.documentElement.lang==='en'&&document.querySelector('#pageTitle').textContent==='AI builder');
- assert.equal(await page.evaluate(()=>getComputedStyle(document.body).backgroundColor),'rgb(244, 246, 249)');
+ assert.equal(await page.evaluate(()=>getComputedStyle(document.body).backgroundColor),'rgb(247, 248, 250)');
  assert.equal(await page.locator('#promptServices').inputValue(),'真实设计服务');assert.equal(await page.locator('#aiPromptTemplate').inputValue(),'company');
  assert.equal(await page.locator('#aiLanguage').inputValue(),'zh','Interface language must not change generated content language');
  if(out)await page.screenshot({path:path.join(out,'ai-light-en.png'),fullPage:true});

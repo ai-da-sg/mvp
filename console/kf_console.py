@@ -2352,38 +2352,40 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </style></head><body><div class="wrap">
 <div class="topbar">
   <div>
-    <h1>KampongFlow 控制台</h1>
+    <h1><span class="brand-mark" aria-hidden="true">K</span>KampongFlow</h1>
   </div>
-  <div class="who"><span id="whoami">—</span> · <a href="/logout">退出</a></div>
+  <div class="who"><span id="whoami">—</span> <a href="/logout">退出</a></div>
 </div>
 <a class="skip-link" href="#workspace">跳转到主要内容</a>
 <div class="console-shell">
 <aside class="sidebar" aria-label="控制台导航">
 <button type="button" id="navToggle" class="ghost nav-toggle" aria-expanded="false" aria-controls="navGroups">导航菜单 · 站点总览</button>
 <nav id="navGroups" class="nav-groups" aria-label="主导航与二级菜单">
-<details class="nav-group" data-group="0" open><summary>站点运营</summary><div class="submenu"><button type="button" class="tab" data-t="automation" aria-controls="p-automation">运营助手</button><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
-<details class="nav-group" data-group="1"><summary>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
-<details class="nav-group" data-group="2"><summary>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
-<details class="nav-group" data-group="3"><summary>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
+<details class="nav-group" data-group="0" open><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>站点运营</summary><div class="submenu"><button type="button" class="tab" data-t="automation" aria-controls="p-automation">运营助手</button><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
+<details class="nav-group" data-group="1"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-1 5 5-1L21 7l-6-6L4 16ZM13 3l6 6"/></svg>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
+<details class="nav-group" data-group="2"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4v2"/></svg>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
+<details class="nav-group" data-group="3"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
-<div class="page-heading"><div><div class="breadcrumb" id="breadcrumb">站点运营 / 站点总览</div><h2 id="pageTitle" tabindex="-1">站点总览</h2></div><span id="editorGlobalState" role="status"></span></div>
+<div class="page-heading"><div><div class="breadcrumb" id="breadcrumb">站点运营 / 站点总览</div><h2 id="pageTitle" tabindex="-1">站点总览</h2></div><span id="editorGlobalState" role="status"></span><button id="newSite" type="button" onclick="openSiteCreate()">新建站点</button></div>
 <div id="globalMsg" class="msg hidden" role="alert" tabindex="-1"></div>
 
 <div id="p-sites">
 <div class="stats" id="stats"></div>
-<label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);margin-bottom:10px">
-  <input type="checkbox" id="onlyMine" onchange="renderSites()"> 只看我负责的
-</label>
+<div class="site-toolbar">
+<div class="search-field"><label for="siteSearch">搜索站点</label><input type="search" id="siteSearch" placeholder="站点、客户或域名" oninput="renderSites()"></div>
+<div class="status-field"><label for="siteStatus">运行状态</label><select id="siteStatus" onchange="renderSites()"><option value="">全部状态</option><option value="active">运行中</option><option value="provisioning">开通中</option><option value="failed">失败</option><option value="stopped">已停止</option></select></div>
+<label class="mine-filter"><input type="checkbox" id="onlyMine" onchange="renderSites()">只看我负责的</label>
+</div>
 <table><thead><tr><th>站点</th><th>客户 / 域名</th><th class="sm-hide">负责人</th><th class="sm-hide">套餐</th><th>状态</th><th class="sm-hide">账单</th><th>到期</th><th>操作</th></tr></thead>
 <tbody id="rows"><tr><td colspan="8" style="color:var(--dim)">加载中…</td></tr></tbody></table>
-<form id="f"><div class="formrow">
+<details id="siteCreate" class="site-create"><summary>新建站点</summary><form id="f"><div class="formrow">
 <div class="field"><label>客户名称</label><input name="company" placeholder="Tanjong Pte Ltd" required></div>
 <div class="field"><label>域名</label><input name="domain" placeholder="example.sg" required></div>
 <div class="field"><label>站点标识（自动建议，可修改）</label><input name="slug" placeholder="例如 tanjong" pattern="[a-z][a-z0-9-]{1,19}" title="2–20 位小写字母、数字或连字符，以字母开头" required></div>
 <div class="field"><label>套餐</label><select name="plan_id" id="planSel"></select></div>
 <div class="field"><label>行业模板</label><select name="industry" id="indSel"></select></div>
 <button id="btn">下单并开通</button>
-</div><div class="msg" id="msg"></div></form>
+</div><div class="msg" id="msg"></div></form></details>
 </div>
 
 <div id="p-billing" class="hidden">
@@ -2778,6 +2780,7 @@ function applyRole(){
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
   });
   const f=$('#f'); if(f) f.style.display = (ROLE==='finance') ? 'none' : '';
+  $('#siteCreate').hidden=ROLE==='finance';$('#newSite').hidden=ROLE==='finance'||CURRENT_TAB!=='sites';
   syncNavigation();
 }
 function badge(s){const m={active:['ok','运行中'],provisioning:['warn','开通中'],failed:['bad','失败'],stopped:['bad','已停止']};
@@ -2790,6 +2793,7 @@ function navigateTo(key, updateHistory=true){
  if(CURRENT_TAB==='layout' && !commitJson())return false;
  $('#globalMsg').classList.add('hidden');
  CURRENT_TAB=key;
+ $('#newSite').hidden=ROLE==='finance'||key!=='sites';
  document.querySelectorAll('.tab').forEach(x=>{x.classList.toggle('on',x===t);if(x===t)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
  document.querySelectorAll('.tab').forEach(x=>$('#p-'+x.dataset.t).classList.toggle('hidden',x!==t));
  t.closest('details').open=true;
@@ -2801,7 +2805,7 @@ function navigateTo(key, updateHistory=true){
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
  const initializers={providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
- if(updateHistory)$('#pageTitle').focus({preventScroll:true});
+ if(updateHistory){$('#pageTitle').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
  return true;
 }
 function syncNavigation(){
@@ -2821,11 +2825,21 @@ function setStableHtml(element, html){
  if(element._renderedHtml===html)return;
  element._renderedHtml=html;element.innerHTML=html;
 }
+function openSiteCreate(){
+ if(ROLE==='finance')return;
+ $('#siteCreate').open=true;$('#f input[name=company]').focus();
+}
+function clearSiteFilters(){
+ $('#siteSearch').value='';$('#siteStatus').value='';$('#onlyMine').checked=false;renderSites();$('#siteSearch').focus();
+}
 function renderSites(){
   let s=(STATE.sites||[]);
   if($('#onlyMine') && $('#onlyMine').checked && STATE.me){
     s=s.filter(x=>x.owner===STATE.me);
   }
+  const query=$('#siteSearch').value.trim().toLocaleLowerCase();
+  const status=$('#siteStatus').value;
+  s=s.filter(x=>(!status||x.state===status)&&(!query||[x.slug,x.company,x.domain].some(v=>String(v||'').toLocaleLowerCase().includes(query))));
   const html=s.length? s.map(x=>`<tr>
   <td class="mono">${esc(x.slug)}</td>
   <td><b data-user-content>${esc(x.company)}</b><div class="mono" style="color:var(--dim)">${esc(x.domain)}</div></td>
@@ -2844,9 +2858,10 @@ function renderSites(){
      ${ROLE==='finance'?'':`<button class="ghost" onclick="renewSite('${esc(x.slug)}')">续费</button>
      <button class="ghost" onclick="toggleSuspend('${esc(x.slug)}','${x.billing_status||'active'}')">${x.billing_status==='suspended'?'恢复':'暂停'}</button>`}
    </div></td></tr>`).join('')
+  :(STATE.sites||[]).length?'<tr><td colspan="8" class="empty-results"><p>没有匹配的站点</p><button class="ghost" onclick="clearSiteFilters()">清除筛选</button></td></tr>'
   :'<tr><td colspan="8" style="text-align:center;padding:28px 12px">'
     +'<div style="color:var(--dim);font-size:13px;margin-bottom:10px">还没有站点，先开通一个</div>'
-    +'<button onclick="document.querySelector(\'#f input[name=company]\').focus()">开通站点</button></td></tr>';
+    +(ROLE==='finance'?'':'<button onclick="openSiteCreate()">开通站点</button>')+'</td></tr>';
   setStableHtml($('#rows'),html);
 }
 

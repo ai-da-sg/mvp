@@ -1,5 +1,12 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+新建站点|Create site
+搜索站点|Search sites
+站点、客户或域名|Site, customer or domain
+运行状态|Site status
+全部状态|All statuses
+没有匹配的站点|No matching sites
+清除筛选|Clear filters
 模型配置 ID（留空使用默认模型）|Model profile ID (blank for default)
 允许替换未发布草稿（旧草稿会备份）|Allow replacing the unpublished draft (a backup will be kept)
 页面标识（留空发布全部页面）|Page ID (blank to publish all pages)

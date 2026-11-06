@@ -2,14 +2,14 @@
 (()=>{
  const keyTheme='kf-ui-theme',keyLanguage='kf-ui-language',root=document.documentElement;
  const read=(key,fallback)=>{try{return localStorage.getItem(key)||fallback;}catch(_){return fallback;}};
- let theme=read(keyTheme,'system'),language=read(keyLanguage,'zh');
+ let theme=read(keyTheme,'light'),language=read(keyLanguage,'zh');
  if(!['light','dark','system'].includes(theme))theme='system';if(!['zh','en'].includes(language))language='zh';
  const media=matchMedia('(prefers-color-scheme: dark)');
  function paintTheme(){root.dataset.theme=theme==='system'?(media.matches?'dark':'light'):theme;root.style.colorScheme=root.dataset.theme;}
  paintTheme();root.lang=language==='en'?'en':'zh-CN';
  const css=document.createElement('style');css.textContent=`
  :root{--bg:#0d1117;--card:#161b22;--line:#30363d;--fg:#e6edf3;--dim:#8b949e;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--acc:#58a6ff;--surface:#21262d;--selected:#1c2d42;--selected-text:#9acbff;--input:#0d1117;--callout:#1c2530}
- html[data-theme=light]{--bg:#f4f6f9;--card:#ffffff;--line:#ccd5df;--fg:#172334;--dim:#536276;--ok:#187437;--warn:#875b00;--bad:#b42318;--acc:#175fba;--surface:#eaf0f6;--selected:#e4efff;--selected-text:#14529b;--input:#fff;--callout:#edf3fa}
+ html[data-theme=light]{--bg:#f7f8fa;--card:#ffffff;--line:#d5d8de;--fg:#20242d;--dim:#596273;--ok:#187437;--warn:#875b00;--bad:#b42318;--acc:#005bd3;--surface:#f1f3f6;--selected:#eaf2ff;--selected-text:#004db3;--input:#fff;--callout:#f1f6ff}
  body{background:var(--bg)!important;color:var(--fg)!important}
  .ui-preferences{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 18px;justify-content:flex-end}
  .ui-preferences label{display:flex;gap:6px;align-items:center;margin:0;font-size:12px;color:var(--dim)}
@@ -26,6 +26,107 @@
  html[data-theme=light] button.danger{color:var(--bad)}
  :where(button,input,select,textarea,summary,a):focus-visible{outline:2px solid var(--acc);outline-offset:3px}
  @media(max-width:600px){.ui-preferences{justify-content:flex-start}.ui-preferences select{font-size:16px;min-height:44px}}
+
+ /* Shared console system: quiet surfaces, readable controls, task-first navigation. */
+ html{--brand:#f48120;--control-border:#8993a3;--action:#005bd3;--action-hover:#0044a0}
+ html[data-theme=dark]{--control-border:#687589;--action:#176bd7;--action-hover:#247deb}
+ body .wrap{max-width:none;padding:0}
+ body .topbar{min-height:72px;padding:14px 28px;display:flex;align-items:center;gap:24px;background:var(--card);border-bottom:1px solid var(--line)}
+ .topbar h1{display:flex;align-items:center;gap:10px;font-size:18px;white-space:nowrap;margin:0;font-weight:700;letter-spacing:-.3px}
+ .brand-mark{width:26px;height:26px;border-radius:6px;background:var(--brand);display:inline-grid;place-items:center;color:#20242d;font-size:17px;flex:none}
+ body .topbar .ui-preferences{margin:0 0 0 auto;gap:16px}
+ body .who{display:flex;gap:10px;align-items:center;font-size:13px;white-space:normal}
+ .who a{padding:8px 0;white-space:nowrap}
+ body .console-shell{grid-template-columns:240px minmax(0,1fr);gap:0;min-height:calc(100dvh - 72px)}
+ body .sidebar{position:sticky;top:0;max-height:100dvh;border:0;border-right:1px solid var(--line);border-radius:0;padding:20px 12px;background:var(--card)}
+ body .nav-group{border:0;padding:0 0 12px}
+ body .nav-group summary{display:flex;align-items:center;gap:10px;list-style:none;padding:12px;font-size:13px;font-weight:650;color:var(--fg);border-radius:4px}
+ .nav-group summary::-webkit-details-marker{display:none}
+ .nav-group summary::after{content:'';margin-left:auto;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg)}
+ .nav-group[open] summary::after{transform:rotate(45deg)}
+ .nav-icon{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+ body .submenu{padding:4px 0;gap:2px}
+ body .tab{border-radius:4px;min-height:40px;padding:9px 14px 9px 40px;font-size:14px;color:var(--dim)}
+ body .tab.on{background:var(--selected);color:var(--selected-text);box-shadow:inset 3px 0 var(--acc);font-weight:600}
+ .nav-group summary:hover{background:var(--surface)}
+ body .workspace{padding:32px 36px 64px;width:100%;max-width:1500px;margin:0 auto}
+ body .page-heading{margin-bottom:24px;align-items:flex-start}
+ body .page-heading h2{font-size:28px;line-height:1.25;letter-spacing:-.6px;font-weight:650}
+ body .breadcrumb{font-size:13px;margin-bottom:10px}
+ body h3{font-size:18px;line-height:1.4;font-weight:600;margin:24px 0 12px}
+ body form h3:first-child{margin-top:0}
+ body .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:24px}
+ body .stat{border-radius:6px;padding:20px 24px;display:flex;flex-direction:column-reverse;gap:10px;min-width:0}
+ body .stat b{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+ body .stat span{font-size:14px;color:var(--dim)}
+ body form{padding:24px;border-radius:6px;margin-top:20px}
+ body .formrow{gap:16px;row-gap:20px}
+ body label,body .fld label{font-size:14px;color:var(--fg);font-weight:500;margin-bottom:7px}
+ body input,body select,body .fld input[type=text],body .fld select,body .fld textarea,body textarea{border-color:var(--control-border);border-radius:4px;font:inherit;font-size:14px;min-height:40px;padding:9px 12px;line-height:1.4}
+ body textarea{width:100%;background:var(--input);color:var(--fg);resize:vertical}
+ body input[type=checkbox],body input[type=radio]{min-height:18px;padding:0}
+ body input[type=color]{padding:3px}
+ body button{border:1px solid transparent;border-radius:4px;background:var(--action);color:#fff;font-size:14px;font-weight:600;min-height:40px;padding:9px 16px;line-height:1.4}
+ body button:hover:not(:disabled):not(.tab):not(.ghost):not(.section-select){background:var(--action-hover)}
+ body button.ghost{background:var(--card);border-color:var(--control-border);color:var(--fg);font-size:13px;padding:7px 12px;min-height:36px}
+ html[data-theme=light] body button.ghost{background:var(--card)}
+ body button.ghost:hover:not(:disabled){background:var(--surface);border-color:var(--acc)}
+ body button.danger{color:var(--bad);border-color:var(--bad)}
+ body button:disabled{opacity:.55;cursor:not-allowed}
+ body table{border-radius:6px;overflow:hidden}
+ body th{padding:14px 16px;background:var(--surface);color:var(--dim);font-size:12px;text-transform:none;letter-spacing:0;font-weight:600}
+ body td{padding:16px;font-size:14px;line-height:1.55;overflow-wrap:anywhere}
+ body tbody tr:hover{background:var(--surface)}
+ body .mono{font-size:13px;font-variant-numeric:tabular-nums}
+ body .pill{padding:3px 9px;font-size:12px;line-height:1.4}
+ body .dom-row,body .lead-card,body .share-row{padding:18px 20px;border-radius:6px;margin-bottom:12px}
+ body .dom-row .hint{word-break:normal;overflow-wrap:anywhere;font-family:inherit;font-size:13px}
+ body .hint,body .sub,body .page-help,body .msg{font-size:14px;line-height:1.65}
+ body .page-help{margin:0 0 20px}
+ body .page-help>summary{min-height:36px}
+ body .callout{overflow-wrap:anywhere;border-radius:4px;font-size:14px;padding:14px 16px}
+ body .optional-options{border-radius:6px;background:var(--card)}
+ body .optional-options>summary{font-size:14px}
+ body .editor-actions{border-radius:6px;box-shadow:0 3px 12px #00000010;padding:16px}
+ .site-toolbar{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin:0 0 20px}
+ .site-toolbar .search-field{flex:1;min-width:200px}
+ .site-toolbar .status-field{width:180px}
+ .site-toolbar .mine-filter{display:flex;align-items:center;gap:8px;min-height:40px;margin:0;font-size:14px;font-weight:400}
+ .site-create{margin-top:24px;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+ .site-create>summary{font-size:16px;font-weight:600;cursor:pointer;padding:18px 24px;min-height:56px}
+ body .site-create form{border:0;border-top:1px solid var(--line);border-radius:0;margin:0}
+ .site-create .formrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .site-create button{justify-self:start;align-self:end}
+ .empty-results{text-align:center;padding:32px 16px!important}
+ .empty-results p{margin:0 0 12px;color:var(--dim)}
+ body .box{max-width:420px;border-radius:8px;padding:32px;box-shadow:0 8px 24px #20242d08}
+ body .box form{padding:0;border:0;margin:0;background:transparent}
+ body .box h1{font-size:26px;margin:12px 0 4px;letter-spacing:-.5px}
+ body .box .sub{margin-bottom:24px;font-size:15px}
+ body .box input{font-size:16px;min-height:44px}
+ body .box .ui-preferences{padding-bottom:16px;border-bottom:1px solid var(--line);gap:12px}
+ body .box button{min-height:44px;background:var(--action)}
+ body .box .ui-preferences label{font-size:12px}
+ body footer{border-top:1px solid var(--line);padding-top:20px;margin-top:32px;font-size:12px}
+ :where(a,button,input,select,textarea,summary,[tabindex]){scroll-margin:16px}
+ @media(min-width:901px){body .sidebar{min-height:calc(100dvh - 72px)}}
+ @media(max-width:1100px){body .workspace{padding:28px 24px}body .topbar{gap:16px;padding:14px 20px}body .console-shell{grid-template-columns:216px minmax(0,1fr)}body .topbar h1{font-size:16px}}
+ @media(max-width:900px){
+  body .topbar{flex-wrap:wrap;flex-direction:row;gap:12px;padding:16px}body .topbar .ui-preferences{order:3;width:100%;margin:0;justify-content:flex-start}body .who{margin-left:auto}
+  body .console-shell{grid-template-columns:minmax(0,1fr);gap:0}body .sidebar{position:static;max-height:none;padding:8px 16px;border-right:0;border-bottom:1px solid var(--line)}
+  body .nav-toggle{background:var(--card);border:0;padding:10px 0}body .workspace{padding:24px 20px 48px}body .tab{min-height:44px}
+  body .page-heading h2{font-size:25px}body .stats{gap:12px}body .stat{padding:16px}
+ }
+ @media(max-width:600px){
+  body .topbar h1{font-size:16px}.brand-mark{width:24px;height:24px}body .who{font-size:12px;gap:8px}body .workspace{padding:24px 16px 48px}
+  body .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}body .stat{padding:14px 10px}body .stat b{font-size:23px}body .stat span{font-size:12px}
+  body form{padding:20px 16px}body .dom-row,body .lead-card,body .share-row{padding:16px}body .page-heading{gap:8px;flex-wrap:wrap}
+  body input,body select,body textarea,body .fld input[type=text],body .fld textarea{font-size:16px;min-height:44px}body button,body button.ghost{min-height:44px}
+  body td{padding:6px 0;font-size:14px}body table{border:0;background:transparent}body tbody tr{border-radius:6px;padding:16px}body tbody td:first-child{font-size:15px}
+  .site-toolbar{gap:12px}.site-toolbar .search-field{min-width:100%}.site-toolbar .status-field{flex:1;width:auto}.site-toolbar .mine-filter{font-size:13px}
+  .site-create .formrow{grid-template-columns:minmax(0,1fr)}.site-create>summary{padding:16px}.site-create button{width:100%}
+  body .box{padding:24px}body .ui-preferences select{font-size:16px}
+ }
  `;document.head.append(css);
  const messages=window.KF_MESSAGES||{},reverse=Object.fromEntries(Object.entries(messages).map(([zh,en])=>[en,zh]));
  const patterns=[
@@ -116,10 +217,11 @@
  const observer=new MutationObserver(()=>{if(!scheduled){scheduled=true;queueMicrotask(()=>{scheduled=false;localize();});}});
  function apply(){root.lang=language==='en'?'en':'zh-CN';paintTheme();localize();document.querySelectorAll('[data-ui-theme]').forEach(e=>e.value=theme);document.querySelectorAll('[data-ui-language]').forEach(e=>e.value=language);}
  document.addEventListener('DOMContentLoaded',()=>{
+  document.head.append(css);
   const target=document.querySelector('.topbar')||document.querySelector('.box');if(!target)return;
   const bar=document.createElement('div');bar.className='ui-preferences';
   bar.innerHTML='<label for="uiTheme">主题 <select id="uiTheme" data-ui-theme><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><label for="uiLanguage">语言 <select id="uiLanguage" data-ui-language><option value="zh">中文</option><option value="en">English</option></select></label>';
-  if(target.classList.contains('box'))target.prepend(bar);else target.after(bar);
+  if(target.classList.contains('box'))target.prepend(bar);else target.insertBefore(bar,target.querySelector('.who'));
   bar.addEventListener('change',e=>{
    if(e.target.matches('[data-ui-theme]'))theme=e.target.value;
    if(e.target.matches('[data-ui-language]'))language=e.target.value;
