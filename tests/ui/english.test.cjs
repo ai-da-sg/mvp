@@ -11,7 +11,22 @@ async function scan(label,selector='body'){await settle();findings[label]=await 
 await scan('static');const tabs=await page.locator('[data-t]').evaluateAll(es=>es.map(e=>e.dataset.t));
 for(const key of tabs){const b=page.locator(`[data-t="${key}"]`);await b.evaluate(e=>e.closest('details').open=true);await b.click();await page.locator('#p-'+key).waitFor();await settle();await scan(key,'#p-'+key);
 if(key==='automation'){for(const v of ['build','dns','mail','maintenance']){await page.selectOption('#autoPurpose',v);await settle();for(const tool of await page.locator('#autoTool option').evaluateAll(es=>es.map(e=>e.value))){await page.selectOption('#autoTool',tool);await scan('tool-'+tool,'#p-automation');}}}
-if(key==='styles'){await page.locator('#styleNew').click();await scan('styles-editor','#styleEditForm');await page.locator('#styleCancel').click();}
+if(key==='styles'){await page.locator('#styleNew').evaluate(e=>{const d=e.closest('details');if(d)d.open=true;});await page.locator('#styleNew').click();await scan('styles-editor','#styleEditForm');await page.locator('#styleCancel').click();
+ // Check asynchronously rendered controls and combined labels, not just the empty library.
+ const ids=await page.evaluate(()=>STYLE_LIBRARY.templates.slice(0,3).map(t=>t.id));
+ await page.evaluate(ids=>{styleToggleCompare(ids[0]);styleToggleCompare(ids[1]);},ids);
+ await page.locator('#styleCompareOpen').click();await scan('styles-comparison','#styleComparePanel');
+ await page.locator('#styleCompareClose').click();
+ await page.evaluate(id=>styleHistory(id),ids[0]);await scan('styles-history','#styleHistoryPanel');
+ await page.locator('#styleHistoryClose').click();
+ await page.evaluate(id=>stylePreview(STYLE_LIBRARY.templates.find(t=>t.id===id)),ids[0]);
+ await scan('styles-detail','#styleDetailDialog');
+ await page.locator('#styleDetailFavorite').click();await settle();await scan('styles-detail-favorite','#styleDetailDialog');
+ for(const language of ['zh','en']){await page.selectOption('#uiLanguage',language,{force:true});await settle();}
+ await scan('styles-detail-switched','#styleDetailDialog');
+ await page.locator('#stylePreviewClose').click();
+ await scan('styles-library-switched','#styleLibrary');
+}
 if(key==='providers'){await page.locator('#providerNew').click();for(const value of await page.locator('#providerKind option').evaluateAll(es=>es.map(e=>e.value))){await page.selectOption('#providerKind',value);await scan('provider-'+value,'#providerForm');}}
 if(key==='mcp'){await page.locator('#mcpNew').click();await scan('mcp-form','#mcpForm');}
 }
@@ -24,6 +39,14 @@ await page.evaluate(async()=>{
 await scan('domain-populated','#dList');
 assert.match(await page.locator('#dList').innerText(),/English audit/);
 assert.equal(await page.locator('#dList [data-user-content]').filter({hasText:'未填写'}).count(),0);
+// Save a local provider record through HTTP; no external DNS or mail operation.
+await page.evaluate(async()=>{
+ await aiRequest('/api/automation/providers',{id:'english-audit',name:'用户账号名称',provider:'cloudflare',enabled:true,sites:['demo'],capabilities:['dns'],values:{token:'fixture-only-token'}});
+ await loadProviders();
+});
+await scan('provider-populated','#providerList');
+assert.equal(await page.locator('#providerList strong[data-user-content]').innerText(),'用户账号名称');
+assert.match(await page.locator('#providerList').innerText(),/Authorized sites:/);
 // Renderer coverage for remote capability payloads; no external MCP calls or mocked HTTP.
 await page.evaluate(()=>renderMCPCapabilities({id:'audit',name:'Audit MCP'}, {
  server:'Audit',version:'1',protocol:'2025-06-18',truncated:true,

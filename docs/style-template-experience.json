@@ -1,0 +1,65 @@
+{
+  "objective": "参考 Squarespace 模板库完善风格模板的浏览、预览、管理和建站全流程",
+  "reference_urls": [
+    "https://www.squarespace.com/templates",
+    "https://www.squarespace.com/templates?mobileAccountFirst=true",
+    "https://support.squarespace.com/hc/en-us/articles/206545337-Choosing-the-right-template"
+  ],
+  "reference_reviewed_at": "2026-11-06",
+  "design_principles": [
+    "大幅真实页面缩略图，减少卡片说明文字",
+    "行业与网站用途分开筛选",
+    "详细说明收纳到模板详情，管理操作收纳到菜单",
+    "桌面、平板和手机预览使用实际页面渲染器",
+    "本地原创插画，不复制参考网站的代码或图片"
+  ],
+  "requirements": [
+    {
+      "id": "browse",
+      "requirement": "搜索、行业、用途、排序、状态、收藏及清空筛选",
+      "evidence_needed": "真实接口浏览器测试覆盖组合筛选和空状态"
+    },
+    {
+      "id": "preview",
+      "requirement": "完整站点页面导航、设备宽度、全屏、关闭及键盘操作",
+      "evidence_needed": "28 套模板跨设备渲染与页面切换测试、截图检查"
+    },
+    {
+      "id": "compare",
+      "requirement": "最多三套模板对比、移除、预览和选用",
+      "evidence_needed": "浏览器完整对比流程与上限测试"
+    },
+    {
+      "id": "manage",
+      "requirement": "创建、编辑、复制、导入、导出、停用、删除、版本恢复及权限校验",
+      "evidence_needed": "真实 CRUD 与持久化测试、角色隔离测试"
+    },
+    {
+      "id": "build",
+      "requirement": "选择模板后按页面结构创建可编辑草稿，发布前不改写线上内容",
+      "evidence_needed": "新站模板页面生成、已有站点保护、备份、编辑与发布测试"
+    },
+    {
+      "id": "sections",
+      "requirement": "预览、编辑及 AI 协议支持相同的 12 种区块",
+      "evidence_needed": "全部区块验证与安全输入测试"
+    },
+    {
+      "id": "language",
+      "requirement": "英文界面完整、用户内容保留原文",
+      "evidence_needed": "英文动态状态审计与语言往返切换"
+    },
+    {
+      "id": "release",
+      "requirement": "代码推送、CI 通过、两套部署更新与生产验证",
+      "evidence_needed": "远程 commit、CI 结果、部署版本和线上检查"
+    }
+  ],
+  "scope_note": "模板用途描述现有内容能力。支付、实时预约、会员订阅属于独立业务系统；不宣称模板已实现这些服务。",
+  "verification_commands": [
+    "python -m unittest discover -s tests",
+    "npm test --prefix tests/ui",
+    "python tools/kf_check.py --skip-php"
+  ],
+  "real_wordpress_verification": "临时页面创建、回读校验、发布、主导航与页脚导航同步已在 clone-gems 测试站验证；测试后恢复原导航并删除测试页面。"
+}

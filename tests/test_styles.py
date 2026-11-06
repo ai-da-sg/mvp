@@ -15,6 +15,30 @@ HTML = '''<html><head><title>Example studio</title><link rel="stylesheet" href="
 </style></head><body><div class="card"></div><h1>Studio</h1><h2>Our services</h2><img src="x"></body></html>'''
 
 class StyleTests(unittest.TestCase):
+    def test_template_pages_favorites_and_restoration_persist(self):
+        with tempfile.TemporaryDirectory() as root:
+            store=styles.StyleStore(root)
+            original=store.public(True)['templates'][0]
+            changed=store.change(dict(original,name='Edited',site_types=['portfolio'],pages=[
+                {'slug':'home','title':'Welcome','blueprint':['hero','cta']},
+                {'slug':'work','title':'Work','blueprint':['hero','gallery','cta']}]))
+            self.assertEqual(changed['pages'][0]['blueprint'],changed['blueprint'])
+            store.preferences('alice',{'id':changed['id'],'favorite':True})
+            reloaded=styles.StyleStore(root)
+            self.assertEqual(reloaded.preferences('alice')['favorites'],[changed['id']])
+            self.assertEqual(reloaded.preferences('bob')['favorites'],[])
+            restored=reloaded.change(dict(id=changed['id'],version=2,action='restore',restore_version=1))
+            self.assertEqual(restored['version'],3)
+            self.assertEqual(restored['name'],original['name'])
+            self.assertEqual([v['version'] for v in reloaded.history(changed['id'])],[1,2,3])
+            with self.assertRaises(styles.StyleConflict): reloaded.change(dict(changed,action='restore',restore_version=1))
+            for slug in ['a','a'*21,'../work']:
+                with self.subTest(slug=slug),self.assertRaises(AIError):
+                    reloaded.change(dict(restored,pages=[{'slug':slug,'title':'Bad','blueprint':['hero']}]))
+            disabled=reloaded.change(dict(restored,enabled=False))
+            self.assertEqual(reloaded.preferences('alice')['favorites'],[])
+            self.assertEqual(reloaded.preferences('alice',admin=True)['favorites'],[disabled['id']])
+
     def test_extraction_and_persistent_template_lifecycle(self):
         result = styles.extract(HTML, ['.button{background:#345678}'], 'https://example.com/', [])
         self.assertEqual(result['tokens']['palette']['primary'], '#345678')

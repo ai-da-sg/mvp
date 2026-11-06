@@ -1,5 +1,87 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+授权站点：|Authorized sites:
+配置版本|Configuration version
+页面已写入，模板导航同步失败；草稿保留，请重试发布|Pages were written, but template navigation could not be updated. The draft is retained; retry publishing.
+编辑模板|Edit template
+页面标识|Page identifier
+为下一站选择设计|Design your next chapter
+找到适合你的起点|Find your starting point
+浏览完整页面，选择模板，再按你的业务调整。|Explore complete pages, choose a template and make it your own.
+使用 AI 建站|Build with AI
+名称、行业或关键词|Name, industry or keyword
+网站用途|Website purpose
+全部用途|All purposes
+排序|Sort by
+推荐顺序|Recommended
+名称排序|Name
+最近更新|Recently updated
+只看收藏|Favorites only
+模板管理|Manage templates
+套模板|templates
+载入预览…|Loading preview…
+预览暂不可用，点击重试|Preview unavailable. Click to retry.
+取消收藏|Remove favorite
+收藏模板|Save favorite
+已收藏|Saved
+收藏|Save
+移出比较|Remove comparison
+加入比较|Compare
+更多操作|More actions
+更多|More
+版本历史|Version history
+没有匹配的模板|No matching templates
+最多同时比较 3 套模板|Compare up to 3 templates at once
+已选模板|Selected templates
+比较模板|Compare templates
+清空比较|Clear comparison
+模板比较|Template comparison
+关闭比较|Close comparison
+比较项目|Compare
+包含页面|Included pages
+适合用途|Best for
+首页结构|Homepage sections
+使用此模板|Use this template
+预览页面|Preview page
+平板|Tablet
+切换全屏|Toggle full screen
+功能说明|Features
+页面、内容区块和设计参数可编辑。联系表单在发布后接收询盘；商城支付、实时预约与会员功能需要单独接入服务。|Pages, content sections and design settings are editable. Published contact forms collect enquiries; payments, live scheduling and memberships require separate integrations.
+模板版本历史|Template version history
+关闭历史|Close history
+当前版本|Current version
+恢复此版本|Restore version
+恢复为新版本？已生成的网站保持不变。|Restore as a new version? Generated websites will stay unchanged.
+模板版本已恢复|Template version restored
+站点页面管理|Site pages
+首页区块在下方调整；其他页面可设置名称、网址标识和区块顺序。|Edit homepage sections below. Set names, URL identifiers and section order for other pages here.
+添加页面|Add page
+页面名称|Page name
+区块顺序（逗号分隔）|Section order (comma-separated)
+最多添加 8 个页面|Add up to 8 pages
+模板用途无效|Invalid template purpose
+模板需要 1–8 个页面|A template needs 1–8 pages
+模板页面格式无效|Invalid template page format
+模板页面标识无效或重复|Invalid or duplicate template page identifier
+模板页面需要 1–20 个受支持的区块|Each template page needs 1–20 supported sections
+模板的第一个页面必须是 home|The first template page must be home
+模板历史版本不存在|Template version not found
+收藏请求无效|Invalid favorite request
+模板预览页面不存在|Template preview page not found
+企业官网|Business website
+作品展示|Portfolio
+产品展示|Product catalog
+单页推广|Landing page
+活动介绍|Event website
+课程介绍|Education website
+图片地址必须是 HTTPS 或站内路径|Image URLs must use HTTPS or a site-relative path
+区块条目数量必须为 1–12|Use 1–12 section items
+区块条目字段无效|Invalid section item fields
+区块条目缺少必填字段|Required section item fields are missing
+表格需要 1–30 行|Tables need 1–30 rows
+表格列数无效|Invalid table column count
+表格每行必须与表头列数一致|Each table row must match the number of headers
+每页必须包含 2–20 个区块|Each page must contain 2–20 sections
 模板行业|Template industry
 全部行业|All industries
 风格标签|Style label

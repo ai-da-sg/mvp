@@ -529,6 +529,48 @@ def backup(site, slug, sections, content_meta=None):
     return f
 
 
+def sync_template_navigation(site, pages):
+    """Prepare both menus before switching locations; retain unrelated menus/pages."""
+    import base64
+    if not pages or any(not SAFE_SLUG.fullmatch(p.get('slug','')) for p in pages):
+        return False
+    payload=base64.b64encode(json.dumps([p['slug'] for p in pages]).encode()).decode()
+    code = '$slugs=json_decode(base64_decode("'+payload+'"),true);' + r'''
+$created=[];
+$previous=get_option('kf_template_navigation_menus',[]);
+try {
+    $ids=[];
+    foreach($slugs as $slug) {
+        $p=get_page_by_path($slug,OBJECT,'page');
+        if(!$p || $p->post_status!=='publish') throw new Exception('Page is not published');
+        $ids[]=$p->ID;
+    }
+    $locations=get_theme_mod('nav_menu_locations',[]);
+    foreach(['primary','footer'] as $location) {
+        $menu=wp_create_nav_menu('Template '.$location.' '.wp_generate_uuid4());
+        if(is_wp_error($menu)) throw new Exception('Unable to create menu');
+        $created[]=$menu;
+        foreach($ids as $index=>$id) {
+            $item=wp_update_nav_menu_item($menu,0,[
+                'menu-item-object-id'=>$id,'menu-item-object'=>'page','menu-item-type'=>'post_type',
+                'menu-item-status'=>'publish','menu-item-position'=>$index+1,'menu-item-title'=>get_the_title($id)]);
+            if(is_wp_error($item)) throw new Exception('Unable to create navigation item');
+        }
+        $locations[$location]=$menu;
+    }
+    set_theme_mod('nav_menu_locations',$locations);
+    update_option('kf_template_navigation_menus',$created);
+    foreach((array)$previous as $menu) if(!in_array($menu,$created)) wp_delete_nav_menu($menu);
+    echo 'KF_NAV_OK';
+} catch(Throwable $e) {
+    foreach($created as $menu) wp_delete_nav_menu($menu);
+    WP_CLI::error('Template navigation could not be updated');
+}
+'''
+    result=wp(site,'eval',code)
+    return result.returncode==0 and 'KF_NAV_OK' in result.stdout
+
+
 def save_page(site, slug, sections, title=None, spec_all=None, write=True):
     """校验 → 快照 → 写入 → 回读校验 → 失败则回滚。返回结果字典。"""
     errs = validate_sections(sections)
@@ -546,8 +588,24 @@ def save_page(site, slug, sections, title=None, spec_all=None, write=True):
 
     pid = page_id(site, slug)
     if not pid:
-        return {"ok": False, "stage": "lookup", "rolled_back": False,
-                "errors": ["找不到对应页面"]}
+        # Keep a new page unpublished until WordPress round-trip validation passes.
+        created = wp(site, "post", "create", "-", "--post_type=page", "--post_status=draft",
+                     "--post_name=" + slug, "--post_title=" + (title or slug), "--porcelain", stdin=html)
+        pid = created.stdout.strip()
+        if created.returncode or not pid.isdigit():
+            return {"ok": False, "stage": "create", "rolled_back": False,
+                    "errors": [(created.stderr or "Unable to create page").strip()[:300]]}
+        after = get_content(site, pid)
+        valid = len(after) >= MIN_HTML and len(after) >= len(html) * KEEP_RATIO and ("wp-block" in after or "kf-" in after)
+        if valid:
+            result = wp(site, "post", "update", pid, "--post_status=publish")
+            if result.returncode == 0:
+                return {"ok": True, "stage": "done", "created": True, "post_id": pid,
+                        "rolled_back": False, "errors": [], "length": len(after), "sections": len(sections)}
+        # This ID was created by this invocation; never delete pre-existing pages.
+        removed = wp(site, "post", "delete", pid, "--force")
+        return {"ok": False, "stage": "verify" if not valid else "publish", "rolled_back": removed.returncode == 0,
+                "errors": ["New page could not be verified or published"], "length": len(after)}
 
     before = get_content(site, pid)
     backup(site, slug, sections, {"post_id": pid, "content_before": before})

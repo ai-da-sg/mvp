@@ -54,6 +54,7 @@ class PromptTests(unittest.TestCase):
         with patch.object(ai,'complete',return_value=json.dumps(payload)) as complete:
             ai.generate(dict(ai.MOCK,protocol='openai_chat'),'key','Acme','Real business data',pages,'en',guidance='Keep copy concise')
         system,prompt=complete.call_args.args[-2:]
-        self.assertIn('never HTML',system)
+        self.assertIn('HTML is allowed only inside a rich.html field',system)
+        self.assertIn('without scripts, styles, embeds or events',system)
         self.assertEqual(json.loads(prompt)['design_guidance'],'Keep copy concise')
         self.assertEqual(json.loads(prompt)['brief'],'Real business data')

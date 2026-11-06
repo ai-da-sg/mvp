@@ -250,7 +250,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -837,57 +837,46 @@ def design_vars(slug, tokens=None):
 
 
 def style_preview_html(body):
-    """Render an isolated local sample using the same section renderer and theme."""
+    """Complete, script-free demo site; links switch pages using CSS :target."""
     import html as _html
     import base64
-    tokens = kf_styles.normalize_tokens(body.get('tokens', {}))
-    recipe = kf_styles.normalize_recipe(body)
-    name = kf_ai.text(body.get('name', 'Untitled style'), '模板名称', 80, True)
-    samples = {
-        'hero': {'kicker':'YOUR BRAND / LOCAL TEMPLATE', 'title':name,
-                 'text':'A considered first impression. Replace this sample with your business story.',
-                 'art':True, 'cta':{'label':'Explore our work','href':'#sample-content'}},
-        'cards': {'title':'Designed around your needs', 'items':[
-            {'title':'Thoughtful details','text':'Use this space to explain a real service or benefit.'},
-            {'title':'A clear process','text':'Guide visitors through the next step with confidence.'},
-            {'title':'Room to grow','text':'Adapt the content and layout to fit your business.'}]},
-        'split': {'title':'A story worth sharing', 'text':'Use a strong visual and a short introduction to explain what makes your approach distinctive.',
-                  'items':['Your approach','Your experience','Your next chapter']},
-        'gallery': {'title':'Selected work','items':[{'src':'/template-sample-%d.svg'%i,'label':'Sample composition %d'%i} for i in range(1,4)]},
-        'quotes': {'title':'In their words','items':[{'text':'A testimonial belongs here only when supplied and approved by a real customer.','by':'Sample placeholder'}]},
-        'table': {'title':'The details, at a glance','headers':['Offering','Details'],'rows':[['Your service','Add a verified description'],['Your next option','Add confirmed information']]},
-        'list': {'title':'What comes next','items':['Explore the options','Ask a question','Plan your next step']},
-        'rich': {'html':'<h2>Space for your story</h2><p>A flexible section for an introduction, an announcement or an editorial passage.</p>'},
-        'form': {'title':'Get in touch','submit':'Send enquiry'},
-        'stats': {'items':[{'value':'—','label':'Add verified metrics'},{'value':'—','label':'Replace sample values'}]},
-        'band': {'src':'/template-sample-1.svg','alt':'Original abstract sample artwork','caption':'Local placeholder artwork'},
-        'cta': {'title':'Let’s begin a conversation','text':'One clear next step, in your own words.','button':'Get in touch','href':'#sample-content'},
-    }
-    from kf_style_presets import SECTOR_SAMPLES
-    sample = SECTOR_SAMPLES.get(recipe['sector'])
-    if sample:
-        samples['hero']['text'] = sample['headline'] + '. Sample content for your industry.'
-        samples['cards']['title'] = sample['headline']
-        samples['cards']['items'] = [{'title':v,'text':'Replace this example with verified information about your business.'} for v in sample['offerings']]
-        samples['split']['title'] = sample['offerings'][1]
-        samples['split']['items'] = sample['offerings']
-        samples['table']['rows'] = [[v,'Add verified details'] for v in sample['offerings']]
-        samples['gallery']['title'] = sample['offerings'][0]
-    sections=[dict(samples[k],type=k) for k in recipe['blueprint'] or ['hero','cards','split','cta']]
-    content=ks().render_sections(sections)
-    content=re.sub(r'\[kf_contact_form[^\]]*\]', '<div class="kf-form"><label>Your name<input disabled placeholder="Sample form"></label><label>Email<input disabled placeholder="you@example.com"></label><button class="kf-btn" disabled>Preview only</button></div>', content)
-    for i in range(1,4):
-        svg=('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">'
-             '<rect width="800" height="600" fill="%s"/><circle cx="%d" cy="240" r="180" fill="%s"/>'
-             '<path d="M0 600 400 250 800 600Z" fill="%s"/></svg>')%(tokens['palette']['bg'],200*i,tokens['palette']['accent'],tokens['palette']['primary'])
-        content=content.replace('/template-sample-%d.svg'%i,'data:image/svg+xml;base64,'+base64.b64encode(svg.encode()).decode())
+    from kf_style_experience import sample_sections, artwork
+    tokens=kf_styles.normalize_tokens(body.get('tokens',{}))
+    recipe=kf_styles.normalize_recipe(body)
+    name=kf_ai.text(body.get('name','Untitled style'),'模板名称',80,True)
+    if body.get('source_url'): kf_styles.public_url(body['source_url'])
+    item=dict(body,**recipe)
+    pages=recipe['pages'][:1] if body.get('thumbnail') is True else recipe['pages']
+    selected=body.get('preview_page','home')
+    if selected not in {p['slug'] for p in pages}: raise kf_ai.AIError('模板预览页面不存在')
+    chunks=[]
+    for page in pages:
+        content=ks().render_sections(sample_sections(item,page))
+        content=re.sub(r'\[kf_contact_form[^\]]*\]', '<div class="kf-form"><label>Your name<input disabled placeholder="Sample form"></label><label>Email<input disabled placeholder="you@example.com"></label><label>Your message<textarea disabled></textarea></label><button class="kf-btn" disabled>Preview only</button></div>', content)
+        for i in range(1,4):
+            data='data:image/svg+xml;base64,'+base64.b64encode(artwork(tokens,recipe['sector'],i).encode()).decode()
+            content=content.replace('/template-sample-%d.png'%i,data)
+        for target in recipe['pages']:
+            content=content.replace('href="/%s/"'%target['slug'],'href="about:srcdoc#demo-%s"'%target['slug'])
+        content=content.replace('href="/contact/"','href="about:srcdoc#sample-content"')
+        chunks.append('<section id="demo-'+page['slug']+'" class="kf-template-page'+(' default' if page['slug']==selected else '')+'" aria-label="'+_html.escape(page['title'])+'">'+content+'</section>')
+    art='data:image/svg+xml;base64,'+base64.b64encode(artwork(tokens,recipe['sector']).encode()).decode()
     css=(BASE/'theme/kampong/style.css').read_text()+'\n'+design_vars('',tokens)+'\n'+(BASE/'theme/kampong/reference.css').read_text()
+    css+='''\n.kf-template-page{display:none}.kf-template-page.default{display:block}
+body:has(.kf-template-page:target) .kf-template-page.default{display:none}.kf-template-page:target{display:block!important}
+.kf-demo-nav{display:flex;flex-wrap:wrap;gap:20px}.kf-demo-nav a{color:var(--kf-ink);text-decoration:none;font-size:14px}
+.kf-header-inner{flex-wrap:wrap;gap:16px}.kf-style-reference .kf-art .gem{display:none}
+.kf-style-reference .kf-art{background-image:url("'''+art+'''");background-size:cover;background-position:center;aspect-ratio:4/3}
+.kf-style-reference .kf-hero h1{text-wrap:balance}.kf-demo-note{font-size:13px;opacity:.8}
+@media(max-width:600px){.kf-demo-nav{gap:14px}.kf-demo-nav a{font-size:13px}.kf-style-reference .kf-art{min-height:0}}
+'''
+    nav=''.join('<a href="about:srcdoc#demo-'+p['slug']+'">'+_html.escape(p['title'])+'</a>' for p in pages)
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; img-src data:; style-src &#39;unsafe-inline&#39;; form-action &#39;none&#39;; base-uri &#39;none&#39;">'
-            '<title>'+_html.escape(name)+'</title><style>'+css+'</style></head><body class="kf-style-reference">'
-            '<header class="kf-header"><div class="kf-container kf-header-inner"><b class="kf-logo">'+_html.escape(name)+'</b></div></header>'
-            '<main id="sample-content" class="kf-main"><div class="kf-content">'+content+'</div></main>'
-            '<footer class="kf-footer"><div class="kf-container">Local template preview · Sample content</div></footer></body></html>')
+        '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; img-src data:; style-src &#39;unsafe-inline&#39;; form-action &#39;none&#39;; base-uri &#39;none&#39;">'
+        '<title>'+_html.escape(name)+'</title><style>'+css+'</style></head><body class="kf-style-reference">'
+        '<header class="kf-header"><div class="kf-container kf-header-inner"><b class="kf-logo">'+_html.escape(name)+'</b><nav class="kf-demo-nav" aria-label="Demo pages">'+nav+'</nav></div></header>'
+        '<main id="sample-content" class="kf-main"><div class="kf-content">'+''.join(chunks)+'</div></main>'
+        '<footer class="kf-footer"><div class="kf-container"><b>'+_html.escape(name)+'</b><p class="kf-demo-note">Local template preview · Sample content</p>'+nav+'</div></footer></body></html>')
 
 
 # Untrusted previews/assets must never execute with the console's origin privileges.
@@ -2518,14 +2507,22 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-styles" class="hidden"><section id="styleManager">
-<div class="formrow"><div class="field"><label for="styleSearch">搜索模板名称或分类</label><input id="styleSearch" type="search"></div><div class="field"><label for="styleSectorFilter">模板行业</label><select id="styleSectorFilter"><option value="">全部行业</option></select></div><div class="field"><label for="styleStatus">模板状态</label><select id="styleStatus"><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select></div><button type="button" id="styleNew">新建模板</button><button type="button" class="ghost" id="styleImport">导入模板</button><input id="styleImportFile" type="file" accept="application/json,.json" hidden><button type="button" class="ghost" id="styleRefresh">刷新模板</button></div>
-<div id="styleLibrary" class="style-library"></div><section id="stylePreviewPanel" class="hidden"><div class="formrow"><h3>模板预览</h3><label for="stylePreviewWidth">预览宽度</label><select id="stylePreviewWidth"><option value="100%">桌面</option><option value="375px">手机</option></select><button type="button" class="ghost" id="stylePreviewClose">关闭预览</button></div><p class="hint">本地示例内容，用于检查布局与配色，不代表已生成的网站。</p><iframe id="stylePreviewFrame" title="风格模板预览" sandbox="" referrerpolicy="no-referrer"></iframe></section>
+<div class="style-intro"><div><p class="eyebrow">为下一站选择设计</p><h3>找到适合你的起点</h3><p class="hint">浏览完整页面，选择模板，再按你的业务调整。</p></div><button type="button" class="ghost" id="styleBuildAI">使用 AI 建站</button></div>
+<div class="style-browser-toolbar"><div class="field style-search-field"><label for="styleSearch">搜索模板名称或分类</label><input id="styleSearch" type="search" placeholder="名称、行业或关键词"></div><div class="field"><label for="styleSectorFilter">模板行业</label><select id="styleSectorFilter"><option value="">全部行业</option></select></div><div class="field"><label for="styleTypeFilter">网站用途</label><select id="styleTypeFilter"><option value="">全部用途</option></select></div><div class="field"><label for="styleSort">排序</label><select id="styleSort"><option value="recommended">推荐顺序</option><option value="name">名称排序</option><option value="updated">最近更新</option></select></div></div>
+<div class="style-browser-tools"><p id="styleResultCount" role="status" aria-live="polite"></p><label><input id="styleFavoritesOnly" type="checkbox">只看收藏</label><label for="styleStatus" class="sr-only">模板状态</label><select id="styleStatus"><option value="">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option></select><button type="button" class="ghost" id="styleResetFilters">清除筛选</button><details class="style-admin-tools"><summary>模板管理</summary><div><button type="button" id="styleNew">新建模板</button><button type="button" class="ghost" id="styleImport">导入模板</button><button type="button" class="ghost" id="styleRefresh">刷新模板</button></div></details><input id="styleImportFile" type="file" accept="application/json,.json" hidden></div>
+<div id="styleCompareBar" class="hidden style-compare-bar"><span id="styleCompareCount"></span><button type="button" id="styleCompareOpen">比较模板</button><button type="button" class="ghost" id="styleCompareClear">清空比较</button></div>
+<section id="styleComparePanel" class="hidden"><div class="formrow"><h3>模板比较</h3><button type="button" class="ghost" id="styleCompareClose">关闭比较</button></div><div id="styleCompareContent" class="style-compare-scroll"></div></section>
+<div id="styleLibrary" class="style-library"></div>
+<dialog id="styleDetailDialog" class="style-detail-dialog" aria-labelledby="styleDetailTitle"><section id="stylePreviewPanel" class="hidden"><div class="style-preview-toolbar"><h3 id="styleDetailTitle">模板预览</h3><label for="stylePreviewPage" class="sr-only">预览页面</label><select id="stylePreviewPage"></select><label for="stylePreviewWidth" class="sr-only">预览宽度</label><select id="stylePreviewWidth"><option value="100%">桌面</option><option value="768px">平板</option><option value="375px">手机</option></select><button type="button" class="ghost" id="stylePreviewFull">切换全屏</button><button type="button" class="ghost" id="stylePreviewClose">关闭预览</button></div><div class="style-detail-layout"><div class="style-preview-stage"><iframe id="stylePreviewFrame" title="风格模板预览" sandbox="" referrerpolicy="no-referrer"></iframe></div><aside class="style-detail-info"><p id="styleDetailSector"></p><p id="styleDetailSummary" data-user-content></p><div id="styleDetailSwatches" class="style-detail-swatches"></div><h4>包含页面</h4><ul id="styleDetailPages"></ul><h4>适合用途</h4><p id="styleDetailTypes"></p><button type="button" id="styleDetailUse">使用此模板</button><button type="button" class="ghost" id="styleDetailFavorite">收藏模板</button><button type="button" class="ghost" id="styleDetailEdit">编辑模板</button><a id="styleDetailSource" target="_blank" rel="noopener noreferrer">参考作品</a><details><summary>功能说明</summary><p class="hint">页面、内容区块和设计参数可编辑。联系表单在发布后接收询盘；商城支付、实时预约与会员功能需要单独接入服务。</p><p class="hint">本地示例内容，用于检查布局与配色，不代表已生成的网站。</p></details></aside></div></section></dialog>
+<section id="styleHistoryPanel" class="hidden"><div class="formrow"><h3>模板版本历史</h3><button type="button" class="ghost" id="styleHistoryClose">关闭历史</button></div><div id="styleHistoryList"></div></section>
 <form id="styleEditForm" class="hidden" style="margin-top:16px">
 <h3>编辑风格模板</h3>
 <div class="formrow"><div class="field"><label for="styleName">模板名称</label><input id="styleName" required maxlength="80"></div><div class="field"><label for="styleCategory">风格标签</label><input id="styleCategory" maxlength="40" placeholder="例如：编辑式、极简、现代"></div></div>
 <div class="formrow"><div class="field"><label for="styleSector">模板行业</label><select id="styleSector"></select></div><div class="field"><label for="styleIndustry">基础行业</label><select id="styleIndustry"></select></div><div class="field"><label for="styleTags">标签（逗号分隔）</label><input id="styleTags" maxlength="400"></div></div><div class="fld"><label for="styleSource">参考来源</label><input id="styleSource" type="url" maxlength="2000"></div>
 <div class="fld"><label for="styleSummary">风格说明</label><textarea id="styleSummary" maxlength="1500" rows="2"></textarea></div>
 <div class="fld"><label for="styleGuidance">内容生成指导</label><textarea id="styleGuidance" maxlength="2400" rows="3"></textarea></div>
+<fieldset class="style-type-editor"><legend>网站用途</legend><div id="styleTypeOptions"></div></fieldset>
+<details class="optional-options"><summary>站点页面管理</summary><div class="optional-content"><p class="hint">首页区块在下方调整；其他页面可设置名称、网址标识和区块顺序。</p><div id="stylePageRows"></div><button type="button" class="ghost" id="stylePageAdd">添加页面</button></div></details>
 <div id="styleColors" class="formrow"></div>
 <div class="formrow"><div class="field"><label for="styleHeading">标题字体</label><select id="styleHeading"><option value="sans">无衬线</option><option value="serif">衬线</option><option value="rounded">圆润</option><option value="mono">等宽</option></select></div><div class="field"><label for="styleRadius">卡片圆角（px）</label><input id="styleRadius" type="number" min="0" max="999" required></div><div class="field"><label for="stylePad">区块间距（px）</label><input id="stylePad" type="number" min="24" max="120" required></div></div>
 <details class="optional-options"><summary>高级视觉参数</summary><div class="optional-content"><div id="styleAdvanced" class="formrow"></div><div class="formrow"><div class="field"><label for="styleButtonRadius">按钮圆角（px）</label><input id="styleButtonRadius" type="number" min="0" max="999"></div><div class="field"><label for="styleOverlay">图片遮罩（0–1）</label><input id="styleOverlay" type="number" min="0" max="1" step="0.01"></div></div></div></details>
@@ -4131,7 +4128,7 @@ siteDomain.addEventListener('input',()=>{if(siteSlug.dataset.manual)return;const
 async function refreshConsole(){try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/ai.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
+<script src="/ai.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -4278,7 +4275,7 @@ class BuildService:
                 if plan is None:
                     raise kf_ai.AIError("请选择套餐")
                 import kf_template
-                pages = kf_template.build_spec(industry, company, domain)
+                pages = (style or {}).get("pages") or kf_template.build_spec(industry, company, domain)
                 original = None
             if not isinstance(pages, list) or not 1 <= len(pages) <= 12:
                 raise kf_ai.AIError("站点需要有 1–12 个可编辑页面")
@@ -4339,7 +4336,11 @@ class BuildService:
                     failed = _live.get(slug, {}).get("state") == "failed"
                 if failed or not (SITES / slug / "site-spec.json").is_file():
                     raise kf_ai.AIError("站点开通失败；请查看站点状态。已有目录会保留，请修复后选择已有站点重试")
-                if {p["slug"] for p in read_spec(slug).get("pages", [])} != {p["slug"] for p in pages}:
+                # Provisioning installs the base industry site; the selected design's
+                # page structure belongs to the unpublished draft generated above.
+                import kf_template
+                base_pages = kf_template.build_spec(industry, company, domain)
+                if {p["slug"] for p in read_spec(slug).get("pages", [])} != {p["slug"] for p in base_pages}:
                     raise kf_ai.AIError("站点模板初始化未完成，请修复后重试")
                 meta = load_meta(slug)
                 meta["plan_id"] = plan["id"]
@@ -4358,7 +4359,7 @@ class BuildService:
                     result["design"] = job["style"]["tokens"]
                 elif current.get("design"):
                     result["design"] = current["design"]
-                result["ai"] = {"job_id": jid, "simulated": job["simulated"], "model": profile["model"],
+                result["ai"] = {"job_id": jid, "mode": job["mode"], "simulated": job["simulated"], "model": profile["model"],
                                 "language": language, "generated_at": int(time.time()),
                                 "prompt": job.get("prompt"), "style": job.get("style"),
                                 "context_sources":[{k:v for k,v in src.items() if k!='data'} for src in job.get("context",[])]}
@@ -4422,6 +4423,14 @@ def _publish_site(body, render):
             failed.append({'page': page['slug'], 'error': '；'.join(res.get('errors', ['失败']))})
             break
         published.append(page)
+    template_navigation = not page_slug and draft.get('ai',{}).get('mode')=='new' and bool(draft.get('ai',{}).get('style',{}))
+    if not failed and template_navigation:
+        if not ks().sync_template_navigation(str(SITES / slug), pages):
+            return (500, {'ok': False, 'error': '页面已写入，模板导航同步失败；草稿保留，请重试发布'})
+        # Only new-site template publication replaces the base template's page list.
+        # WordPress pages and unrelated menus remain available; no content is deleted.
+        kf_ai.atomic_json(spec_path(slug), draft)
+        return (200, {'ok': True, 'pages': len(published), 'dirty': is_dirty(slug)})
     live = read_spec(slug)
     live_pages = live.get('pages', [])
     for page in published:
@@ -4838,7 +4847,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权使用自动建站"})
         store = ai_store()
         if path == "/api/ai/styles":
-            return self._send(200, kf_styles.StyleStore(BASE).public(self.user_role == "admin"))
+            return self._send(200, {**kf_styles.StyleStore(BASE).public(self.user_role == "admin"), **kf_styles.StyleStore(BASE).preferences(self.user,admin=self.user_role=="admin")})
+        if path.startswith('/api/ai/styles/history/'):
+            if self.user_role!='admin': return self._send(403, {'error':'只有管理员可以管理风格模板'})
+            try: return self._send(200, {'versions':kf_styles.StyleStore(BASE).history(path.rsplit('/',1)[-1])})
+            except kf_ai.AIError as exc: return self._send(400, {'error':str(exc)})
         if path == "/api/ai/prompts":
             return self._send(200, kf_prompts.PromptStore(BASE).public(self.user_role == "admin"))
         if path == "/api/ai/config":
@@ -4861,6 +4874,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/ai/styles/preview":
                 return self._send(200, {"html": style_preview_html(body), "tokens": kf_styles.normalize_tokens(body.get("tokens", {})), "recipe": kf_styles.normalize_recipe(body)})
+            if path == '/api/ai/styles/preferences':
+                return self._send(200,kf_styles.StyleStore(BASE).preferences(self.user,body,self.user_role=='admin'))
             if path == "/api/ai/styles/analyze":
                 return self._send(200, kf_styles.analyze(body.get("url")))
             if path == "/api/ai/styles":
@@ -4938,7 +4953,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/ai.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
@@ -5274,7 +5289,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True}, extra={"Set-Cookie": "kf_sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax" + ("; Secure" if self._is_secure() else "")})
         if path != "/api/upload" and self.headers.get_content_type() != "application/json":
             return self._send(415, {"error": "请使用 JSON 请求"})
-        is_prompt_preview = path in ("/api/ai/prompts/preview", "/api/ai/styles/analyze", "/api/ai/styles/preview") and self.user_role in ("admin", "ops")
+        is_prompt_preview = path in ("/api/ai/prompts/preview", "/api/ai/styles/analyze", "/api/ai/styles/preview", "/api/ai/styles/preferences") and self.user_role in ("admin", "ops")
         if not is_prompt_preview and not can_write(getattr(self, "user_role", "ops"), path):
             audit(getattr(self, "user", "-"), "denied", path)
             return self._send(403, {"error": "当前角色无权执行此操作"})

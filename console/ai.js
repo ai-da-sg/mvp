@@ -201,7 +201,7 @@ async function styleLoad(){
  }
  styleBuilderOptions(previous);
  $('#aiStyleSaveAnalysis').classList.toggle('hidden',!STYLE_LIBRARY.can_manage);
- styleRender();
+ styleBrowserLoad();styleRender();
 }
 function styleSectorLabel(id){return (STYLE_LIBRARY.sectors||[]).find(s=>s.id===(id||'general'))?.label||'通用';}
 function styleBuilderOptions(previous=$('#aiStyleTemplate').value){
@@ -211,19 +211,7 @@ function styleBuilderOptions(previous=$('#aiStyleTemplate').value){
 }
 $('#aiStyleSector').onchange=()=>{styleBuilderOptions();$('#aiStyleTemplate').onchange();};
 $('#styleSectorFilter').onchange=()=>styleRender();
-function styleCardArt(t){
- const a=t.tokens.advanced||{},palette=t.tokens.palette;
- const centered=a.hero==='center',minimal=a.hero==='minimal',columns=Math.max(1,Math.min(4,Number(a.columns)||3));
- const font={sans:'Arial,sans-serif',serif:'Georgia,serif',mono:'monospace',rounded:'ui-rounded,Arial,sans-serif'}[t.tokens.type.heading]||'sans-serif';
- return `<div class="style-card-art" style="background:${styleColor(palette.bg)};color:${styleColor(palette.ink)};text-align:${centered?'center':'left'};font-family:${font}"><span class="style-mini-line" style="background:${styleColor(palette.primary)};margin:${centered?'0 auto 12px':'0 0 12px'};width:${minimal?'12%':'32%'}"></span><b data-user-content style="font-weight:${Number(a.heading_weight)||700};font-size:${minimal?'24':'20'}px">${esc(t.name)}</b><div class="style-mini-grid" style="grid-template-columns:repeat(${columns},1fr)">${Array.from({length:columns},()=>`<span style="background:${styleColor(palette.accent)};border-radius:${Number.parseInt(t.tokens.shape.radius)||0}px;height:${a.image_ratio==='1 / 1'?'56':'36'}px"></span>`).join('')}</div></div>`;
-}
-function styleRender(){
- const q=$('#styleSearch').value.trim().toLowerCase();
- const state=$('#styleStatus').value,sector=$('#styleSectorFilter').value;
- const items=STYLE_LIBRARY.templates.filter(t=>(t.name+' '+t.category+' '+styleSectorLabel(t.sector)+' '+((STYLE_LIBRARY.sectors||[]).find(s=>s.id===t.sector)?.label_en||'')+' '+(t.tags||[]).join(' ')).toLowerCase().includes(q)&&(!sector||(t.sector||'general')===sector)&&(!state||(state==='enabled')===t.enabled));
- $('#styleNew').hidden=!STYLE_LIBRARY.can_manage;$('#styleImport').hidden=!STYLE_LIBRARY.can_manage;
- $('#styleLibrary').innerHTML=items.length?items.map(t=>`<article class="style-card">${styleCardArt(t)}<div class="style-card-body"><h3 data-user-content>${esc(t.name)}</h3><p class="hint"><span>${esc(styleSectorLabel(t.sector))}</span> · <span data-user-content>${esc(t.category)}</span> · v${Number(t.version)}</p><p class="style-description" data-user-content>${esc(t.summary)}</p>${t.source_url?`<a class="style-source" href="${esc(t.source_url)}" target="_blank" rel="noopener noreferrer">参考作品</a>`:''}${t.enabled?'':'<span class="pill">已停用</span>'}<div class="style-card-actions"><button type="button" data-style-use="${esc(t.id)}" ${t.enabled?'':'disabled'}>使用</button><button type="button" class="ghost" data-style-preview="${esc(t.id)}">预览</button><button type="button" class="ghost" data-style-export="${esc(t.id)}">导出</button>${STYLE_LIBRARY.can_manage?`<button type="button" class="ghost" data-style-edit="${esc(t.id)}">编辑</button><button type="button" class="ghost" data-style-copy="${esc(t.id)}">复制</button><button type="button" class="ghost danger" data-style-delete="${esc(t.id)}">删除</button>`:''}</div></div></article>`).join(''):'<p class="hint">尚无匹配模板。可新建模板或调整筛选条件。</p>';
-}
+function styleRender(){styleRenderBrowser();}
 function styleShow(item){
  $('#aiStyleResult').classList.toggle('hidden',!item);
  if(!item)return;
@@ -265,7 +253,7 @@ function styleEdit(item){
  $('#styleEnabled').checked=item.enabled!==false;
  $('#styleHeading').value=item.tokens.type.heading;$('#styleRadius').value=parseInt(item.tokens.shape.radius);$('#stylePad').value=parseInt(item.tokens.layout.pad);
  $('#styleColors').innerHTML=Object.entries(STYLE_LABELS).map(([key,label])=>`<div class="field"><label for="styleColor-${key}">${label}</label><input type="color" id="styleColor-${key}" value="${esc(item.tokens.palette[key])}"></div>`).join('');
- styleEditExtras(item);STYLE_DIRTY=false;
+ styleEditExtras(item);styleEditPages(item);STYLE_DIRTY=false;
  $('#styleEditForm').classList.remove('hidden');$('#styleEditForm').scrollIntoView({block:'start'});
 }
 $('#aiStyleSaveAnalysis').onclick=()=>{if(STYLE_ANALYSIS)styleEdit({...STYLE_ANALYSIS,name:(STYLE_ANALYSIS.title||'参考网站').slice(0,70)+' 风格'});};
@@ -274,11 +262,14 @@ $('#styleSearch').oninput=styleRender;
 $('#styleRefresh').onclick=async()=>{try{await styleLoad();aiMessage('#styleManageMsg','模板已刷新');}catch(e){aiMessage('#styleManageMsg',e.message,true);}};
 $('#styleLibrary').onclick=async e=>{
  const button=e.target.closest('button');if(!button)return;
+ if(button.dataset.styleFavorite){styleToggleFavorite(button.dataset.styleFavorite);return;}
+ if(button.dataset.styleCompare){styleToggleCompare(button.dataset.styleCompare);return;}
+ if(button.dataset.styleHistory){styleHistory(button.dataset.styleHistory);return;}
  const id=button.dataset.styleUse||button.dataset.styleEdit||button.dataset.styleCopy||button.dataset.styleDelete||button.dataset.stylePreview||button.dataset.styleExport;
  const item=STYLE_LIBRARY.templates.find(t=>t.id===id);if(!item)return;
  if(button.dataset.stylePreview){try{await stylePreview(item);}catch(e){aiMessage('#styleManageMsg',e.message,true);}return;}
  if(button.dataset.styleExport){styleExport(item);return;}
- if(button.dataset.styleUse){if(!navigateTo('ai'))return;$('#aiStyleSector').value=item.sector||'general';styleBuilderOptions(id);$('#aiStyleTemplate').value=id;styleShow(item);aiMessage('#aiStyleMsg','已选择 '+item.name);$('#aiStyleTemplate').scrollIntoView({block:'center'});return;}
+ if(button.dataset.styleUse){styleUseTemplate(item);return;}
  if(button.dataset.styleEdit){styleEdit(item);return;}
  if(button.dataset.styleDelete&&!confirm('删除此风格模板？已生成的网站和任务快照会保留。'))return;
  button.disabled=true;
@@ -322,13 +313,14 @@ function styleEditExtras(item){
   const control=typeof spec[0]==='string'?`<select id="styleAdv-${key}">${spec.slice(1).map(v=>`<option value="${esc(v)}" ${value===v?'selected':''}>${esc(STYLE_OPTION_LABELS[v]||v)}</option>`).join('')}</select>`:`<input id="styleAdv-${key}" type="number" min="${spec[1]}" max="${spec[2]}" step="${key==='line_height'?'.05':'1'}" value="${Number(value)}" required>`;
   return `<div class="field"><label for="styleAdv-${key}">${esc(STYLE_ADV_LABELS[key]||key)}</label>${control}</div>`;
  }).join('');
- STYLE_EDIT.blueprint=[...(item.blueprint||[])];styleBlueprint();
+ STYLE_EDIT.blueprint=[...(item.blueprint?.length?item.blueprint:['hero','cards','split','cta'])];styleBlueprint();
  $('#styleBlockType').innerHTML=Object.entries(STYLE_BLOCKS).map(([key,label])=>`<option value="${key}">${label}</option>`).join('');
  $('#styleJSON').value=JSON.stringify(item,null,2);
 }
 function styleReadForm(){
  const body=JSON.parse(JSON.stringify(STYLE_EDIT||{}));body.tokens=body.tokens||{};
  for(const [id,key] of Object.entries({styleName:'name',styleCategory:'category',styleSource:'source_url',styleSummary:'summary',styleGuidance:'guidance'}))body[key]=$('#'+id).value.trim();
+ body.site_types=[...document.querySelectorAll('#styleTypeOptions input:checked')].map(e=>e.value);body.pages=styleReadPages();
  body.sector=$('#styleSector').value;body.industry=$('#styleIndustry').value;body.tags=$('#styleTags').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean);body.enabled=$('#styleEnabled').checked;
  body.tokens.palette=Object.fromEntries(Object.keys(STYLE_LABELS).map(key=>[key,$('#styleColor-'+key).value]));
  body.tokens.type={heading:$('#styleHeading').value};body.tokens.shape={radius:$('#styleRadius').value+'px',button:$('#styleButtonRadius').value+'px'};
@@ -339,10 +331,8 @@ function styleReadForm(){
 function styleBlueprint(){
  $('#styleBlueprint').innerHTML=(STYLE_EDIT?.blueprint||[]).map((type,i)=>`<div class="share-row"><span>${i+1}. <span>${esc(STYLE_BLOCKS[type]||type)}</span></span><button type="button" class="ghost" data-style-block="up" data-index="${i}" ${i===0?'disabled':''}>上移</button><button type="button" class="ghost" data-style-block="down" data-index="${i}" ${i===STYLE_EDIT.blueprint.length-1?'disabled':''}>下移</button><button type="button" class="ghost" data-style-block="remove" data-index="${i}">移除</button></div>`).join('');
 }
-async function stylePreview(item){
- const result=await aiRequest('/api/ai/styles/preview',item);
- $('#stylePreviewFrame').srcdoc=result.html;$('#stylePreviewPanel').classList.remove('hidden');$('#stylePreviewPanel').scrollIntoView({block:'start'});
-}
+async function stylePreview(item){return styleOpenPreview(item);}
+
 function styleExport(item){
  const data={...item};delete data.id;delete data.version;delete data.updated;delete data.origin;
  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
@@ -353,7 +343,7 @@ window.addEventListener('beforeunload',e=>{if(STYLE_DIRTY){e.preventDefault();e.
 $('#styleNew').onclick=()=>styleEdit({name:'',category:'',industry:'tech',tags:[],blueprint:['hero','cards','split','cta'],enabled:true,tokens:{palette:{primary:'#315e57',primaryDark:'#203e39',accent:'#92512e',bg:'#fafaf7',surface:'#ffffff',ink:'#202b29',muted:'#53615d',deep:'#203e39'},shape:{radius:'16px',button:'8px'},type:{heading:'sans'},layout:{pad:'72px'},photos:{overlay:'0.46'}}});
 $('#styleStatus').onchange=styleRender;
 $('#stylePreviewWidth').onchange=()=>{$('#stylePreviewFrame').style.width=$('#stylePreviewWidth').value;};
-$('#stylePreviewClose').onclick=()=>{$('#stylePreviewPanel').classList.add('hidden');$('#stylePreviewFrame').srcdoc='';};
+$('#stylePreviewClose').onclick=()=>styleClosePreview();
 $('#stylePreviewEdit').onclick=async()=>{try{await stylePreview(styleReadForm());}catch(e){aiMessage('#styleManageMsg',e.message,true);}};
 $('#styleAddBlock').onclick=()=>{if(STYLE_EDIT.blueprint.length>=20){aiMessage('#styleManageMsg','最多添加 20 个区块',true);return;}STYLE_EDIT.blueprint.push($('#styleBlockType').value);STYLE_DIRTY=true;styleBlueprint();};
 $('#styleBlueprint').onclick=e=>{const button=e.target.closest('[data-style-block]');if(!button)return;const i=Number(button.dataset.index),items=STYLE_EDIT.blueprint;const action=button.dataset.styleBlock;if(action==='remove')items.splice(i,1);else{const j=i+(action==='up'?-1:1);if(j>=0&&j<items.length)[items[i],items[j]]=[items[j],items[i]];}STYLE_DIRTY=true;styleBlueprint();};

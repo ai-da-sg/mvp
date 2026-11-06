@@ -37,6 +37,28 @@ class ProviderTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ai.AIError):
                 ai.validate_spec(bad, PAGES)
 
+    def test_all_template_sections_validate_and_unsafe_content_is_rejected(self):
+        import kf_style_experience as experience
+        page={'slug':'home','title':'Home','blueprint':list(experience.BLOCKS)}
+        sections=experience.sample_sections({'name':'Studio','sector':'creative'},page)
+        spec={'pages':[{'slug':'home','title':'Home','sections':sections}]}
+        clean=ai.validate_spec(spec,[page])
+        self.assertEqual({b['type'] for b in clean['pages'][0]['sections']},set(experience.BLOCKS))
+        rich=next(b for b in sections if b['type']=='rich')
+        rich['html']='<p>Keep this</p><script>alert(1)</script><img src=x onerror=alert(1)>'
+        cleaned=ai.validate_spec(spec,[page])
+        markup=next(b for b in cleaned['pages'][0]['sections'] if b['type']=='rich')['html']
+        self.assertIn('Keep this',markup);self.assertNotIn('<script',markup);self.assertNotIn('onerror',markup)
+        for block in [
+            {'type':'band','src':'javascript:alert(1)'},
+            {'type':'gallery','items':[{'src':'//evil.test/x','label':'Image'}]},
+            {'type':'table','headers':['A','B'],'rows':[['Only one']]},
+            {'type':'table','headers':['A']},
+            {'type':'quotes','items':[{'text':'Quote','by':'Name','onclick':'bad'}]},
+        ]:
+            with self.subTest(block=block),self.assertRaises(ai.AIError):
+                ai.validate_spec({'pages':[{'slug':'home','title':'Home','sections':[sections[0],block]}]},[page])
+
     def test_config_keys_and_restart(self):
         with tempfile.TemporaryDirectory() as d:
             store = ai.AIStore(d)
@@ -126,7 +148,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('ai.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
+        for filename in ('ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -538,6 +560,38 @@ class ConsoleTests(unittest.TestCase):
             self.assertEqual(job['status'],'failed')
         self.assertEqual(self.m.read_draft('demo'),self.original)
         self.assertEqual(self.m.read_spec('demo'),self.original)
+
+    def test_new_site_uses_template_pages_without_changing_provisioned_live_pages(self):
+        import kf_template, kf_styles
+        store=kf_styles.StyleStore(self.base)
+        template=store.public(True)['templates'][0]
+        template=store.change(dict(template,pages=[
+            {'slug':'home','title':'Welcome','blueprint':['hero','cards','cta']},
+            {'slug':'portfolio','title':'Our work','blueprint':['hero','gallery','cta']}]))
+        def provision(company,domain,slug,port,name,price,industry,plan_id):
+            site=self.base/'sites'/slug;site.mkdir()
+            ai.atomic_json(site/'meta.json',dict(company=company,domain=domain,port=port))
+            ai.atomic_json(site/'site-spec.json',{'pages':kf_template.build_spec(industry,company,domain)})
+        with patch.object(self.m,'provision',side_effect=provision):
+            status,data=self.request('/api/ai/build',dict(mode='new',slug='portfolio-site',company='Studio',
+                domain='portfolio.example.test',plan_id='starter',brief='Design portfolio',language='en',
+                profile_id='mock',style_template_id=template['id']))
+            self.assertEqual(status,202,data)
+            job=self.wait_job(data['job']['id']);self.assertEqual(job['status'],'completed',job)
+        draft=self.m.read_draft('portfolio-site')
+        self.assertEqual([p['slug'] for p in draft['pages']],['home','portfolio'])
+        self.assertEqual(draft['ai']['style']['pages'],template['pages'])
+        self.assertNotIn('portfolio',[p['slug'] for p in self.m.read_spec('portfolio-site')['pages']])
+        self.assertTrue(list((self.base/'sites'/'portfolio-site'/'.backups').glob('ai-*.json')))
+        with patch.object(self.m,'apply_design',return_value=True),patch.object(self.m.ks(),'sync_template_navigation',return_value=False):
+            code,result=self.m.publish_site({'slug':'portfolio-site'},lambda *a,**kw:{'ok':True})
+            self.assertEqual(code,500);self.assertTrue(self.m.is_dirty('portfolio-site'))
+        with patch.object(self.m,'apply_design',return_value=True),patch.object(self.m.ks(),'sync_template_navigation',return_value=True) as navigation:
+            code,result=self.m.publish_site({'slug':'portfolio-site'},lambda *a,**kw:{'ok':True})
+            self.assertEqual(code,200,result);self.assertFalse(result['dirty'])
+            self.assertEqual(navigation.call_args.args[1],draft['pages'])
+            self.assertEqual(self.m.read_spec('portfolio-site'),draft)
+
 
     def test_new_site_pipeline_and_invoice(self):
         import kf_template

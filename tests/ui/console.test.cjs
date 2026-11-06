@@ -34,7 +34,7 @@ print(json.dumps(result))
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
   assert.equal(u.hostname,'review.invalid','Unexpected external request');
   if(p==='/'||p==='/login')return route.fulfill({contentType:'text/html',body:pages[p==='/'?'console':'login']});
-  if(['/ai.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
+  if(['/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
@@ -170,11 +170,11 @@ print(json.dumps(result))
  let style=styleAPI('read').templates.find(t=>t.name==='参考风格测试');assert(style);await nav('ai');
  calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
  assert.equal(calls.find(c=>c.path==='/api/ai/build').body.style_template_id,style.id);
- await nav('styles');await page.locator(`[data-style-edit="${style.id}"]`).click();await page.locator('#styleName').fill('已修改风格');await page.locator('#styleEnabled').uncheck();
+ await nav('styles');await page.locator(`[data-style-edit="${style.id}"]`).evaluate(e=>{const d=e.closest('details');if(d)d.open=true;});await page.locator(`[data-style-edit="${style.id}"]`).click();await page.locator('#styleName').fill('已修改风格');await page.locator('#styleEnabled').uncheck();
  await page.locator('#styleEditForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#styleEditForm').classList.contains('hidden'));
  assert.equal(styleAPI('read').templates.find(t=>t.id===style.id).version,2);assert.equal(await page.locator('#aiStyleTemplate').inputValue(),'');
- await page.locator(`[data-style-copy="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===30);
- page.once('dialog',d=>d.accept());await page.locator(`[data-style-delete="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===29);
+ await page.locator(`[data-style-copy="${style.id}"]`).evaluate(e=>{const d=e.closest('details');if(d)d.open=true;});await page.locator(`[data-style-copy="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===30);
+ page.once('dialog',d=>d.accept());await page.locator(`[data-style-delete="${style.id}"]`).evaluate(e=>{const d=e.closest('details');if(d)d.open=true;});await page.locator(`[data-style-delete="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===29);
  assert.equal(styleAPI('read').templates.length,29);
  console.log('PASS reference analysis, save, selection, edit, disable, copy and delete');
  await nav('prompts');await page.waitForSelector('#promptLibraryList .dom-row');
