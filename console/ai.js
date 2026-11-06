@@ -98,11 +98,11 @@ async function initAI() {
     await aiLoadConfig();
     await initPromptComposer();
     await styleLoad();
-    aiOptions('#aiSite',(STATE.sites||[]).map(s=>({...s,id:s.slug})),s=>s.company+' / '+s.slug);
+    SiteContext.fill($('#aiSite'),window.aiContextTarget);
     aiOptions('#aiPlan',STATE.plans||[],p=>p.name+' — '+money(p.price));
     aiOptions('#aiIndustry',(STATE.industries||[]).map(([id,name])=>({id,name})),p=>p.name);
     if (!AI_READY) {
-      $('#aiMode').value=STATE.sites.length?'existing':'new'; $('#aiIndustry').value='tech';
+      $('#aiMode').value=$('#aiSite').value?'existing':'new'; $('#aiIndustry').value='tech';
       AI_READY=true;
     }
     if(window.aiContextTarget){$('#aiMode').value='existing';$('#aiSite').value=window.aiContextTarget;window.aiContextTarget=null;}

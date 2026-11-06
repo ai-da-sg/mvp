@@ -250,7 +250,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -2956,6 +2956,7 @@ let CURRENT_TAB='sites', NAV_READY=false;
 function navigateTo(key, updateHistory=true){
  const t=[...document.querySelectorAll('.tab')].find(x=>x.dataset.t===key);
  if(!t || t.style.display==='none') return false;
+ if(key!==CURRENT_TAB&&typeof AdminUI!=='undefined'&&!AdminUI.canLeave())return false;
  if(CURRENT_TAB==='styles'&&key!=='styles'&&typeof styleCanLeave==='function'&&!styleCanLeave())return false;
  if(EDITOR_BUSY){ showGlobalError('正在保存或发布，请稍候再切换页面。'); return false; }
  if(CURRENT_TAB==='layout' && !commitJson())return false;
@@ -3133,6 +3134,7 @@ function dnsRow(r,i){
   </div></div>`;
 }
 async function loadDns(slug){
+  if(!slug){$('#dnBody').innerHTML='<p class="hint">没有可选站点</p>';return;}
   const r=await fetch('/api/dns/'+encodeURIComponent(slug));
   const d=await r.json(); DNSINFO=d;
   const box=$('#dnBody');
@@ -3242,8 +3244,9 @@ async function checkDns(ep){
 }
 function initDns(){
   const sel=$('#dnSlug');
-  if(!sel.options.length){
-    sel.innerHTML=STATE.sites.map(s=>`<option value="${s.slug}">${esc(s.company)}</option>`).join('');
+  SiteContext.fill(sel);
+  if(!sel.dataset.initialized){
+    sel.dataset.initialized='1';
     sel.onchange=()=>loadDns(sel.value);
     $('#dnRefresh').onclick=()=>loadDns(sel.value);
   }
@@ -3301,12 +3304,13 @@ async function loadBoard(){
       <span class="hint" style="margin:0;flex:1">${esc(x.domain||'—')} · ${esc(x.registrar||'未登记')}</span>
       <span style="min-width:120px;font-size:12px">域名 ${daysBadge(x.domain_days,x.auto_renew)}</span>
       <span style="min-width:120px;font-size:12px;color:var(--dim)">服务 ${daysBadge(x.service_days,true)}</span>
-      <button onclick="$('#clSlug').value='${esc(x.slug)}';loadClient('${esc(x.slug)}');window.scrollTo(0,0)">查看</button>
+      <button onclick="SiteContext.fill($('#clSlug'),'${esc(x.slug)}');loadClient('${esc(x.slug)}');window.scrollTo(0,0)">查看</button>
     </div></div>`;
   }).join('');
   $('#clBoard').innerHTML=head+(rows||'<div style="color:var(--dim);font-size:13px">还没有域名记录</div>');
 }
 async function loadClient(slug){
+  if(!slug){$('#clForm').innerHTML='<p class="hint">没有可选站点</p>';$('#clLedger').innerHTML='';$('#clBal').textContent='—';return;}
   const [cs, lg]=await Promise.all([
     fetch('/api/clients').then(r=>r.json()),
     fetch('/api/ledger/'+encodeURIComponent(slug)).then(r=>r.json())]);
@@ -3357,8 +3361,9 @@ async function addLedger(){
 function initClient(){
   loadBoard();
   const sel=$('#clSlug');
-  if(!sel.options.length){
-    sel.innerHTML=STATE.sites.map(s=>`<option value="${s.slug}">${esc(s.company)}</option>`).join('');
+  SiteContext.fill(sel);
+  if(!sel.dataset.initialized){
+    sel.dataset.initialized='1';
     sel.onchange=()=>loadClient(sel.value);
   }
   loadClient(sel.value);
@@ -3613,6 +3618,7 @@ function initMaint(){
 
 // ---------------- 线索 ----------------
 async function loadLeads(slug){
+  if(!slug){$('#ldList').innerHTML='<p class="hint">没有可选站点</p>';return;}
   $('#ldMsg').textContent='读取中…';
   const r=await fetch('/api/leads/'+encodeURIComponent(slug));
   const d=await r.json();
@@ -3636,8 +3642,9 @@ async function loadLeads(slug){
 }
 function initLeads(){
   const sel=$('#ldSlug');
-  if(!sel.options.length){
-    sel.innerHTML=STATE.sites.map(s=>`<option value="${s.slug}">${esc(s.company)}</option>`).join('');
+  SiteContext.fill(sel);
+  if(!sel.dataset.initialized){
+    sel.dataset.initialized='1';
     sel.onchange=()=>loadLeads(sel.value);
     $('#ldRefresh').onclick=()=>loadLeads(sel.value);
   }
@@ -3649,6 +3656,7 @@ async function initDomain(){ return loadDomainRegistry(); }
 
 // ---------------- 分享 ----------------
 async function loadShares(slug){
+  if(!slug){$('#sList').innerHTML='<p class="hint">没有可选站点</p>';return;}
   const r=await fetch('/api/shares/'+encodeURIComponent(slug));
   const d=await r.json();
   const box=$('#sList');
@@ -3684,8 +3692,9 @@ async function revokeShare(token){
 }
 function initShare(){
   const sel=$('#sSlug');
-  if(!sel.options.length){
-    sel.innerHTML=STATE.sites.map(s=>`<option value="${s.slug}">${esc(s.company)}</option>`).join('');
+  SiteContext.fill(sel);
+  if(!sel.dataset.initialized){
+    sel.dataset.initialized='1';
     sel.onchange=()=>loadShares(sel.value);
     $('#sCreate').onclick=async()=>{
       const r=await fetch('/api/shares',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -3703,6 +3712,7 @@ function initShare(){
 let MSLUG='';
 function humanSize(n){ return n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB'; }
 async function loadGrid(slug){
+  if(!slug){$('#mGrid').innerHTML='<p class="hint">没有可选站点</p>';return;}
   MSLUG=slug;
   const r=await fetch('/api/media/'+encodeURIComponent(slug));
   const d=await r.json();
@@ -3747,8 +3757,9 @@ async function delMedia(name, force){
 }
 function initMedia(){
   const sel=$('#mSlug');
-  if(!sel.options.length){
-    sel.innerHTML=STATE.sites.map(s=>`<option value="${s.slug}">${esc(s.company)}</option>`).join('');
+  SiteContext.fill(sel);
+  if(!sel.dataset.initialized){
+    sel.dataset.initialized='1';
     sel.onchange=()=>loadGrid(sel.value);
     $('#mUpload').onclick=()=>$('#mFile').click();
     $('#mFile').onchange=async()=>{
@@ -4021,7 +4032,8 @@ function paintDirty(){
 async function loadSpec(slug, force=false){
  if(EDITOR_BUSY)return;
  if(!force && LSLUG===slug && LSPEC.pages.length)return;
- if((LOCAL_DIRTY.size||JSON_DIRTY)&&!confirm('当前站点还有未保存内容。载入其他草稿将丢弃这些改动，是否继续？')){$('#lSlug').value=LSLUG;return;}
+ if((LOCAL_DIRTY.size||JSON_DIRTY)&&!confirm('当前站点还有未保存内容。载入其他草稿将丢弃这些改动，是否继续？')){$('#lSlug').value=LSLUG;SiteContext.save({slug:LSLUG});return;}
+ if(!slug){LOCAL_DIRTY.clear();JSON_DIRTY=false;LSPEC={pages:[]};LSLUG='';LPAGE='';LW=null;LIDX=-1;$('#lPage').innerHTML='';$('#lJson').value='';renderSecList();renderForm();paintDirty();$('#lMsg').textContent='没有可选站点';return;}
  editorBusy(true);
  try{
   const r=await fetch('/api/spec/'+encodeURIComponent(slug));
@@ -4077,8 +4089,9 @@ async function publish(slug, page){
 }
 async function initLayout(preferredSlug){
   const sel=$('#lSlug');
-  if(!sel.options.length){
-    sel.innerHTML=STATE.sites.map(s=>`<option value="${s.slug}">${esc(s.company)}</option>`).join('');
+  SiteContext.fill(sel,preferredSlug);
+  if(!sel.dataset.initialized){
+    sel.dataset.initialized='1';
     sel.onchange=()=>loadSpec(sel.value);
     $('#lPage').onchange=()=>{if(!commitJson()){$('#lPage').value=LPAGE;return;}LPAGE=$('#lPage').value;LIDX=-1;LW=null;renderSecList();renderForm();paintDirty();};
     $('#lAdd').onclick=()=>{
@@ -4108,7 +4121,7 @@ async function initLayout(preferredSlug){
     $('#lSave').onclick=()=>editorAction(async()=>{await saveDrafts();$('#lMsg').className='msg ok';$('#lMsg').textContent='全部改动已保存到草稿，线上未变。';renderSecList();});
   }
   if(preferredSlug) sel.value=preferredSlug;
-  if(sel.value) await loadSpec(sel.value,!!preferredSlug);
+  await loadSpec(sel.value,!!preferredSlug);
 }
 
 // ---------------- 设计 ----------------
@@ -4161,8 +4174,9 @@ async function fetchDesign(slug){
 }
 async function initDesign(){
   const sel=$('#dSlug');
-  if(!sel.options.length){
-    sel.innerHTML=STATE.sites.map(s=>`<option value="${s.slug}">${esc(s.company)}</option>`).join('');
+  SiteContext.fill(sel);
+  if(!sel.dataset.initialized){
+    sel.dataset.initialized='1';
     sel.onchange=()=>fetchDesign(sel.value);
     $('#dPreset').onchange=e=>{const k=e.target.value; if(k&&DPRESETS[k]) fillDesign(DPRESETS[k]);};
     ['cPrimary','cAccent','cBg','sButton','sHead'].forEach(id=>$('#'+id).oninput=syncTokens);
@@ -4221,10 +4235,11 @@ $('#workspace').addEventListener('invalid',e=>{if(!e.target.form)return;e.preven
 $('#workspace').addEventListener('input',e=>{if(e.target.form?.querySelector('.form-error-summary'))renderValidation(e.target.form);});
 const accessibilityObserver=new MutationObserver(enhanceAccessibility);
 accessibilityObserver.observe($('#workspace'),{childList:true,subtree:true});enhanceAccessibility();
-async function refreshConsole(){try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}}
+let REFRESH_RUNNING=false;
+async function refreshConsole(){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/ai.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/ai.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -5050,7 +5065,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})

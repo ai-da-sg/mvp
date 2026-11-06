@@ -1,5 +1,11 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+包含归档站点|Include archived sites
+没有可选站点|No available sites
+认证方式|Authentication
+授权站点|Authorized sites
+没有匹配记录|No matching records
+有未保存的修改，放弃修改？|Discard unsaved changes?
 搜索域名|Search domains
 域名、客户、机构或账号|Domain, customer, provider or account
 到期状态|Expiry status

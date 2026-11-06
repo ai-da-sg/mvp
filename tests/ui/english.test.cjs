@@ -27,9 +27,9 @@ if(key==='styles'){await page.locator('#styleNew').evaluate(e=>{const d=e.closes
  await page.locator('#stylePreviewClose').click();
  await scan('styles-library-switched','#styleLibrary');
 }
-if(key==='providers'){await page.locator('#providerNew').click();for(const value of await page.locator('#providerKind option').evaluateAll(es=>es.map(e=>e.value))){await page.selectOption('#providerKind',value);await scan('provider-'+value,'#providerForm');}}
+if(key==='providers'){await page.locator('#providerNew').click();for(const value of await page.locator('#providerKind option').evaluateAll(es=>es.map(e=>e.value))){await page.selectOption('#providerKind',value);await scan('provider-'+value,'#providerForm');}page.once('dialog',d=>d.accept());await page.locator('#providerCancel').click();}
 if(key==='domain'){await page.locator('#domainNew').click();await scan('domain-record-form','#domainRecordDialog');await page.locator('#domainRecordCancel').click();await page.locator('[data-domain-view]').first().click();await scan('domain-detail','#domainDetailDialog');await page.locator('#domainDetailClose').click();}
-if(key==='mcp'){await page.locator('#mcpNew').click();await scan('mcp-form','#mcpForm');}
+if(key==='mcp'){await page.locator('#mcpNew').click();await scan('mcp-form','#mcpForm');await page.locator('#mcpCancel').click();}
 }
 
 // Exercise populated domain accounts through real HTTP, including empty fields.
@@ -46,8 +46,8 @@ await page.evaluate(async()=>{
  await loadProviders();
 });
 await scan('provider-populated','#providerList');
-assert.equal(await page.locator('#providerList strong[data-user-content]').innerText(),'用户账号名称');
-assert.match(await page.locator('#providerList').innerText(),/Authorized sites:/);
+assert.equal(await page.locator('#providerList td[data-user-content]').first().innerText(),'用户账号名称');
+await page.evaluate(()=>document.querySelector('[data-provider-view]').click());await scan('provider-detail','#adminDetailDialog');assert.match(await page.locator('#adminDetailDialog').innerText(),/Authorized sites/);await page.locator('#adminDetailDialog button').click();
 // Renderer coverage for remote capability payloads; no external MCP calls or mocked HTTP.
 await page.evaluate(()=>renderMCPCapabilities({id:'audit',name:'Audit MCP'}, {
  server:'Audit',version:'1',protocol:'2025-06-18',truncated:true,

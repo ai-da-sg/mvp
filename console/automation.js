@@ -8,7 +8,7 @@ function autoText(name,label,value='',required=false){return `<div class="fld"><
 async function loadAutomation(){
  const controls=['autoSite','autoPurpose','autoSource','autoTool','autoPrepare'].map(id=>document.getElementById(id));controls.forEach(e=>e.disabled=true);
  try{
- const previous=window.autoPendingAction?.slug||$('#autoSite').value;$('#autoSite').innerHTML=(STATE.sites||[]).map(s=>`<option value="${esc(s.slug)}">${esc(s.company)} / ${esc(s.domain)}</option>`).join('');if(previous)$('#autoSite').value=previous;
+ SiteContext.fill($('#autoSite'),window.autoPendingAction?.slug);
  AUTO_CONFIG=await aiRequest('/api/automation/config');$('#autoDNSConfig').hidden=!AUTO_CONFIG.can_configure;$('#autoMailConfig').hidden=!AUTO_CONFIG.can_configure;
  await autoSources();await autoHistory();await autoWorkflows();
  if(window.autoPendingAction){const item=window.autoPendingAction;window.autoPendingAction=null;showAutoReview(item);}
