@@ -18,7 +18,8 @@ if not args.allow_test_writes:parser.error('Use --allow-test-writes only for an 
 site=str(Path(args.site).resolve())
 def evaluate(code):
  r=wp(site,'eval',code);assert r.returncode==0,r.stderr;return json.loads(r.stdout)
-original=evaluate("$m=new stdClass();$d=get_option('kf_design',$m);$k=get_option('kf_template_navigation_menus',$m);echo wp_json_encode(['locations'=>get_theme_mod('nav_menu_locations',[]),'has_locations'=>array_key_exists('nav_menu_locations',(array)get_theme_mods()),'design'=>$d===$m?null:$d,'has_design'=>$d!==$m,'managed'=>$k===$m?null:$k,'has_managed'=>$k!==$m]);")
+baseline_code="$m=new stdClass();$d=get_option('kf_design',$m);$k=get_option('kf_template_navigation_menus',$m);echo wp_json_encode(['locations'=>get_theme_mod('nav_menu_locations',[]),'has_locations'=>array_key_exists('nav_menu_locations',(array)get_theme_mods()),'design'=>$d===$m?null:$d,'has_design'=>$d!==$m,'managed'=>$k===$m?null:$k,'has_managed'=>$k!==$m]);"
+original=evaluate(baseline_code)
 owned=[]
 try:
  name='recovery-proof-'+uuid.uuid4().hex[:8]
@@ -33,9 +34,11 @@ try:
 
  finally:owned+=evaluate("$l=get_theme_mod('nav_menu_locations',[]);echo wp_json_encode(array_values(array_intersect_key($l,array_flip(['primary','footer']))));")
  assert adapter.capture()==before
- print(json.dumps({'design_and_deleted_nested_navigation_restore':'passed','cleanup':'original configuration restored in finally'}),flush=True)
 finally:
  payload=base64.b64encode(json.dumps(original).encode()).decode()
  evaluate("$s=json_decode(base64_decode('"+payload+"'),true);if($s['has_locations'])set_theme_mod('nav_menu_locations',$s['locations']);else remove_theme_mod('nav_menu_locations');if($s['has_design'])update_option('kf_design',$s['design']);else delete_option('kf_design');if($s['has_managed'])update_option('kf_template_navigation_menus',$s['managed']);else delete_option('kf_template_navigation_menus');echo 'true';")
  for ident in set(owned):
   if isinstance(ident,int):evaluate('wp_delete_nav_menu('+str(ident)+');echo "true";')
+
+assert evaluate(baseline_code)==original, 'Original test-site configuration was not fully restored'
+print(json.dumps({'design_and_deleted_nested_navigation_restore':'passed','original_configuration_readback':'passed'}),flush=True)

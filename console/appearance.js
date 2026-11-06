@@ -151,7 +151,7 @@
   body form{padding:20px 16px}body .dom-row,body .lead-card,body .share-row{padding:16px}body .page-heading{gap:8px;flex-wrap:wrap}
   body input,body select,body textarea,body .fld input[type=text],body .fld textarea{font-size:16px;min-height:44px}body button,body button.ghost{min-height:44px}
   body td{padding:6px 0;font-size:14px}body table{border:0;background:transparent}body tbody tr{border-radius:6px;padding:16px}body tbody td:first-child{font-size:15px}
-  .site-toolbar{gap:12px}.site-toolbar .search-field{min-width:100%}.site-toolbar .status-field{flex:1;width:auto}.site-toolbar .mine-filter{font-size:13px}
+  .site-toolbar{gap:12px}.site-toolbar .search-field{min-width:100%}.site-toolbar .status-field{flex:1 1 140px;min-width:140px;width:auto}.site-toolbar .mine-filter{font-size:13px}
   .site-create .formrow{grid-template-columns:minmax(0,1fr)}.site-create>summary{padding:16px}.site-create button{width:100%}
   body .box{padding:24px}body .ui-preferences select{font-size:16px}
  }

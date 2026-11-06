@@ -19,6 +19,10 @@ try:
     users = m.load_users()
     users['mfa-test'] = dict(users['ops-test'], mfa_secret='JBSWY3DPEHPK3PXP')
     m._write(m.USERS_F, users)
+    if os.environ.get('KF_E2E_OPERATIONS') == '1':
+        store = m.ai_store()
+        job = store.create_job('demo', store.resolve('mock')[0], 'ops-test', 'existing')
+        store.update_job(job['id'], status='failed', message='Private generation details')
     if os.environ.get('KF_E2E_PUBLICATION') == '1':
         # The fixture has no WordPress service; use its explicit in-memory
         # transport while exercising the real publication journal and HTTP UI.

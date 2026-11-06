@@ -38,6 +38,8 @@ import kf_dns_provider
 import kf_stepup
 import kf_workflows
 import kf_publications
+from kf_health_cache import HealthCache
+import kf_operations_inbox
 from kf_publication_wp import WordPressSnapshot
 
 from reportlab.lib import colors
@@ -195,7 +197,7 @@ DEFAULT_ROLES = {
     "admin": {"label": "管理员", "write": None},
     "ops": {"label": "运营", "write": [
         "/api/spec", "/api/design", "/api/media/", "/api/dns/", "/api/domain/manage",
-        "/api/clients/save", "/api/shares", "/api/publish", "/api/create", "/api/suspend", "/api/site/archive",
+        "/api/clients/save", "/api/operations/ack", "/api/shares", "/api/publish", "/api/create", "/api/suspend", "/api/site/archive",
         "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login", "/api/domain/accounts", "/api/domain/records", "/api/automation/",
     ]},
     "finance": {"label": "财务", "write": [
@@ -252,7 +254,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -2039,13 +2041,18 @@ def http_status(port):
         return 0
 
 
-def docker_state(slug):
+def docker_state(slug, strict=False):
     try:
-        out = subprocess.run(
-            ["docker", "ps", "-a", "--filter", f"name=kf-{slug}",
+        result = subprocess.run(
+            ["docker", "ps", "-a", "--filter", f"label=com.docker.compose.project=kf-{slug}",
              "--format", "{{.Names}}|{{.Status}}"],
-            capture_output=True, text=True, timeout=10).stdout.strip()
+            capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            raise OSError('Container status unavailable')
+        out = result.stdout.strip()
     except Exception:
+        if strict:
+            raise OSError('Container status unavailable') from None
         return []
     rows = []
     for line in out.splitlines():
@@ -2083,21 +2090,36 @@ def change_site_archive(body, user):
     return 200, {"ok": True, **changed}
 
 
-def site_list():
+_HEALTH_CACHE = HealthCache(ttl=10, workers=4)
+
+
+def site_health(key):
+    slug, port = key
+    started = time.monotonic()
+    try:
+        containers = docker_state(slug, strict=True)
+        error = False
+    except OSError:
+        containers, error = [], True
+    return {'containers': containers, 'http': http_status(port), 'probe_error': error,
+            'checked_at': time.time(), 'elapsed_ms': round((time.monotonic() - started) * 1000, 1)}
+
+
+def site_list(force=False):
     items = []
     if not SITES.exists():
         return items
     inv_by_slug = {}
     for inv in invoices():
         inv_by_slug.setdefault(inv.get("slug"), inv)
-    for d in sorted(SITES.iterdir()):
-        if not d.is_dir():
-            continue
-        m = load_meta(d.name)
+    entries = [(d, load_meta(d.name)) for d in sorted(SITES.iterdir()) if d.is_dir()]
+    health = _HEALTH_CACHE.many([(d.name, int(m.get('port') or 0)) for d, m in entries], site_health, force)
+    for d, m in entries:
         port = int(m.get("port") or 0)
+        probe = health[(d.name, port)]
         with _lock:
             live = dict(_live[d.name]) if d.name in _live else None
-        cs = docker_state(d.name)
+        cs = probe["containers"]
         running = sum(1 for c in cs if c["status"].startswith("Up"))
         inv = inv_by_slug.get(d.name)
         items.append({
@@ -2108,10 +2130,13 @@ def site_list():
             "port": port,
             "created": m.get("created", ""),
             "plan": m.get("plan", ""),
-            "http": http_status(port),
+            "http": probe["http"],
+            "health_checked_at": probe["checked_at"],
+            "health_elapsed_ms": probe["elapsed_ms"],
+            "health_error": probe["probe_error"],
             "containers": cs,
             "running": running,
-            "state": live["state"] if live else ("active" if running >= 2 else "stopped"),
+            "state": live["state"] if live else ("unknown" if probe["probe_error"] else "active" if running >= 2 else "stopped"),
             "message": live.get("msg", "") if live else "",
             "invoice": inv.get("no") if inv else "",
             "invoice_status": inv.get("status") if inv else "",
@@ -2124,6 +2149,40 @@ def site_list():
             "owner": client_of(d.name).get("owner", ""),
         })
     return items
+
+
+def operations_items(user, role, include_archived=False):
+    sites = site_list()
+    store = automation_store()
+    actions = store.actions.list(user, role == 'admin')
+    inspect_tools = {'site.https', 'dns.inspect', 'mail.inspect', 'maintenance.inspect', 'mail.status'}
+    for action in actions:
+        if action.get('state') == 'succeeded' and action.get('tool') in inspect_tools:
+            detail = store.actions.get(action['id'], None if role == 'admin' else user)
+            action['result'] = detail.get('result', {})
+    records, backups = [], {}
+    for site in sites:
+        slug = site['slug']
+        root = SITES / slug
+        paths = list((root / '.backups').glob('*.json'))
+        stamps = [p.stat().st_mtime for p in paths if p.is_file()]
+        backups[slug] = max(stamps) if stamps else None
+        if (root / '.publications').exists():
+            try:
+                journal = kf_publications.PublicationStore(BASE, slug)
+                try:
+                    with journal.locked():
+                        records.extend(journal.history())
+                except kf_publications.PublicationConflict:
+                    records.extend(journal.history())
+            except kf_ai.AIError:
+                records.append({'id': 'unreadable-' + slug, 'slug': slug, 'state': 'interrupted'})
+        publication_times = [r['created'] for r in records if r.get('slug') == slug and isinstance(r.get('created'), (float, int))]
+        if publication_times:
+            backups[slug] = max(publication_times + stamps)
+    return kf_operations_inbox.build_inbox(sites=sites, domains=domain_records(), jobs=ai_store().jobs(),
+        actions=actions, workflows=workflow_store().list(user, role == 'admin'), publications=records,
+        backups=backups, include_archived=include_archived)
 
 
 def free_port():
@@ -2532,11 +2591,12 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 
 <div id="p-sites">
 <div class="stats" id="stats"></div>
+<details id="operationInbox" class="optional-options" hidden><summary>运营待办 <span id="operationCount" aria-live="polite"></span></summary><div class="optional-content"><div class="site-toolbar"><div class="search-field"><label for="operationSearch">搜索待办</label><input type="search" id="operationSearch"></div><div class="status-field"><label for="operationSeverity">优先级</label><select id="operationSeverity"><option value="">全部优先级</option><option value="critical">紧急</option><option value="warning">需关注</option><option value="info">提示</option></select></div><label><input type="checkbox" id="operationArchived">包含归档站点</label><label><input type="checkbox" id="operationAcknowledged">包含已知悉</label><button type="button" class="ghost" id="operationRefresh">刷新待办</button></div><div id="operationList"></div><p class="hint">检查结果来自最近一次记录。内容快照不代表数据库备份。</p><div id="operationMsg" class="msg" role="status"></div></div></details>
 <div class="site-toolbar">
 <div class="search-field"><label for="siteSearch">搜索站点</label><input type="search" id="siteSearch" placeholder="站点、客户或域名" oninput="renderSites()"></div>
-<div class="status-field"><label for="siteStatus">运行状态</label><select id="siteStatus" onchange="renderSites()"><option value="">全部状态</option><option value="active">运行中</option><option value="provisioning">开通中</option><option value="failed">失败</option><option value="stopped">已停止</option></select></div>
+<div class="status-field"><label for="siteStatus">运行状态</label><select id="siteStatus" onchange="renderSites()"><option value="">全部状态</option><option value="active">运行中</option><option value="provisioning">开通中</option><option value="failed">失败</option><option value="stopped">已停止</option><option value="unknown">状态未知</option></select></div>
 <div class="status-field"><label for="siteArchiveFilter">归档状态</label><select id="siteArchiveFilter" onchange="renderSites()"><option value="current">未归档</option><option value="archived">已归档</option><option value="all">全部站点</option></select></div>
-<label class="mine-filter"><input type="checkbox" id="onlyMine" onchange="renderSites()">只看我负责的</label>
+<label class="mine-filter"><input type="checkbox" id="onlyMine" onchange="renderSites()">只看我负责的</label><button type="button" class="ghost" id="siteHealthRefresh" onclick="refreshConsole(true)">立即检测</button>
 </div>
 <table><thead><tr><th>站点</th><th>客户 / 域名</th><th class="sm-hide">负责人</th><th class="sm-hide">套餐</th><th>状态</th><th class="sm-hide">账单</th><th>到期</th><th>操作</th></tr></thead>
 <tbody id="rows"><tr><td colspan="8" style="color:var(--dim)">加载中…</td></tr></tbody></table>
@@ -2953,7 +3013,7 @@ function applyRole(){
   });
   syncNavigation();
 }
-function badge(s){const m={active:['ok','运行中'],provisioning:['warn','开通中'],failed:['bad','失败'],stopped:['bad','已停止']};
+function badge(s){const m={active:['ok','运行中'],provisioning:['warn','开通中'],failed:['bad','失败'],stopped:['bad','已停止'],unknown:['warn','状态未知']};
  const [c,t]=m[s]||['warn',s];return `<span class="dot ${c}"></span>${t}`}
 let CURRENT_TAB='sites', NAV_READY=false;
 function navigateTo(key, updateHistory=true){
@@ -3013,7 +3073,7 @@ function renderSites(){
   <td><b data-user-content>${esc(x.company)}</b><div class="mono" style="color:var(--dim)">${esc(x.domain)}</div></td>
   <td class="sm-hide" style="font-size:12.5px;color:var(--dim)">${esc(x.owner)||'—'}</td>
   <td class="sm-hide">${esc(x.plan)||'-'}</td>
-  <td>${badge(x.state)}<details class="hint"><summary>运行详情</summary><div class="mono">HTTP ${x.http||'-'} · ${x.running}/2</div>${x.archived?`<div><span>归档时间</span>：<time data-user-content>${esc(x.archived_at)}</time></div><div><span>归档人</span>：<span data-user-content>${esc(x.archived_by)}</span></div>`:''}</details>
+  <td>${badge(x.state)}<details class="hint"><summary>运行详情</summary><div class="mono">HTTP ${x.http||'-'} · ${x.running}/2</div>${x.health_checked_at?`<div><span>检测时间</span>：<time data-user-content>${esc(new Date(x.health_checked_at*1000).toLocaleString())}</time></div>`:''}${x.archived?`<div><span>归档时间</span>：<time data-user-content>${esc(x.archived_at)}</time></div><div><span>归档人</span>：<span data-user-content>${esc(x.archived_by)}</span></div>`:''}</details>
    ${x.message?`<div style="color:var(--bad);font-size:11.5px">${esc(x.message)}</div>`:''}</td>
   <td class="sm-hide">${x.invoice?`<a href="/api/invoice/${encodeURIComponent(x.invoice)}/pdf">${esc(x.invoice)}</a>
    <div style="color:var(--dim);font-size:11.5px">${x.invoice_status==='paid'?'已付':'待付'}</div>`
@@ -3032,9 +3092,9 @@ function renderSites(){
   setStableHtml($('#rows'),html);
 }
 
-async function load(){
- const r=await fetch('/api/state');if(!r.ok)throw Error(r.status===401?'登录已过期，请重新登录':'暂时无法获取状态');STATE=await r.json();
- ROLE=STATE.role||'ops'; applyRole();
+async function load(force=false){
+ const r=await fetch(force?'/api/state?refresh=1':'/api/state');if(!r.ok)throw Error(r.status===401?'登录已过期，请重新登录':'暂时无法获取状态');STATE=await r.json();
+ ROLE=STATE.role||'ops'; applyRole();$('#operationInbox').hidden=ROLE==='finance';
  try {STATE.wordpress=(await (await fetch('/api/wordpress/sites')).json()).sites||{};} catch(_){STATE.wordpress={};}
  if($('#whoami')) $('#whoami').textContent=(STATE.me||'')+'（'+({admin:'管理员',ops:'运营',finance:'财务'}[ROLE]||ROLE)+'）';
  const s=(STATE.sites||[]).filter(x=>!x.archived);
@@ -3043,6 +3103,7 @@ async function load(){
   <div class="stat"><b>${s.filter(x=>x.http===200).length}</b><span>HTTP 正常</span></div>
   <div class="stat"><b>${(STATE.sites||[]).filter(x=>x.archived).length}</b><span>已归档</span></div>`;
  renderSites();
+ if(typeof refreshOperations==='function'&&CURRENT_TAB==='sites')refreshOperations();
  const iv=STATE.invoices||[];
  const paid=iv.filter(i=>i.status==='paid'),unpaid=iv.filter(i=>i.status!=='paid');
  $('#billStats').innerHTML=`<div class="stat"><b>${money(paid.reduce((a,b)=>a+b.total,0))}</b><span>已收款</span></div>
@@ -4241,10 +4302,10 @@ $('#workspace').addEventListener('input',e=>{if(e.target.form?.querySelector('.f
 const accessibilityObserver=new MutationObserver(enhanceAccessibility);
 accessibilityObserver.observe($('#workspace'),{childList:true,subtree:true});enhanceAccessibility();
 let REFRESH_RUNNING=false;
-async function refreshConsole(){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;}}
+async function refreshConsole(force=false){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;$('#siteHealthRefresh').disabled=true;try{await load(force);}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;$('#siteHealthRefresh').disabled=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/ai.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -5146,7 +5207,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
@@ -5168,6 +5229,16 @@ class Handler(BaseHTTPRequestHandler):
             allowed = self.user_role in ("admin", "ops") and can_write(self.user_role, "/api/wordpress/login")
             return self._send(200, {"sites": {slug: {"url": item["url"], "enabled": bool(item.get("enabled") and allowed)}
                                               for slug, item in cfg["sites"].items()}})
+        if path == '/api/operations/overview':
+            if self.user_role not in ('admin', 'ops'):
+                return self._send(403, {'error': '当前角色无权查看运营待办'})
+            include_archived = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('archived') == ['1']
+            items = operations_items(self.user, self.user_role, include_archived)
+            visible = kf_operations_inbox.InboxAcknowledgements(BASE).filter(self.user, items)
+            visible_ids = {x['id'] for x in visible}
+            include_ack = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('ack') == ['1']
+            shown = [dict(x, acknowledged=x['id'] not in visible_ids) for x in items if include_ack or x['id'] in visible_ids]
+            return self._send(200, {'items': shown, 'total': len(items), 'acknowledged': len(items)-len(visible), 'checked_at': time.time()})
         if path == "/api/state":
             # settings 里含 smtp.api_key 等敏感值，绝不能原样下发
             pub = dict(settings())
@@ -5179,7 +5250,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"role": getattr(self, "user_role", "ops"),
                                     "me": getattr(self, "user", ""),
                                     "staff": sorted(load_users().keys()) if self.user_role == "admin" else [self.user],
-                                    "sites": site_list(), "invoices": invoices(),
+                                    "sites": site_list(force=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("refresh") == ["1"]), "invoices": invoices(),
                                     "can_archive": can_write(self.user_role, "/api/site/archive"),
                                     "plans": plans(), "settings": pub,
                                     "industries": sorted(INDUSTRIES.items()),
@@ -5668,6 +5739,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._share_create(body)
         if path == "/api/shares/revoke":
             return self._share_revoke(body)
+        if path == '/api/operations/ack':
+            if self.user_role not in ('admin', 'ops'):
+                return self._send(403, {'error': '当前角色无权处理运营待办'})
+            item = next((x for x in operations_items(self.user, self.user_role, True) if x['id'] == body.get('id')), None)
+            if not item:
+                return self._send(409, {'error': '待办事项已变化，请刷新后再处理'})
+            try:
+                if body.get('action', 'ack') not in ('ack', 'restore'):
+                    raise kf_ai.AIError('待办操作无效')
+                kf_operations_inbox.InboxAcknowledgements(BASE).acknowledge(self.user, item, body.get('revision'), body.get('action') == 'restore')
+            except kf_tool_runtime.ActionConflict as exc:
+                return self._send(409, {'error': str(exc)})
+            except kf_ai.AIError as exc:
+                return self._send(400, {'error': str(exc)})
+            audit(self.user, 'operation_remind' if body.get('action') == 'restore' else 'operation_acknowledge', item['slug'], item['id'])
+            return self._send(200, {'ok': True})
         if path == "/api/publish/restore":
             try:
                 return self._send(200, restore_publication(body, self.user))
@@ -6468,11 +6555,13 @@ class Handler(BaseHTTPRequestHandler):
             ok = r.returncode == 0
         except Exception:
             ok = False
+        _HEALTH_CACHE.invalidate(lambda key: key[0] == slug)
         b = read_billing(slug)
-        b["status"] = "suspended" if action == "stop" else "active"
-        (SITES / slug / "billing.json").write_text(json.dumps(b, ensure_ascii=False, indent=1))
+        if ok:
+            b["status"] = "suspended" if action == "stop" else "active"
+            kf_ai.atomic_json(SITES / slug / "billing.json", b)
         return self._send(200 if ok else 500,
-                          {"ok": ok, "status": b["status"],
+                          {"ok": ok, "status": b.get("status", "unknown"),
                            "error": "" if ok else "容器操作失败"})
 
     @draft_operation

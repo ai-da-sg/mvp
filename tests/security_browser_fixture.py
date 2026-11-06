@@ -8,7 +8,7 @@ from test_ai import ConsoleTests, ai
 
 fixture=ConsoleTests();fixture.setUp();m=fixture.m
 # Avoid Docker/network health probes: this fixture has no deployed WordPress instance.
-m.site_list=lambda:[{'slug':'demo','company':'Fixture','domain':'demo.example','state':'active','http':200,'running':2,'port':0,'owner':'admin','plan':'Test','days_left':30}]
+m.site_list=lambda force=False:[{'slug':'demo','company':'Fixture','domain':'demo.example','state':'active','http':200,'running':2,'port':0,'owner':'admin','plan':'Test','days_left':30}]
 (m.CONSOLE/'providers.js').symlink_to(Path(__file__).resolve().parents[1]/'console/providers.js')
 m._write(m.SHARES_F,{'fixture-share':{'slug':'demo','active':True}})
 root=fixture.base/'sites/demo/html'

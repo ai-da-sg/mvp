@@ -29,6 +29,29 @@ WordPress 快照或恢复失败，请检查站点后重试|WordPress snapshot or
 WordPress 快照格式无效|Invalid WordPress snapshot
 发布状态待核实；快照和草稿已保留，请查看发布记录|Publication needs verification. Snapshots and drafts are retained; check publication history.
 建站任务正在运行，请完成后再恢复|Site generation is running. Wait for it to finish before restoring.
+运营待办|Operations inbox
+搜索待办|Search operations
+优先级|Priority
+全部优先级|All priorities
+紧急|Urgent
+需关注|Needs attention
+提示|Information
+事项|Issue
+处理|Review
+已知悉|Acknowledged
+包含已知悉|Include acknowledged
+刷新待办|Refresh inbox
+恢复提醒|Restore reminder
+立即检测|Check now
+检测时间|Checked at
+检查结果来自最近一次记录。内容快照不代表数据库备份。|Inspection results come from the latest saved check. Content snapshots are not database backups.
+从我的待办中隐藏这条记录？不会改变原任务结果，可通过“包含已知悉”恢复提醒。|Hide this record from my inbox? The task result will not change. Use “Include acknowledged” to restore the reminder.
+当前角色无权查看运营待办|Your role cannot view the operations inbox.
+当前角色无权处理运营待办|Your role cannot update the operations inbox.
+待办事项已变化，请刷新后再处理|This item has changed. Refresh before reviewing it.
+待办操作无效|Invalid inbox action
+此事项需要修复后自动消除，不能标记已知悉|This item clears when fixed and cannot be acknowledged.
+状态未知|Status unknown
 结果|Result
 发布与恢复记录|Publication and recovery history
 发布时间|Published at

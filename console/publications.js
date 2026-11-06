@@ -6,7 +6,8 @@ async function loadPublications(){
  const data=await aiRequest('/api/publications/'+encodeURIComponent(slug));
  if(slug!==$('#lSlug').value)return;
  PUBLICATIONS=data.items||[];
- AdminUI.table('publicationList',PUBLICATIONS,['发布时间','操作账号','结果','操作'],item=>`<tr><td><time data-user-content>${esc(new Date(item.created*1000).toLocaleString())}</time></td><td data-user-content>${esc(item.user)}</td><td>${PUBLICATION_LABELS[item.state]||esc(item.state)}</td><td><div class="domain-row-actions"><button type="button" class="ghost" data-publication-view="${esc(item.id)}">查看</button>${item.can_restore?`<button type="button" class="ghost" data-publication-restore="${esc(item.id)}">恢复发布前内容</button>`:''}</div></td></tr>`);
+ AdminUI.table('publicationList',PUBLICATIONS,['发布时间','操作账号','结果','操作'],item=>`<tr data-operation-reference="${esc(item.id)}"><td><time data-user-content>${esc(new Date(item.created*1000).toLocaleString())}</time></td><td data-user-content>${esc(item.user)}</td><td>${PUBLICATION_LABELS[item.state]||esc(item.state)}</td><td><div class="domain-row-actions"><button type="button" class="ghost" data-publication-view="${esc(item.id)}">查看</button>${item.can_restore?`<button type="button" class="ghost" data-publication-restore="${esc(item.id)}">恢复发布前内容</button>`:''}</div></td></tr>`);
+ focusOperationTarget('publication','#publicationList [data-operation-reference]');
 }
 $('#publicationRefresh').onclick=()=>loadPublications().catch(e=>aiMessage('#publicationMsg',e.message,true));
 $('#publicationList').onclick=async e=>{

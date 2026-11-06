@@ -80,7 +80,7 @@ async function aiJobs() {
   try {
     const data=await aiRequest('/api/ai/jobs');
     const labels={queued:'排队中',generating:'生成中',provisioning:'开通站点中',saving:'保存中',completed:'草稿已就绪',failed:'失败',interrupted:'已中断'};
-    const html=data.jobs.length?data.jobs.map(j=>`<div class="dom-row">
+    const html=data.jobs.length?data.jobs.map(j=>`<div class="dom-row" data-operation-reference="${esc(j.id)}">
       <div class="h"><b>${esc(j.slug)}</b><span class="pill">${esc(labels[j.status]||j.status)}</span>
       <span>${esc(j.provider)} / ${esc(j.model)}</span>${j.simulated?'<span class="pill">模拟</span>':''}
       <span class="hint">${esc(new Date(j.created*1000).toLocaleString())}</span></div>
@@ -89,7 +89,7 @@ async function aiJobs() {
       <button type="button" data-ai-editor="${esc(j.slug)}">编辑页面</button>
       <button type="button" data-ai-publish="${esc(j.slug)}">发布当前草稿</button>
       <span class="hint">${Number(j.pages)} 个页面 · 预览和发布均使用该站点当前草稿</span>`:''}</div>`).join(''):'<div class="callout">暂无任务。填写需求后生成草稿。</div>';
-    setStableHtml($('#aiJobs'),html);
+    setStableHtml($('#aiJobs'),html);focusOperationTarget('generation','#aiJobs [data-operation-reference]');
   } catch(e) { aiMessage('#aiBuildMsg', e.message, true); }
   finally { AI_LOADING=false; }
 }

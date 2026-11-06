@@ -148,7 +148,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
+        for filename in ('operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -178,7 +178,7 @@ class ConsoleTests(unittest.TestCase):
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def tearDown(self):
-        self.server.shutdown(); self.server.server_close(); self.env.stop(); self.tmp.cleanup()
+        self.server.shutdown(); self.server.server_close(); self.m._HEALTH_CACHE.close(); self.env.stop(); self.tmp.cleanup()
 
     def request(self, path, data=None, user='admin'):
         headers = {'Content-Type':'application/json'}
@@ -239,6 +239,52 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual((self.base/'sites/demo/meta.json').read_bytes(),before)
         self.assertEqual(self.m.read_domain('demo')['registrar'],'Name.com')
         self.assertEqual(self.request('/api/domain/records',dict(action='delete',id='demo',version=linked['version']))[0],409)
+
+    def test_health_cache_force_refresh_and_failed_suspend_preserves_state(self):
+        with patch.object(self.m, 'docker_state', return_value=[]), patch.object(self.m, 'http_status', side_effect=[200, 503]) as probe:
+            self.assertEqual(self.request('/api/state')[1]['sites'][0]['http'], 200)
+            self.assertEqual(self.request('/api/state')[1]['sites'][0]['http'], 200)
+            self.assertEqual(probe.call_count, 1)
+            self.assertEqual(self.request('/api/state?refresh=1')[1]['sites'][0]['http'], 503)
+            self.assertEqual(probe.call_count, 2)
+        path = self.base / 'sites/demo/billing.json'
+        ai.atomic_json(path, {'status': 'active', 'expires': '2027-01-01'})
+        before = path.read_bytes()
+        with patch.object(self.m.subprocess, 'run') as command:
+            command.return_value.returncode = 1
+            code, result = self.request('/api/suspend', {'slug': 'demo', 'action': 'stop'})
+        self.assertEqual(code, 500)
+        self.assertEqual(result['status'], 'active')
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_operations_permissions_acknowledgement_and_action_visibility(self):
+        store = self.m.ai_store()
+        job = store.create_job('demo', store.resolve('mock')[0], 'ops-test', 'existing')
+        store.update_job(job['id'], status='failed', message='private job content')
+        actions = self.m.automation_store().actions
+        item = actions.prepare(user='admin', slug='demo', tool='site.context', arguments={},
+                               mode='read', summary='private operation', snapshot={})
+        with actions.locked():
+            item['state'] = 'failed'
+            actions.save(item, 'test')
+        self.assertEqual(self.request('/api/operations/overview', user='finance-test')[0], 403)
+        code, data = self.request('/api/operations/overview', user='ops-test')
+        self.assertEqual(code, 200, data)
+        task = next(x for x in data['items'] if x['kind'] == 'generation')
+        self.assertFalse(any(x['kind'] == 'action' for x in data['items']))
+        self.assertNotIn('private', json.dumps(data))
+        admin = self.request('/api/operations/overview')[1]['items']
+        self.assertTrue(any(x['reference'] == item['id'] for x in admin))
+        body = {'id': task['id'], 'revision': task['revision']}
+        self.assertEqual(self.request('/api/operations/ack', body, user='finance-test')[0], 403)
+        self.assertEqual(self.request('/api/operations/ack', dict(body, revision='stale'), user='ops-test')[0], 409)
+        self.assertEqual(self.request('/api/operations/ack', body, user='ops-test')[0], 200)
+        self.assertFalse(any(x['id'] == task['id'] for x in self.request('/api/operations/overview', user='ops-test')[1]['items']))
+        self.assertTrue(any(x['id'] == task['id'] for x in self.request('/api/operations/overview')[1]['items']))
+        acknowledged = self.request('/api/operations/overview?ack=1', user='ops-test')[1]['items']
+        self.assertTrue(next(x for x in acknowledged if x['id'] == task['id'])['acknowledged'])
+        self.assertEqual(self.request('/api/operations/ack', dict(body, action='restore'), user='ops-test')[0], 200)
+        self.assertTrue(any(x['id'] == task['id'] for x in self.request('/api/operations/overview', user='ops-test')[1]['items']))
 
     def test_site_archive_restore_permissions_and_data_preservation(self):
         site=self.base/'sites/demo'
