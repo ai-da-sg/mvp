@@ -193,7 +193,7 @@ DEFAULT_ROLES = {
     "admin": {"label": "管理员", "write": None},
     "ops": {"label": "运营", "write": [
         "/api/spec", "/api/design", "/api/media/", "/api/dns/", "/api/domain/manage",
-        "/api/clients/save", "/api/shares", "/api/publish", "/api/create", "/api/suspend",
+        "/api/clients/save", "/api/shares", "/api/publish", "/api/create", "/api/suspend", "/api/site/archive",
         "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login", "/api/domain/accounts", "/api/automation/",
     ]},
     "finance": {"label": "财务", "write": [
@@ -1969,6 +1969,34 @@ def docker_state(slug):
     return rows
 
 
+def site_archive(slug):
+    record = _read(SITES / slug / "archive.json", {})
+    return {"archived": record.get("archived") is True,
+            "archive_version": record.get("archive_version", 0),
+            "archived_at": record.get("archived_at", ""),
+            "archived_by": record.get("archived_by", "")}
+
+
+def change_site_archive(body, user):
+    slug = body.get("slug")
+    if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug) or not (SITES / slug / "meta.json").is_file():
+        return 400, {"error": "请选择有效站点"}
+    if not isinstance(body.get("archived"), bool) or type(body.get("version")) is not int:
+        return 400, {"error": "归档请求无效"}
+    with _file_lock:
+        current = site_archive(slug)
+        if body["version"] != current["archive_version"]:
+            return 409, {"error": "归档状态已改变，请刷新后重试"}
+        if current["archived"] == body["archived"]:
+            return 200, {"ok": True, **current}
+        changed = {"archived": body["archived"], "archive_version": current["archive_version"] + 1,
+                   "archived_at": datetime.now(SGT).isoformat(timespec="seconds") if body["archived"] else "",
+                   "archived_by": user if body["archived"] else ""}
+        kf_ai.atomic_json(SITES / slug / "archive.json", changed)
+    audit(user, "site_archive" if body["archived"] else "site_restore", slug)
+    return 200, {"ok": True, **changed}
+
+
 def site_list():
     items = []
     if not SITES.exists():
@@ -1988,6 +2016,7 @@ def site_list():
         inv = inv_by_slug.get(d.name)
         items.append({
             "slug": d.name,
+            **site_archive(d.name),
             "company": m.get("company", d.name),
             "domain": m.get("domain", ""),
             "port": port,
@@ -2412,7 +2441,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <details class="nav-group" data-group="2"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4v2"/></svg>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
 <details class="nav-group" data-group="3"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
-<div class="page-heading"><div><div class="breadcrumb" id="breadcrumb">站点运营 / 站点总览</div><h2 id="pageTitle" tabindex="-1">站点总览</h2></div><span id="editorGlobalState" role="status"></span><button id="newSite" type="button" onclick="openSiteCreate()">新建站点</button></div>
+<div class="page-heading"><div><div class="breadcrumb" id="breadcrumb">站点运营 / 站点总览</div><h2 id="pageTitle" tabindex="-1">站点总览</h2></div><span id="editorGlobalState" role="status"></span></div>
 <div id="globalMsg" class="msg hidden" role="alert" tabindex="-1"></div>
 
 <div id="p-sites">
@@ -2420,18 +2449,12 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="site-toolbar">
 <div class="search-field"><label for="siteSearch">搜索站点</label><input type="search" id="siteSearch" placeholder="站点、客户或域名" oninput="renderSites()"></div>
 <div class="status-field"><label for="siteStatus">运行状态</label><select id="siteStatus" onchange="renderSites()"><option value="">全部状态</option><option value="active">运行中</option><option value="provisioning">开通中</option><option value="failed">失败</option><option value="stopped">已停止</option></select></div>
+<div class="status-field"><label for="siteArchiveFilter">归档状态</label><select id="siteArchiveFilter" onchange="renderSites()"><option value="current">未归档</option><option value="archived">已归档</option><option value="all">全部站点</option></select></div>
 <label class="mine-filter"><input type="checkbox" id="onlyMine" onchange="renderSites()">只看我负责的</label>
 </div>
 <table><thead><tr><th>站点</th><th>客户 / 域名</th><th class="sm-hide">负责人</th><th class="sm-hide">套餐</th><th>状态</th><th class="sm-hide">账单</th><th>到期</th><th>操作</th></tr></thead>
 <tbody id="rows"><tr><td colspan="8" style="color:var(--dim)">加载中…</td></tr></tbody></table>
-<details id="siteCreate" class="site-create"><summary>新建站点</summary><form id="f"><div class="formrow">
-<div class="field"><label>客户名称</label><input name="company" placeholder="Tanjong Pte Ltd" required></div>
-<div class="field"><label>域名</label><input name="domain" placeholder="example.sg" required></div>
-<div class="field"><label>站点标识（自动建议，可修改）</label><input name="slug" placeholder="例如 tanjong" pattern="[a-z][a-z0-9-]{1,19}" title="2–20 位小写字母、数字或连字符，以字母开头" required></div>
-<div class="field"><label>套餐</label><select name="plan_id" id="planSel"></select></div>
-<div class="field"><label>行业模板</label><select name="industry" id="indSel"></select></div>
-<button id="btn">下单并开通</button>
-</div><div class="msg" id="msg"></div></form></details>
+
 </div>
 
 <div id="p-billing" class="hidden">
@@ -2839,8 +2862,6 @@ function applyRole(){
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
   });
-  const f=$('#f'); if(f) f.style.display = (ROLE==='finance') ? 'none' : '';
-  $('#siteCreate').hidden=ROLE==='finance';$('#newSite').hidden=ROLE==='finance'||CURRENT_TAB!=='sites';
   syncNavigation();
 }
 function badge(s){const m={active:['ok','运行中'],provisioning:['warn','开通中'],failed:['bad','失败'],stopped:['bad','已停止']};
@@ -2854,7 +2875,6 @@ function navigateTo(key, updateHistory=true){
  if(CURRENT_TAB==='layout' && !commitJson())return false;
  $('#globalMsg').classList.add('hidden');
  CURRENT_TAB=key;
- $('#newSite').hidden=ROLE==='finance'||key!=='sites';
  document.querySelectorAll('.tab').forEach(x=>{x.classList.toggle('on',x===t);if(x===t)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
  document.querySelectorAll('.tab').forEach(x=>$('#p-'+x.dataset.t).classList.toggle('hidden',x!==t));
  t.closest('details').open=true;
@@ -2886,15 +2906,12 @@ function setStableHtml(element, html){
  if(element._renderedHtml===html)return;
  element._renderedHtml=html;element.innerHTML=html;
 }
-function openSiteCreate(){
- if(ROLE==='finance')return;
- $('#siteCreate').open=true;$('#f input[name=company]').focus();
-}
 function clearSiteFilters(){
- $('#siteSearch').value='';$('#siteStatus').value='';$('#onlyMine').checked=false;renderSites();$('#siteSearch').focus();
+ $('#siteSearch').value='';$('#siteStatus').value='';$('#siteArchiveFilter').value='current';$('#onlyMine').checked=false;renderSites();$('#siteSearch').focus();
 }
 function renderSites(){
-  let s=(STATE.sites||[]);
+  const archiveFilter=$('#siteArchiveFilter').value;
+  let s=(STATE.sites||[]).filter(x=>archiveFilter==='all'||(archiveFilter==='archived')===!!x.archived);
   if($('#onlyMine') && $('#onlyMine').checked && STATE.me){
     s=s.filter(x=>x.owner===STATE.me);
   }
@@ -2902,11 +2919,11 @@ function renderSites(){
   const status=$('#siteStatus').value;
   s=s.filter(x=>(!status||x.state===status)&&(!query||[x.slug,x.company,x.domain].some(v=>String(v||'').toLocaleLowerCase().includes(query))));
   const html=s.length? s.map(x=>`<tr>
-  <td class="mono">${esc(x.slug)}</td>
+  <td class="mono">${esc(x.slug)}${x.archived?'<div class="pill">已归档</div>':''}</td>
   <td><b data-user-content>${esc(x.company)}</b><div class="mono" style="color:var(--dim)">${esc(x.domain)}</div></td>
   <td class="sm-hide" style="font-size:12.5px;color:var(--dim)">${esc(x.owner)||'—'}</td>
   <td class="sm-hide">${esc(x.plan)||'-'}</td>
-  <td>${badge(x.state)}<details class="hint"><summary>运行详情</summary><div class="mono">HTTP ${x.http||'-'} · ${x.running}/2</div></details>
+  <td>${badge(x.state)}<details class="hint"><summary>运行详情</summary><div class="mono">HTTP ${x.http||'-'} · ${x.running}/2</div>${x.archived?`<div><span>归档时间</span>：<time data-user-content>${esc(x.archived_at)}</time></div><div><span>归档人</span>：<span data-user-content>${esc(x.archived_by)}</span></div>`:''}</details>
    ${x.message?`<div style="color:var(--bad);font-size:11.5px">${esc(x.message)}</div>`:''}</td>
   <td class="sm-hide">${x.invoice?`<a href="/api/invoice/${encodeURIComponent(x.invoice)}/pdf">${esc(x.invoice)}</a>
    <div style="color:var(--dim);font-size:11.5px">${x.invoice_status==='paid'?'已付':'待付'}</div>`
@@ -2916,13 +2933,12 @@ function renderSites(){
    <a href="/api/site/${encodeURIComponent(x.slug)}/handover.pdf">交接单</a>
    ${STATE.wordpress?.[x.slug]?.enabled?`<a class="kf-wp-entry" href="${esc(STATE.wordpress[x.slug].url)}/?kf_mvp_sso=begin" target="_blank" rel="noopener">进入 WordPress 后台</a>`:''}
    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+     ${STATE.can_archive?`<button type="button" class="ghost" data-site-archive="${esc(x.slug)}" onclick="archiveSite(this,'${esc(x.slug)}',${!x.archived},${Number(x.archive_version||0)})">${x.archived?'恢复归档':'归档站点'}</button>`:''}
      ${ROLE==='finance'?'':`<button class="ghost" onclick="renewSite('${esc(x.slug)}')">续费</button>
      <button class="ghost" onclick="toggleSuspend('${esc(x.slug)}','${x.billing_status||'active'}')">${x.billing_status==='suspended'?'恢复':'暂停'}</button>`}
    </div></td></tr>`).join('')
   :(STATE.sites||[]).length?'<tr><td colspan="8" class="empty-results"><p>没有匹配的站点</p><button class="ghost" onclick="clearSiteFilters()">清除筛选</button></td></tr>'
-  :'<tr><td colspan="8" style="text-align:center;padding:28px 12px">'
-    +'<div style="color:var(--dim);font-size:13px;margin-bottom:10px">还没有站点，先开通一个</div>'
-    +(ROLE==='finance'?'':'<button onclick="openSiteCreate()">开通站点</button>')+'</td></tr>';
+  :'<tr><td colspan="8" class="empty-results">暂无站点</td></tr>';
   setStableHtml($('#rows'),html);
 }
 
@@ -2931,16 +2947,12 @@ async function load(){
  ROLE=STATE.role||'ops'; applyRole();
  try {STATE.wordpress=(await (await fetch('/api/wordpress/sites')).json()).sites||{};} catch(_){STATE.wordpress={};}
  if($('#whoami')) $('#whoami').textContent=(STATE.me||'')+'（'+({admin:'管理员',ops:'运营',finance:'财务'}[ROLE]||ROLE)+'）';
- const s=STATE.sites||[];
- $('#stats').innerHTML=`<div class="stat"><b>${s.length}</b><span>站点</span></div>
+ const s=(STATE.sites||[]).filter(x=>!x.archived);
+ $('#stats').innerHTML=`<div class="stat"><b>${s.length}</b><span>未归档站点</span></div>
   <div class="stat"><b>${s.filter(x=>x.state==='active').length}</b><span>运行中</span></div>
-  <div class="stat"><b>${s.filter(x=>x.http===200).length}</b><span>HTTP 正常</span></div>`;
+  <div class="stat"><b>${s.filter(x=>x.http===200).length}</b><span>HTTP 正常</span></div>
+  <div class="stat"><b>${(STATE.sites||[]).filter(x=>x.archived).length}</b><span>已归档</span></div>`;
  renderSites();
- const oldPlan=$('#planSel').value,oldIndustry=$('#indSel').value;
- $('#planSel').innerHTML=(STATE.plans||[]).map(p=>`<option value="${p.id}">${esc(p.name)} — ${money(p.price)}</option>`).join('');
- $('#indSel').innerHTML=(STATE.industries||[]).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join('');
- if([...$('#planSel').options].some(o=>o.value===oldPlan))$('#planSel').value=oldPlan;
- if([...$('#indSel').options].some(o=>o.value===oldIndustry))$('#indSel').value=oldIndustry;
  const iv=STATE.invoices||[];
  const paid=iv.filter(i=>i.status==='paid'),unpaid=iv.filter(i=>i.status!=='paid');
  $('#billStats').innerHTML=`<div class="stat"><b>${money(paid.reduce((a,b)=>a+b.total,0))}</b><span>已收款</span></div>
@@ -2971,6 +2983,15 @@ function expiryCell(x){
   return `<span style="color:${color}">${esc(x.expires||'')}</span>
     <div style="font-size:11.5px;color:${color}">${d<0?'已过期':''}${d>=0?label:''}</div>`;
 }
+async function archiveSite(button,slug,archived,version){
+ if(!confirm(archived?'归档该站点？归档后从默认列表隐藏，网站继续运行，数据与账单保留，可随时恢复。':'恢复该站点到未归档列表？'))return;
+ button.disabled=true;
+ try{
+  const r=await fetch('/api/site/archive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug,archived,version})});
+  const result=await r.json();if(!r.ok)throw Error(result.error||'归档请求失败');
+  await load();
+ }catch(e){showGlobalError(e.message);}finally{if(button.isConnected)button.disabled=false;}
+}
 async function renewSite(slug){
   const y=prompt('续费几年？（1-5）','1'); if(!y) return;
   const r=await fetch('/api/renew',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -2998,14 +3019,6 @@ async function pay(no){
 function editPlan(id){const p=STATE.plans.find(x=>x.id===id);const f=$('#pf');
  f.id.value=p.id;f.name.value=p.name;f.price.value=p.price;f.period.value=p.period;f.specs.value=p.specs;
  $('#pmsg').textContent='编辑中：'+p.name;}
-$('#f').addEventListener('submit',async e=>{e.preventDefault();
- const fd=new FormData(e.target);$('#btn').disabled=true;$('#msg').className='msg';$('#msg').textContent='提交中…';
- try{const r=await fetch('/api/create',{method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify(Object.fromEntries(fd))});const d=await r.json();
-  if(!r.ok){$('#msg').className='msg bad';$('#msg').textContent=d.error||'失败'}
-  else{$('#msg').className='msg ok';$('#msg').textContent=`已下单 ${d.invoice}，正在开通 ${d.slug}（约 60 秒）`;e.target.reset()}}
- catch(err){$('#msg').className='msg bad';$('#msg').textContent=String(err)}
- $('#btn').disabled=false;load();});
 $('#pf').addEventListener('submit',async e=>{e.preventDefault();
  const fd=Object.fromEntries(new FormData(e.target));fd.price=Number(fd.price);
  const r=await fetch('/api/plan/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fd)});
@@ -4122,9 +4135,6 @@ $('#workspace').addEventListener('invalid',e=>{if(!e.target.form)return;e.preven
 $('#workspace').addEventListener('input',e=>{if(e.target.form?.querySelector('.form-error-summary'))renderValidation(e.target.form);});
 const accessibilityObserver=new MutationObserver(enhanceAccessibility);
 accessibilityObserver.observe($('#workspace'),{childList:true,subtree:true});enhanceAccessibility();
-const siteSlug=$('#f input[name=slug]'),siteDomain=$('#f input[name=domain]');
-siteSlug.addEventListener('input',()=>siteSlug.dataset.manual=siteSlug.value?'yes':'');
-siteDomain.addEventListener('input',()=>{if(siteSlug.dataset.manual)return;const candidate=siteDomain.value.toLowerCase().replace(/^https?:\/\//,'').split('.')[0].replace(/[^a-z0-9-]/g,'').slice(0,20);if(/^[a-z][a-z0-9-]+$/.test(candidate))siteSlug.value=candidate;});
 async function refreshConsole(){try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
@@ -4987,6 +4997,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "me": getattr(self, "user", ""),
                                     "staff": sorted(load_users().keys()) if self.user_role == "admin" else [self.user],
                                     "sites": site_list(), "invoices": invoices(),
+                                    "can_archive": can_write(self.user_role, "/api/site/archive"),
                                     "plans": plans(), "settings": pub,
                                     "industries": sorted(INDUSTRIES.items()),
                                     "free_port": free_port()})
@@ -5320,8 +5331,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._domain_account_post(path, body)
         if path.startswith("/api/ai/"):
             return self._ai_post(path, body)
+        if path == "/api/site/archive":
+            code, data = change_site_archive(body, self.user)
+            return self._send(code, data)
         if path == "/api/create":
-            return self._create(body)
+            return self._send(410, {"error": "手动开通已取消，请使用 AI 建站"})
         if path == "/api/invoice/issue":
             return self._issue(body.get("slug", ""))
         if path == "/api/invoice/pay":

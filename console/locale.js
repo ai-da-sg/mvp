@@ -1,5 +1,22 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+手动开通已取消，请使用 AI 建站|Manual site creation has been removed. Use AI Builder.
+归档时间|Archived at
+归档人|Archived by
+归档状态|Archive status
+未归档站点|Unarchived sites
+未归档|Not archived
+已归档|Archived
+全部站点|All sites
+暂无站点|No sites yet
+归档站点|Archive site
+恢复归档|Restore site
+归档请求无效|Invalid archive request
+归档状态已改变，请刷新后重试|Archive status changed. Refresh and retry.
+归档请求失败|Could not update archive status
+归档该站点？归档后从默认列表隐藏，网站继续运行，数据与账单保留，可随时恢复。|Archive this site? It will be hidden from the default list. The website stays online, data and invoices are retained, and you can restore it at any time.
+恢复该站点到未归档列表？|Restore this site to the unarchived list?
+
 授权站点：|Authorized sites:
 配置版本|Configuration version
 页面已写入，模板导航同步失败；草稿保留，请重试发布|Pages were written, but template navigation could not be updated. The draft is retained; retry publishing.

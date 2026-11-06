@@ -184,6 +184,31 @@ class ConsoleTests(unittest.TestCase):
         except ValueError: body = raw.decode()
         return r.status, body
 
+    def test_site_archive_restore_permissions_and_data_preservation(self):
+        site=self.base/'sites/demo'
+        before={p.name:p.read_bytes() for p in site.iterdir() if p.is_file()}
+        body={'slug':'demo','archived':True,'version':0}
+        with patch.object(self.m,'reserve_site') as reserve:
+            self.assertEqual(self.request('/api/create',{'slug':'new-site'})[0],410)
+            reserve.assert_not_called()
+        self.assertEqual(self.request('/api/site/archive',body,user=None)[0],401)
+        self.assertEqual(self.request('/api/site/archive',body,user='finance-test')[0],403)
+        for invalid in [dict(body,slug='../demo'),dict(body,slug='missing'),dict(body,archived='true'),dict(body,version=True)]:
+            self.assertEqual(self.request('/api/site/archive',invalid)[0],400)
+        with patch.object(self.m.subprocess,'run') as run:
+            code,result=self.request('/api/site/archive',body,user='ops-test')
+            self.assertEqual(code,200,result);run.assert_not_called()
+        self.assertTrue(result['archived']);self.assertEqual(result['archived_by'],'ops-test')
+        self.assertEqual(json.loads((site/'archive.json').read_text())['archive_version'],1)
+        self.assertEqual({p.name:p.read_bytes() for p in site.iterdir() if p.is_file() and p.name!='archive.json'},before)
+        self.assertEqual(self.request('/api/site/archive',body)[0],409)
+        with patch.object(self.m,'docker_state',return_value=[]),patch.object(self.m,'http_status',return_value=200):
+            row=next(x for x in self.m.site_list() if x['slug']=='demo')
+            self.assertTrue(row['archived']);self.assertEqual(row['http'],200)
+        code,result=self.request('/api/site/archive',dict(body,archived=False,version=1))
+        self.assertEqual(code,200);self.assertFalse(result['archived']);self.assertEqual(result['archive_version'],2)
+        self.assertIn('site_restore',(self.base/'console/audit.log').read_text())
+
     def wait_job(self, jid):
         for _ in range(100):
             job = next(j for j in self.m.ai_store().jobs() if j['id']==jid)

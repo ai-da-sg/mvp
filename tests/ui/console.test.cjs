@@ -98,11 +98,8 @@ print(json.dumps(result))
  assert.equal(await page.locator('#loginCode').evaluate(e=>Math.round(e.getBoundingClientRect().width)),await page.locator('form').evaluate(e=>Math.round(e.getBoundingClientRect().width)));
  console.log('PASS recovery input, labels and login layout');
  await page.goto('http://review.invalid/');await page.waitForSelector('#rows button');
- await page.locator('#newSite').click();await page.locator('#btn').click();await page.waitForSelector('#f .form-error-summary');
- assert.equal(await page.locator('#f .form-error-summary').evaluate(e=>document.activeElement===e),true);
- await page.locator('#f input[name=company]').fill('Test');await page.locator('#f input[name=domain]').fill('demo.example');
- assert.equal(await page.locator('#f input[name=slug]').inputValue(),'demo');
- console.log('PASS linked validation summary and suggested site identifier');
+ assert.equal(await page.locator('#newSite,#siteCreate,#f').count(),0);
+ console.log('PASS site overview has no manual site creation controls');
  await page.locator('#rows details summary').click();await page.locator('#rows button').first().focus();
  await page.evaluate(()=>load());assert.equal(await page.locator('#rows details').evaluate(e=>e.open),true);
  assert.equal(await page.locator('#rows button').first().evaluate(e=>document.activeElement===e),true);
@@ -264,7 +261,7 @@ print(json.dumps(result))
  console.log('PASS domain account create, search, edit, TOTP reveal, mobile layout, automatic hiding and delete');
  await nav('sites');role='finance';await page.reload();await page.waitForSelector('#rows');await page.waitForFunction(()=>document.querySelector('[data-t=layout]').style.display==='none');
  assert.equal(await page.locator('.nav-group').last().isVisible(),false);
- assert.equal(await page.locator('#f').isVisible(),false);
+ assert.equal(await page.locator('#f').count(),0);
  assert.deepEqual(errors,[]);
  console.log('PASS responsive menus, saved navigation, role filtering and no JavaScript errors');
  }finally{await browser.close();fs.rmSync(promptBase,{recursive:true,force:true});}

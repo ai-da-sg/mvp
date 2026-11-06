@@ -142,6 +142,7 @@
  }
  @media(max-width:600px){
   body .topbar h1{font-size:16px}.brand-mark{width:24px;height:24px}body .who{font-size:12px;gap:8px}body .workspace{padding:24px 16px 48px}
+  #p-sites .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   body .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}body .stat{padding:14px 10px}body .stat b{font-size:23px}body .stat span{font-size:12px}
   body form{padding:20px 16px}body .dom-row,body .lead-card,body .share-row{padding:16px}body .page-heading{gap:8px;flex-wrap:wrap}
   body input,body select,body textarea,body .fld input[type=text],body .fld textarea{font-size:16px;min-height:44px}body button,body button.ghost{min-height:44px}
