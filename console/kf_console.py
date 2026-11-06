@@ -41,6 +41,7 @@ import kf_publications
 from kf_health_cache import HealthCache
 import kf_operations_inbox
 import kf_leads
+import kf_billing
 from kf_publication_wp import WordPressSnapshot
 
 from reportlab.lib import colors
@@ -255,7 +256,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -578,7 +579,7 @@ WPCLI_IMG  = "docker.m.daocloud.io/library/wordpress:cli-php8.3"
 SGT = timezone(timedelta(hours=8))
 _live = {}
 _lock = threading.Lock()
-_file_lock = threading.Lock()
+_file_lock = threading.RLock()
 
 SLUG_RE   = re.compile(r"^[a-z][a-z0-9-]{1,19}$")
 MAX_DNS_RECORDS = 200      # 单个域名的记录数上限，防止被灌爆做反射放大
@@ -1272,23 +1273,6 @@ def spec_path(slug):
     return SITES / slug / "site-spec.json"
 
 
-def _extend_on_payment(inv):
-    """续费账单付款后，自动把站点到期日往后推。"""
-    if inv.get("kind") != "renewal":
-        return
-    slug = inv.get("slug")
-    years = int(inv.get("years") or 1)
-    b = read_billing(slug)
-    if not b:
-        return
-    base = b.get("expires") or datetime.now(SGT).strftime("%Y-%m-%d")
-    dl = days_left(slug)
-    if dl is not None and dl < 0:
-        base = datetime.now(SGT).strftime("%Y-%m-%d")
-    b["expires"] = add_years(base, years)
-    b["status"] = "active"
-    (SITES / slug / "billing.json").write_text(json.dumps(b, ensure_ascii=False, indent=1))
-
 
 def clients():
     return _read(CLIENTS_F, {})
@@ -1351,9 +1335,10 @@ def read_domain(slug):
 
 
 def write_domain(slug, data):
-    b = read_billing(slug)
-    b["domain"] = data
-    kf_ai.atomic_json(SITES / slug / "billing.json", b)
+    with _file_lock:
+        b = read_billing(slug)
+        b["domain"] = data
+        kf_ai.atomic_json(SITES / slug / "billing.json", b)
 
 
 def domain_records(include_hidden=False):
@@ -2323,6 +2308,7 @@ def invoice_pdf(inv):
             ("域名", inv.get("domain", "-")),
             ("套餐", inv.get("plan_name", "-")),
             ("签发日期", inv.get("issued_at", "-")),
+            ("付款到期日", inv.get("due_date") or "未设置"),
             ("状态", "已付款" if inv.get("status") == "paid" else "待付款"),
         ], cell),
         Spacer(1, 6 * mm),
@@ -2331,7 +2317,7 @@ def invoice_pdf(inv):
             [inv.get("plan_name", "服务"), inv.get("plan_specs", ""),
              f"{s['currency']} {inv['subtotal']:,.2f}"]]
     if inv.get("gst", 0):
-        rows.append(["GST", f"{int(s['gst_rate'] * 100)}%", f"{inv['gst']:,.2f}"])
+        rows.append(["GST", "账单税额 / Invoice tax", f"{inv['gst']:,.2f}"])
     rows.append(["合计", "", f"{s['currency']} {inv['total']:,.2f}"])
     t = Table(rows, colWidths=[40 * mm, 80 * mm, 38 * mm])
     t.setStyle(TableStyle([
@@ -2606,8 +2592,9 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 
 <div id="p-billing" class="hidden">
 <div class="stats" id="billStats"></div>
-<table><thead><tr><th>账单号</th><th>客户</th><th>套餐</th><th>金额</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
-<tbody id="billRows"></tbody></table>
+<div class="site-toolbar"><div class="search-field"><label for="billSearch" data-bill-text="search"></label><input type="search" id="billSearch"></div><div class="status-field"><label for="billView" data-bill-text="view"></label><select id="billView"></select></div><label><input type="checkbox" id="billArchived"><span data-bill-text="archived"></span></label><button type="button" class="ghost" id="billRefresh" data-bill-text="refresh"></button></div>
+<div id="billList"></div><div id="billMsg" class="msg" role="status"></div>
+<form id="billForm" class="hidden"><h3 id="billEditTitle" data-bill-text="adjust"></h3><p id="billEditNo" data-user-content></p><div class="formrow"><div class="field"><label for="billSubtotal" data-bill-text="subtotal"></label><input id="billSubtotal" type="number" step="0.01" min="0" max="100000000" required></div><div class="field"><label for="billTax" data-bill-text="tax"></label><input id="billTax" type="number" step="0.01" min="0" max="100000000" required></div></div><p id="billEditTotal"></p><label for="billDue" data-bill-text="due"></label><input id="billDue" type="date"><label for="billReason" data-bill-text="reason"></label><textarea id="billReason" maxlength="500" rows="3" required></textarea><div class="domain-dialog-actions"><button id="billSave" type="submit" data-bill-text="save"></button><button id="billCancel" class="ghost" type="button" data-bill-text="cancel"></button></div><div id="billEditMsg" class="msg" role="status"></div></form>
 </div>
 
 <div id="p-plans" class="hidden">
@@ -3090,7 +3077,7 @@ function renderSites(){
    ${STATE.wordpress?.[x.slug]?.enabled?`<a class="kf-wp-entry" href="${esc(STATE.wordpress[x.slug].url)}/?kf_mvp_sso=begin" target="_blank" rel="noopener">进入 WordPress 后台</a>`:''}
    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
      ${STATE.can_archive?`<button type="button" class="ghost" data-site-archive="${esc(x.slug)}" onclick="archiveSite(this,'${esc(x.slug)}',${!x.archived},${Number(x.archive_version||0)})">${x.archived?'恢复归档':'归档站点'}</button>`:''}
-     ${ROLE==='finance'?'':`<button class="ghost" onclick="renewSite('${esc(x.slug)}')">续费</button>
+     ${ROLE==='finance'?'':`${STATE.can_renew?`<button class="ghost" onclick="renewSite('${esc(x.slug)}')">续费</button>`:''}
      <button class="ghost" onclick="toggleSuspend('${esc(x.slug)}','${x.billing_status||'active'}')">${x.billing_status==='suspended'?'恢复':'暂停'}</button>`}
    </div></td></tr>`).join('')
   :(STATE.sites||[]).length?'<tr><td colspan="8" class="empty-results"><p>没有匹配的站点</p><button class="ghost" onclick="clearSiteFilters()">清除筛选</button></td></tr>'
@@ -3110,20 +3097,7 @@ async function load(force=false){
   <div class="stat"><b>${(STATE.sites||[]).filter(x=>x.archived).length}</b><span>已归档</span></div>`;
  renderSites();
  if(typeof refreshOperations==='function'&&CURRENT_TAB==='sites')refreshOperations();
- const iv=STATE.invoices||[];
- const paid=iv.filter(i=>i.status==='paid'),unpaid=iv.filter(i=>i.status!=='paid');
- $('#billStats').innerHTML=`<div class="stat"><b>${money(paid.reduce((a,b)=>a+b.total,0))}</b><span>已收款</span></div>
-  <div class="stat"><b>${money(unpaid.reduce((a,b)=>a+b.total,0))}</b><span>待收款</span></div>
-  <div class="stat"><b>${iv.length}</b><span>账单数</span></div>`;
- const billHtml=iv.length?iv.map(i=>`<tr>
-  <td class="mono">${esc(i.no)}</td><td data-user-content>${esc(i.company)}</td><td>${esc(i.plan_name)}</td>
-  <td class="mono">${money(i.total)}</td>
-  <td><span class="pill" style="color:${i.status==='paid'?'var(--ok)':'var(--warn)'}">${i.status==='paid'?'已付款':'待付款'}</span></td>
-  <td class="mono" style="color:var(--dim)">${esc(i.issued_at)}</td>
-  <td><a href="/api/invoice/${encodeURIComponent(i.no)}/pdf">PDF</a>
-   ${i.status!=='paid'?`　<button class="ghost" onclick="pay('${esc(i.no)}')">标记已付</button>`:''}</td></tr>`).join('')
-  :'<tr><td colspan="7" style="color:var(--dim)">暂无账单</td></tr>';
- setStableHtml($('#billRows'),billHtml);
+ if(typeof renderBilling==='function')renderBilling();
  const planHtml=(STATE.plans||[]).map(p=>`<tr><td><b>${esc(p.name)}</b>
   <div class="mono" style="color:var(--dim);font-size:11.5px">${esc(p.id)}</div></td>
   <td class="mono">${money(p.price)} <span style="color:var(--dim)">/ ${esc(p.period)}</span></td>
@@ -3149,14 +3123,6 @@ async function archiveSite(button,slug,archived,version){
   await load();
  }catch(e){showGlobalError(e.message);}finally{if(button.isConnected)button.disabled=false;}
 }
-async function renewSite(slug){
-  const y=prompt('续费几年？（1-5）','1'); if(!y) return;
-  const r=await fetch('/api/renew',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({slug:slug,years:Number(y)})});
-  const d=await r.json();
-  if(r.ok){ alert('已续费至 '+d.expires+'\n账单 '+d.invoice); load(); }
-  else alert('失败：'+(d.error||''));
-}
 async function toggleSuspend(slug,status){
   const act = status==='suspended' ? 'start' : 'stop';
   if(!confirm(act==='stop'?'暂停该站点？客户将无法访问。':'恢复该站点？')) return;
@@ -3169,9 +3135,6 @@ async function toggleSuspend(slug,status){
 
 async function issue(slug){
  const r=await fetch('/api/invoice/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug})});
- const d=await r.json(); if(!r.ok)alert(d.error||'失败'); load();}
-async function pay(no){
- const r=await fetch('/api/invoice/pay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({no})});
  const d=await r.json(); if(!r.ok)alert(d.error||'失败'); load();}
 function editPlan(id){const p=STATE.plans.find(x=>x.id===id);const f=$('#pf');
  f.id.value=p.id;f.name.value=p.name;f.price.value=p.price;f.period.value=p.period;f.specs.value=p.specs;
@@ -4276,7 +4239,7 @@ let REFRESH_RUNNING=false;
 async function refreshConsole(force=false){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;$('#siteHealthRefresh').disabled=true;try{await load(force);}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;$('#siteHealthRefresh').disabled=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/billing.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -4326,27 +4289,9 @@ def release_site(slug):
         _SITE_RESERVATIONS.pop(slug, None)
 
 
-def make_invoice( slug, company, domain, plan, kind="new", years=0):
-    s = settings()
+def make_invoice(slug, company, domain, plan, kind="new", years=0, user="", apply_renewal=False):
     with _file_lock:
-        invs = invoices()
-        no = next_invoice_no()
-        subtotal = float(plan["price"])
-        gst = round(subtotal * s["gst_rate"], 2) if s.get("gst_enabled") else 0.0
-        inv = {
-            "no": no, "slug": slug, "company": company, "domain": domain,
-            "plan_id": plan["id"], "plan_name": plan["name"],
-            "plan_specs": plan.get("specs", ""),
-            "subtotal": subtotal, "gst": gst, "total": round(subtotal + gst, 2),
-            "status": "unpaid",
-            "issued_at": datetime.now(SGT).strftime("%Y-%m-%d %H:%M"),
-            "paid_at": "",
-            "kind": kind,
-            "years": years,
-        }
-        invs.append(inv)
-        _write(INVOICES_F, invs)
-    return inv
+        return kf_billing.Billing(BASE).create(slug, company, domain, plan, settings(), kind, years, user, apply_renewal)
 
 
 class BuildService:
@@ -5178,7 +5123,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
@@ -5221,8 +5166,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"role": getattr(self, "user_role", "ops"),
                                     "me": getattr(self, "user", ""),
                                     "staff": sorted(load_users().keys()) if self.user_role == "admin" else [self.user],
-                                    "sites": site_list(force=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("refresh") == ["1"]), "invoices": invoices(),
+                                    "sites": site_list(force=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("refresh") == ["1"]), "invoices": kf_billing.Billing(BASE).public(invoices()),
                                     "can_archive": can_write(self.user_role, "/api/site/archive"),
+                                    "can_pay": can_write(self.user_role, "/api/invoice/pay"),
+                                    "can_adjust_invoice": can_write(self.user_role, "/api/invoice/adjust"),
+                                    "can_renew": can_write(self.user_role, "/api/renew"),
                                     "plans": plans(), "settings": pub,
                                     "industries": sorted(INDUSTRIES.items()),
                                     "free_port": free_port()})
@@ -5580,8 +5528,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(410, {"error": "手动开通已取消，请使用 AI 建站"})
         if path == "/api/invoice/issue":
             return self._issue(body.get("slug", ""))
+        if path == '/api/invoice/adjust':
+            try:
+                with _file_lock:
+                    item = kf_billing.Billing(BASE).adjust(body.get('no'), body.get('version'), body.get('subtotal'),
+                        body.get('gst'), body.get('due_date', ''), body.get('reason'), self.user)
+                audit(self.user, 'invoice_adjust', item['slug'], item['no'])
+                return self._send(200, {'item': item})
+            except kf_tool_runtime.ActionConflict as exc:
+                return self._send(409, {'error': str(exc)})
+            except kf_ai.AIError as exc:
+                return self._send(400, {'error': str(exc)})
         if path == "/api/invoice/pay":
-            return self._pay(body.get("no", ""))
+            return self._pay(body.get("no", ""), body.get("version"))
         if path == "/api/notify/run":
             try:
                 r = subprocess.run([sys.executable, str(BASE / "tools" / "kf_notify.py")],
@@ -5685,7 +5644,7 @@ class Handler(BaseHTTPRequestHandler):
             if etype == "topup" and getattr(self, "user_role", "ops") not in ("admin", "finance"):
                 return self._send(403, {"error": "只有财务或管理员可以记录收入"})
             try:
-                amount = abs(float(body.get("amount", 0)))
+                amount = kf_billing.money(body.get("amount", 0))
             except Exception:
                 return self._send(400, {"error": "金额必须是数字"})
             if amount <= 0:
@@ -5852,24 +5811,18 @@ class Handler(BaseHTTPRequestHandler):
                                  meta.get("domain", ""), plan)
         return self._send(201, inv)
 
-    def _pay(self, no):
-        with _file_lock:
-            invs = invoices()
-            inv = next((i for i in invs if i["no"] == no), None)
-            if not inv:
-                return self._send(404, {"error": "没有这张账单"})
-            if inv.get("status") == "paid":
-                return self._send(200, inv)
-            inv["status"] = "paid"
-            inv["paid_at"] = datetime.now(SGT).strftime("%Y-%m-%d %H:%M")
-            _write(INVOICES_F, invs)
+    def _pay(self, no, version=None):
         try:
-            add_ledger(inv["slug"], "topup", inv.get("total", 0),
-                       "服务费", "账单 %s 已付款" % inv["no"], getattr(self, "user", ""))
-        except Exception:
-            pass
-        _extend_on_payment(inv)
-        return self._send(200, inv)
+            with _file_lock:
+                item = kf_billing.Billing(BASE).pay(no, self.user, version)
+            audit(self.user, 'invoice_pay', item['slug'], no)
+            return self._send(200, item)
+        except kf_tool_runtime.ActionConflict as exc:
+            return self._send(409, {'error': str(exc)})
+        except kf_ai.AIError as exc:
+            return self._send(400, {'error': str(exc)})
+        except OSError:
+            return self._send(503, {'error': 'Payment is incomplete; retry this invoice to resume safely'})
 
     def _media_delete(self, body):
         slug = str(body.get("slug", "")).strip().lower()
@@ -6523,28 +6476,30 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError,TypeError) as exc:return self._send(400,{'error':str(exc) if isinstance(exc,kf_ai.AIError) else 'DNS 记录格式无效'})
 
     def _renew(self, body):
-        slug = str(body.get("slug", "")).strip().lower()
-        if not SLUG_RE.match(slug) or not (SITES / slug).exists():
-            return self._send(400, {"error": "站点不存在"})
+        slug = body.get('slug')
+        if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug) or not (SITES / slug / 'meta.json').is_file():
+            return self._send(400, {'error': '站点不存在'})
+        years = body.get('years', 1)
+        if type(years) is not int or not 1 <= years <= 5:
+            return self._send(400, {'error': 'Renewal years must be between 1 and 5'})
         try:
-            years = max(1, min(5, int(body.get("years", 1))))
-        except Exception:
-            years = 1
-        b = read_billing(slug)
-        plan = next((p for p in plans() if p["id"] == b.get("plan_id")), None)
-        if not plan:
-            plan = {"id": "renewal", "name": "Renewal", "price": 0, "specs": "Annual renewal"}
-        meta = load_meta(slug)
-        base = b.get("expires") or datetime.now(SGT).strftime("%Y-%m-%d")
-        dl = days_left(slug)
-        if dl is not None and dl < 0:
-            base = datetime.now(SGT).strftime("%Y-%m-%d")
-        b["expires"] = add_years(base, years)
-        b["status"] = "active"
-        (SITES / slug / "billing.json").write_text(json.dumps(b, ensure_ascii=False, indent=1))
-        inv = self._make_invoice(slug, meta.get("company", slug), meta.get("domain", ""),
-                                 dict(plan, name=(plan["name"] + " · 续费 %d 年" % years)))
-        return self._send(200, {"ok": True, "expires": b["expires"], "invoice": inv["no"]})
+            with _file_lock:
+                b = read_billing(slug)
+                plan = next((p for p in plans() if p['id'] == b.get('plan_id')), None)
+                if not plan:
+                    raise kf_ai.AIError('Choose a valid plan before renewing')
+                meta = load_meta(slug)
+                inv = make_invoice(slug, meta.get('company', slug), meta.get('domain', ''),
+                    dict(plan, name=plan['name']+' · 续费 %d 年' % years), kind='renewal', years=years,
+                    user=self.user, apply_renewal=True)
+            audit(self.user, 'invoice_renewal', slug, inv['no'])
+            return self._send(200, {'ok': True, 'expires': inv.get('renewal_expires', ''), 'invoice': inv['no']})
+        except kf_tool_runtime.ActionConflict as exc:
+            return self._send(409, {'error': str(exc)})
+        except kf_ai.AIError as exc:
+            return self._send(400, {'error': str(exc)})
+        except OSError:
+            return self._send(503, {'error': 'Renewal is incomplete; retry to resume safely'})
 
     def _suspend(self, body):
         slug = str(body.get("slug", "")).strip().lower()
@@ -6560,10 +6515,11 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             ok = False
         _HEALTH_CACHE.invalidate(lambda key: key[0] == slug)
-        b = read_billing(slug)
-        if ok:
-            b["status"] = "suspended" if action == "stop" else "active"
-            kf_ai.atomic_json(SITES / slug / "billing.json", b)
+        with _file_lock:
+            b = read_billing(slug)
+            if ok:
+                b["status"] = "suspended" if action == "stop" else "active"
+                kf_ai.atomic_json(SITES / slug / "billing.json", b)
         return self._send(200 if ok else 500,
                           {"ok": ok, "status": b.get("status", "unknown"),
                            "error": "" if ok else "容器操作失败"})
@@ -6632,7 +6588,7 @@ class Handler(BaseHTTPRequestHandler):
         if not pid:
             return self._send(400, {"error": "套餐 ID 必填且只能用小写字母数字"})
         try:
-            price = float(body.get("price", 0))
+            price = kf_billing.money(body.get("price", 0))
         except Exception:
             return self._send(400, {"error": "价格必须是数字"})
         item = {"id": pid, "name": str(body.get("name", pid))[:40], "price": price,

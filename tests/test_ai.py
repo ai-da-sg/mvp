@@ -148,7 +148,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
+        for filename in ('billing.js','leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -195,6 +195,53 @@ class ConsoleTests(unittest.TestCase):
         try: body = json.loads(raw)
         except ValueError: body = raw.decode()
         return r.status, body
+
+    def test_payment_interruption_is_visible_and_resumes_through_http(self):
+        item = self.m.make_invoice('demo', 'Demo', 'example.test', dict(self.m.plans()[0], price=100))
+        original = self.m.kf_billing.atomic_json
+        def fail_invoice(path, data):
+            if Path(path) == self.m.INVOICES_F:
+                raise OSError('Test write failure')
+            original(path, data)
+        with patch.object(self.m.kf_billing, 'atomic_json', side_effect=fail_invoice):
+            self.assertEqual(self.request('/api/invoice/pay', {'no': item['no'], 'version': 0}, user='finance-test')[0], 503)
+        self.assertTrue(self.request('/api/state')[1]['invoices'][0]['processing'])
+        self.assertEqual(len(self.m.ledger()), 1)
+        self.assertEqual(self.request('/api/invoice/pay', {'no': item['no'], 'version': 0}, user='finance-test')[0], 200)
+        self.assertEqual(len(self.m.ledger()), 1)
+        self.assertFalse(self.request('/api/state')[1]['invoices'][0]['processing'])
+        self.assertEqual(self.request('/api/ledger', {'slug': 'demo', 'type': 'topup', 'amount': 'NaN'}, user='finance-test')[0], 400)
+        self.assertEqual(self.request('/api/plan/save', {'id': 'invalid-plan', 'price': 'Infinity'})[0], 400)
+
+    def test_invoice_adjustment_payment_roles_and_manual_renewal_idempotency(self):
+        plan = self.m.plans()[0]
+        ai.atomic_json(self.base / 'sites/demo/billing.json', {'plan_id': plan['id'], 'expires': '2027-01-01',
+                                                            'status': 'active', 'domain': {'registrar': 'Keep'}})
+        invoice = self.m.make_invoice('demo', 'Demo', 'example.test', plan)
+        body = {'no': invoice['no'], 'version': 0, 'subtotal': '200', 'gst': '18',
+                'due_date': '2026-01-01', 'reason': 'Updated scope'}
+        self.assertEqual(self.request('/api/invoice/adjust', body, user='ops-test')[0], 403)
+        code, result = self.request('/api/invoice/adjust', body, user='finance-test')
+        self.assertEqual(code, 200, result)
+        self.assertEqual(result['item']['total'], 218)
+        self.assertEqual(self.request('/api/invoice/adjust', body)[0], 409)
+        pay = {'no': invoice['no'], 'version': 1}
+        self.assertEqual(self.request('/api/invoice/pay', pay, user='ops-test')[0], 403)
+        self.assertEqual(self.request('/api/invoice/pay', pay, user='finance-test')[0], 200)
+        self.assertEqual(self.request('/api/invoice/pay', pay, user='finance-test')[0], 200)
+        self.assertEqual(len(self.m.ledger()), 1)
+        self.assertEqual(self.request('/api/invoice/adjust', dict(body, version=2))[0], 409)
+        code, renewal = self.request('/api/renew', {'slug': 'demo', 'years': 2}, user='finance-test')
+        self.assertEqual(code, 200, renewal)
+        self.assertEqual(renewal['expires'], '2029-01-01')
+        self.assertEqual(self.request('/api/renew', {'slug': 'demo', 'years': 2})[1]['invoice'], renewal['invoice'])
+        self.assertEqual(self.request('/api/invoice/pay', {'no': renewal['invoice']}, user='finance-test')[0], 200)
+        self.assertEqual(self.m.read_billing('demo')['expires'], '2029-01-01')
+        self.assertEqual(self.m.read_billing('demo')['domain']['registrar'], 'Keep')
+        item = next(i for i in self.m.invoices() if i['no'] == renewal['invoice'])
+        self.assertEqual(item['subtotal'], float(plan['price'])*2)
+        self.assertTrue(item['renewal_applied'])
+        self.assertEqual(self.request('/api/renew', {'slug': 'demo', 'years': 1.5})[0], 400)
 
     def test_enquiries_cross_site_followup_conflicts_and_permissions(self):
         for slug in ('other', 'archived', 'broken'):

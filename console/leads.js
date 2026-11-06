@@ -10,6 +10,7 @@ const LEAD_ERRORS={
 };
 let LEAD_ITEMS=[],LEAD_SOURCES=[],LEAD_PAGE=1,LEAD_MORE=false,LEAD_EPOCH=0,LEAD_EDIT=null,LEAD_READY=false,LEAD_SCOPE='',LEAD_CONTEXT='';
 function leadText(key){return AdminUI.text(...LEAD_TEXT[key]);}
+function leadMessage(id,value='',bad=false){const pair=typeof value==='string'?(LEAD_TEXT[value]||[value,value]):(LEAD_ERRORS[value.message]||[value.message,value.message]);AdminUI.message(id,pair,bad);}
 function leadError(error){const pair=LEAD_ERRORS[error.message];return pair?AdminUI.text(...pair):error.message;}
 function leadTranslate(){
  document.querySelectorAll('[data-lead-text]').forEach(e=>e.textContent=leadText(e.dataset.leadText));
@@ -35,13 +36,13 @@ async function loadLeads(reset=true,force=false){
  const scope=JSON.stringify([$('#ldSlug').value,$('#ldArchived').checked]);
  if(scope!==LEAD_SCOPE){LEAD_SCOPE=scope;LEAD_ITEMS=[];LEAD_SOURCES=[];LEAD_MORE=false;renderLeads();}
  const epoch=++LEAD_EPOCH,page=reset?1:LEAD_PAGE+1;
- $('#ldRefresh').disabled=$('#ldMore').disabled=true;$('#ldList').setAttribute('aria-busy','true');aiMessage('#ldMsg',leadText('loading'));
+ $('#ldRefresh').disabled=$('#ldMore').disabled=true;$('#ldList').setAttribute('aria-busy','true');leadMessage('#ldMsg','loading');
  try{
   const query=new URLSearchParams({slug:$('#ldSlug').value,page:String(page),archived:Number($('#ldArchived').checked),refresh:Number(force||LEAD_SOURCES.some(x=>x.error))});
   const data=await aiRequest('/api/leads?'+query);if(epoch!==LEAD_EPOCH)return;
   LEAD_ITEMS=[...new Map((reset?data.items:[...LEAD_ITEMS,...data.items]).map(x=>[x.slug+':'+x.id,x])).values()];
-  LEAD_SOURCES=data.sources;const partial=data.sources.some(x=>x.error);LEAD_PAGE=partial?page-1:page;LEAD_MORE=partial||data.has_more;renderLeads();aiMessage('#ldMsg','');
- }catch(e){if(epoch===LEAD_EPOCH)aiMessage('#ldMsg',leadError(e),true);}
+  LEAD_SOURCES=data.sources;const partial=data.sources.some(x=>x.error);LEAD_PAGE=partial?page-1:page;LEAD_MORE=partial||data.has_more;renderLeads();leadMessage('#ldMsg','');
+ }catch(e){if(epoch===LEAD_EPOCH)leadMessage('#ldMsg',e,true);}
  finally{if(epoch===LEAD_EPOCH){$('#ldRefresh').disabled=$('#ldMore').disabled=false;$('#ldList').removeAttribute('aria-busy');}}
 }
 function renderLeadDetail(){
@@ -51,11 +52,11 @@ function renderLeadDetail(){
 }
 const LEAD_DIALOG=AdminUI.form('leadForm','',()=>{LEAD_EDIT=null;$('#leadNote').value='';});
 $('#leadCancel').onclick=()=>LEAD_DIALOG.close();
-$('#ldList').onclick=e=>{const b=e.target.closest('[data-lead-open]');if(!b)return;LEAD_EDIT=LEAD_ITEMS.find(x=>x.slug+':'+x.id===b.dataset.leadOpen);if(!LEAD_EDIT)return;$('#leadStatus').value=LEAD_EDIT.followup.status;$('#leadNote').value='';aiMessage('#leadMsg','');renderLeadDetail();LEAD_DIALOG.open();$('#leadStatus').focus();};
+$('#ldList').onclick=e=>{const b=e.target.closest('[data-lead-open]');if(!b)return;LEAD_EDIT=LEAD_ITEMS.find(x=>x.slug+':'+x.id===b.dataset.leadOpen);if(!LEAD_EDIT)return;$('#leadStatus').value=LEAD_EDIT.followup.status;$('#leadNote').value='';leadMessage('#leadMsg','');renderLeadDetail();LEAD_DIALOG.open();$('#leadStatus').focus();};
 $('#leadForm').onsubmit=async e=>{
  e.preventDefault();const x=LEAD_EDIT;if(!x)return;$('#leadSave').disabled=true;
- try{const data=await aiRequest('/api/leads/followup',{slug:x.slug,id:x.id,version:x.followup.version,status:$('#leadStatus').value,note:$('#leadNote').value});x.followup=data.item;LEAD_DIALOG.close(true);renderLeads();aiMessage('#ldMsg',leadText('saved'));}
- catch(error){aiMessage('#leadMsg',leadError(error),true);}finally{$('#leadSave').disabled=false;}
+ try{const data=await aiRequest('/api/leads/followup',{slug:x.slug,id:x.id,version:x.followup.version,status:$('#leadStatus').value,note:$('#leadNote').value});x.followup=data.item;LEAD_DIALOG.close(true);renderLeads();leadMessage('#ldMsg','saved');}
+ catch(error){leadMessage('#leadMsg',error,true);}finally{$('#leadSave').disabled=false;}
 };
 $('#ldSearch').oninput=$('#ldStatus').onchange=()=>{AdminUI.pages.set('ldList',0);renderLeads();};
 $('#ldSlug').onchange=()=>{if($('#ldSlug').value)SiteContext.save({slug:$('#ldSlug').value,archived:$('#ldArchived').checked});LEAD_CONTEXT=JSON.stringify(SiteContext.read());loadLeads();};

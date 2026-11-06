@@ -19,6 +19,23 @@ try:
     users = m.load_users()
     users['mfa-test'] = dict(users['ops-test'], mfa_secret='JBSWY3DPEHPK3PXP')
     m._write(m.USERS_F, users)
+    if os.environ.get('KF_E2E_BILLING') == '1':
+        from datetime import timedelta
+        import kf_ai
+        plan = m.plans()[0]
+        kf_ai.atomic_json(m.SITES / 'demo/billing.json', {'plan_id': plan['id'], 'expires': m.datetime.now(m.SGT).date().isoformat(), 'status': 'active'})
+        store = m.kf_billing.Billing(m.BASE)
+        for title in ('Overdue invoice', 'Undated invoice', 'Paid invoice'):
+            item = m.make_invoice('demo', title, 'example.test', dict(plan, price=100))
+            if title.startswith('Overdue'):
+                store.adjust(item['no'], 0, 100, 0, (m.datetime.now(m.SGT).date()-timedelta(days=1)).isoformat(), 'Fixture terms', 'admin')
+            elif title.startswith('Paid'):
+                store.pay(item['no'], 'admin')
+        old = m.SITES / 'old-demo'
+        old.mkdir()
+        kf_ai.atomic_json(old / 'meta.json', {'company': 'Archived customer', 'port': 0})
+        kf_ai.atomic_json(old / 'archive.json', {'archived': True})
+        m.make_invoice('old-demo', 'Archived customer', 'old.test', dict(plan, price=100))
     if os.environ.get('KF_E2E_LEADS') == '1':
         # Exercise real HTTP, authorization and persistent follow-ups without
         # starting WordPress containers in CI. Live WP reads have opt-in proof.

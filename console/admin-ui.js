@@ -1,6 +1,8 @@
 /* Shared administration controls. Never persist form values or credentials. */
 const AdminUI={
  text(zh,en){return document.documentElement.lang.startsWith('en')?en:zh;},
+ messages:new Map(),
+ message(id,pair,bad=false){this.messages.set(id,{pair,bad});aiMessage(id,this.text(...pair),bad,true);},
  pages:new Map(),
  forms:[],
  async load(list,button,message,action){
@@ -40,6 +42,7 @@ const AdminUI={
   dialog.querySelector('button').onclick=()=>dialog.close();dialog.showModal();
  }
 };
+new MutationObserver(()=>{for(const [id,{pair,bad}] of AdminUI.messages)aiMessage(id,AdminUI.text(...pair),bad,true);}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
 
 /* Share a site selection between operational pages, without changing access scopes. */
 const SiteContext={

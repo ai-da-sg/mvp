@@ -14,7 +14,8 @@ async function aiRequest(path, body) {
   if (!response.ok) throw new Error(data.error || '操作失败');
   return data;
 }
-function aiMessage(id, message, bad=false) {
+function aiMessage(id, message, bad=false, localized=false) {
+  if(!localized&&typeof AdminUI!=='undefined')AdminUI.messages.delete(id);
   const el = $(id); el.textContent = message; el.className = 'msg ' + (bad ? 'bad' : 'ok');
 }
 function aiOptions(id, items, label) {

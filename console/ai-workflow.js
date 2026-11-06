@@ -12,6 +12,7 @@ const BUILD_TEXT={
  mock:['模拟模式，不调用真实模型','Simulation; no real model call'],actual:['将发送业务资料至所选模型接口','Business data will be sent to the selected model endpoint']
 };
 let BUILD_STEP=1,BUILD_REVIEW=null,BUILD_SIGNATURE='',BUILD_BUSY=false,BUILD_SKIP_BRIEF=true;
+function buildMessage(value='',bad=false){AdminUI.message('#aiBuildMsg',Object.values(BUILD_TEXT).find(pair=>pair.includes(value))||[value,value],bad);}
 function buildText(key){return AdminUI.text(...BUILD_TEXT[key]);}
 function buildSignature(){return JSON.stringify([...$('#aiBuildForm').querySelectorAll('input,select,textarea')].filter(e=>!e.readOnly&&e.id!=='aiReplace').map(e=>[e.id,e.value,e.type==='checkbox'?e.checked:null]).concat([['context',window.aiContextActions||[]],['prompt',promptSelection()],['style',STYLE_LIBRARY?.templates.find(t=>t.id===$('#aiStyleTemplate').value)||STYLE_ANALYSIS]]));}
 function buildRender(){
@@ -47,18 +48,18 @@ async function buildContinue(){
  if(BUILD_BUSY||!AI_READY)return;
  if(BUILD_STEP===1){if(buildValidate(1,true))buildShow(2);return;}
  if(!buildValidate(1)||!buildValidate(2))return;
- BUILD_BUSY=true;buildRender();aiMessage('#aiBuildMsg','');const signature=buildSignature();
+ BUILD_BUSY=true;buildRender();buildMessage('');const signature=buildSignature();
  try{
   styleSelection();
   const prompt=promptSelection()?await previewPrompt():null;
   if(signature!==buildSignature())throw Error(buildText('changed'));
   BUILD_REVIEW={prompt};BUILD_SIGNATURE=signature;buildShow(3);
- }catch(e){aiMessage('#aiBuildMsg',e.message,true);}
+ }catch(e){buildMessage(e.message,true);}
  finally{BUILD_BUSY=false;buildRender();}
 }
 function buildCanSubmit(){
  if(BUILD_STEP!==3){buildContinue();return false;}
- if(!BUILD_REVIEW||BUILD_SIGNATURE!==buildSignature()){BUILD_REVIEW=null;buildShow(2);aiMessage('#aiBuildMsg',buildText('changed'),true);return false;}
+ if(!BUILD_REVIEW||BUILD_SIGNATURE!==buildSignature()){BUILD_REVIEW=null;buildShow(2);buildMessage(buildText('changed'),true);return false;}
  return buildValidate(1)&&buildValidate(2);
 }
 function buildReconcile(){
@@ -70,7 +71,7 @@ $('#aiBuildForm').validationControls=()=>[...$('#aiBuildStep'+BUILD_STEP).queryS
 $('#aiBuildNext').onclick=buildContinue;
 $('#aiBuildRefreshPrompts').onclick=async()=>{
  const button=$('#aiBuildRefreshPrompts');button.disabled=true;
- try{await loadPromptLibrary();buildReconcile();aiMessage('#aiBuildMsg','');}catch(e){aiMessage('#aiBuildMsg',e.message,true);}finally{button.disabled=false;}
+ try{await loadPromptLibrary();buildReconcile();buildMessage('');}catch(e){buildMessage(e.message,true);}finally{button.disabled=false;}
 };
 $('#aiBuildBack').onclick=()=>buildShow(BUILD_STEP-1);
 $('#aiBuildSteps').onclick=e=>{const b=e.target.closest('[data-build-step]');if(b&&!b.disabled)buildShow(Number(b.dataset.buildStep));};
