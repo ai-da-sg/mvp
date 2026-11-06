@@ -34,7 +34,7 @@ function aiMode() {
 function aiNotice() {
   const p = (AI_CONFIG?.profiles || []).find(p => p.id === $('#aiProfile').value);
   $('#aiModeNotice').textContent = p?.protocol === 'mock'
-    ? '当前为 GPT 模拟模式：按企业信息与需求生成示例草稿，不调用真实 GPT、不产生模型费用。'
+    ? '模拟模式：不调用模型，不产生费用。'
     : `将调用 ${p?.name || '所选服务商'} / ${p?.model || ''} 生成内容，企业名称和建站要求会发送至该配置的接口。`;
 }
 function aiRenderProfiles() {
@@ -88,7 +88,7 @@ async function aiJobs() {
       ${j.status==='completed'?`<a href="/preview/${encodeURIComponent(j.slug)}/home" target="_blank" rel="noopener">预览草稿</a>
       <button type="button" data-ai-editor="${esc(j.slug)}">编辑页面</button>
       <button type="button" data-ai-publish="${esc(j.slug)}">发布当前草稿</button>
-      <span class="hint">${Number(j.pages)} 个页面 · 预览和发布均使用该站点当前草稿</span>`:''}</div>`).join(''):'<div class="callout">还没有建站任务。填写上方要求，开始生成第一份草稿。</div>';
+      <span class="hint">${Number(j.pages)} 个页面 · 预览和发布均使用该站点当前草稿</span>`:''}</div>`).join(''):'<div class="callout">暂无任务。填写需求后生成草稿。</div>';
     setStableHtml($('#aiJobs'),html);
   } catch(e) { aiMessage('#aiBuildMsg', e.message, true); }
   finally { AI_LOADING=false; }
@@ -273,6 +273,7 @@ $('#styleEditForm').onsubmit=async e=>{
 
 function renderAIContext(){
  const entries=window.aiContextActions||[];
+ if(entries.length)$('#aiContextOptions').open=true;
  $('#aiContextList').innerHTML=entries.map(id=>`<p><span data-user-content>${esc(window.aiContextLabels?.[id]||id)}</span> <button type="button" class="ghost" data-context-remove="${esc(id)}">移除</button></p>`).join('')||'<p class="hint">尚未选择 MCP 资料；可先在运营助手运行已授权的只读工具或资源读取。</p>';
 }
 $('#aiContextList').onclick=e=>{const b=e.target.closest('[data-context-remove]');if(!b)return;window.aiContextActions=(window.aiContextActions||[]).filter(id=>id!==b.dataset.contextRemove);renderAIContext();};

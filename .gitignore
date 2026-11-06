@@ -29,3 +29,7 @@ deploy.env
 console/*.key
 console/actions/
 console/workflows/
+
+# Browser test traces can contain authenticated test state
+**/output/e2e-real/
+playwright/.auth/

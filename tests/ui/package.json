@@ -2,7 +2,11 @@
   "name": "kampongflow-ui-regression",
   "private": true,
   "scripts": {
-    "test": "node console.test.cjs && node security.test.cjs"
+    "test": "node console.test.cjs && node security.test.cjs && node real-api.test.cjs",
+    "test:real": "node real-api.test.cjs",
+    "test:live-mcp": "E2E_REMOTE_MCP=1 node real-api.test.cjs",
+    "test:showcases": "node showcases.test.cjs",
+    "test:production": "node production-smoke.test.cjs"
   },
   "devDependencies": {
     "playwright": "1.64.1"

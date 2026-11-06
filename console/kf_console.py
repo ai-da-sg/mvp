@@ -2302,7 +2302,7 @@ input[type=color]{height:38px;padding:2px;cursor:pointer}
 .wrap{max-width:1440px;padding:24px 24px 64px}
 .console-shell{display:grid;grid-template-columns:216px minmax(0,1fr);gap:28px;align-items:start}
 .sidebar{position:sticky;top:20px;max-height:calc(100dvh - 40px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
-#aiContextOptions,#mcpForm fieldset{min-inline-size:0;border:1px solid var(--line);border-radius:10px;padding:16px;margin:16px 0}
+#mcpForm fieldset{min-inline-size:0;border:1px solid var(--line);border-radius:10px;padding:16px;margin:16px 0}
 #aiContextOptions label,#mcpPurposes label{display:inline-block;margin:6px 14px 6px 0}
 #providerForm textarea,#providerForm input,#providerForm select{max-width:100%;box-sizing:border-box}#providerForm textarea{width:100%;background:var(--input,#0d1117);color:var(--fg);border:1px solid var(--line);padding:10px}#providerForm fieldset{min-inline-size:0;margin:16px 0;border:1px solid var(--line)}#providerForm label{margin:8px 0}#mcpForm textarea,#workflowDNS{width:100%;max-width:100%;padding:10px;background:var(--input,#0d1117);color:var(--fg);border:1px solid var(--line);border-radius:6px;resize:vertical}
 #p-automation pre,#mcpResult pre{max-height:360px;overflow:auto}
@@ -2338,12 +2338,21 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
  .editor-actions{position:static}.editor-actions button{flex:1;min-height:44px}.sec-row{padding:8px;gap:4px}.sec-row .t{min-width:0}
  .sec-row button{min-width:40px;min-height:44px}.sec-row .section-select{flex-wrap:wrap}
 }
+
+.page-help{margin:0 0 16px;color:var(--dim);font-size:13px;max-width:76ch}
+.page-help>summary{display:list-item;width:fit-content;min-height:44px;align-content:center;cursor:pointer;color:var(--dim)}
+.page-help[open]>summary{color:var(--fg)}
+.help-content{border-left:2px solid var(--line);padding:0 0 0 16px;line-height:1.7}
+.help-content p{margin:0 0 10px}.help-content .callout{margin:0}
+.optional-options{margin:16px 0;border:1px solid var(--line);border-radius:10px}
+.optional-options>summary{min-height:48px;padding:12px 16px;box-sizing:border-box;cursor:pointer;font-weight:600}
+.optional-content{padding:0 16px 16px}
+.page-help>summary:focus-visible,.optional-options>summary:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:4px}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{scroll-behavior:auto!important}}
 </style></head><body><div class="wrap">
 <div class="topbar">
   <div>
     <h1>KampongFlow 控制台</h1>
-    <div class="sub">一次性交付：域名 · 建站 · 邮箱 · 托管</div>
   </div>
   <div class="who"><span id="whoami">—</span> · <a href="/logout">退出</a></div>
 </div>
@@ -2398,8 +2407,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 
 
 <div id="p-ai" class="hidden">
-<h2>AI 自动建站</h2>
-<p class="hint">描述企业、服务与风格，自动生成整站页面草稿。预览、调整后发布到网站。</p>
+<details class="page-help"><summary>建站说明</summary><div class="help-content"><p class="hint">描述企业、服务与风格，自动生成整站页面草稿。预览、调整后发布到网站。</p><p class="hint">模板影响内容结构与语气；配色、字体仍由视觉模板负责。模拟模式用于流程验证，不代表真实模型效果。</p><p class="hint">读取公开页面与样式，提取颜色、字体和布局线索。不复制原站品牌或图片；动态页面可能无法完整分析。</p><p class="hint">风格随生成内容一起保存到草稿，预览确认后发布；模板更新不会改变已经生成的网站。</p></div></details>
 <div class="callout" id="aiModeNotice">GPT 模拟模式无需密钥；真实模型请由管理员配置。</div>
 <form id="aiBuildForm">
 <div class="formrow">
@@ -2414,7 +2422,8 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="field"><label for="aiSlug">站点标识</label><input id="aiSlug" maxlength="20" pattern="[a-z][a-z0-9-]{1,19}" placeholder="bay-studio"></div>
 <div class="field"><label for="aiPlan">套餐</label><select id="aiPlan"></select></div>
 <div class="field"><label for="aiIndustry">行业与视觉模板</label><select id="aiIndustry"></select></div>
-</div><p class="hint">新站点会开通 WordPress 和数据库，并生成套餐账单。生成的 AI 内容先保存为草稿；域名解析可在交付前配置。</p></div>
+</div><p class="hint">新站会创建 WordPress、数据库和套餐账单，内容先保存为草稿。</p></div>
+<div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求 / 额外补充</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍主营业务、目标客户和希望访客完成的操作。"></textarea></div>
 <fieldset class="prompt-composer" style="margin-top:20px;border:1px solid var(--line);border-radius:10px;padding:16px">
 <legend>提示词方案</legend>
 <div class="formrow"><div class="field"><label for="aiPromptCategory">场景分类</label><select id="aiPromptCategory"><option value="">全部场景</option></select></div><div class="field"><label for="aiPromptTemplate">选择模板</label><select id="aiPromptTemplate"><option value="">自由输入（不使用模板）</option></select></div></div>
@@ -2428,20 +2437,19 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <button type="button" class="ghost" id="aiPromptPreviewBtn" style="margin-top:12px">预览组合后的提示词</button>
 <details id="aiPromptPreviewBox"><summary>最终提示词预览</summary><textarea id="aiPromptPreview" class="json-edit" readonly aria-label="组合后的提示词"></textarea></details>
 <div id="aiPromptMsg" class="msg" role="status"></div></div>
-<p class="hint">模板影响内容结构与语气；配色、字体仍由视觉模板负责。模拟模式用于流程验证，不代表真实模型效果。</p>
+
 </fieldset>
-<fieldset style="margin-top:20px;border:1px solid var(--line);border-radius:10px;padding:16px">
-<legend>参考网站与风格模板</legend>
+<details id="aiReferenceOptions" class="optional-options"><summary>参考网站与风格模板</summary><div class="optional-content">
 <div class="formrow"><div class="field"><label for="aiReferenceUrl">参考网站地址</label><input id="aiReferenceUrl" type="url" maxlength="2000" placeholder="https://example.com"></div><button type="button" id="aiAnalyzeStyle">分析参考风格</button></div>
-<p class="hint">读取公开页面与样式，提取颜色、字体和布局线索。不复制原站品牌或图片；动态页面可能无法完整分析。</p>
+
 <div class="formrow"><div class="field"><label for="aiStyleTemplate">本次生成使用的风格</label><select id="aiStyleTemplate"><option value="">保持站点当前风格</option></select></div><button type="button" class="ghost" id="aiStyleManage">管理风格模板</button></div>
 <div id="aiStyleResult" class="hidden"><p id="aiStyleSummary"></p><div id="aiStyleSwatches" style="display:flex;gap:8px;flex-wrap:wrap"></div><p id="aiStyleWarnings" class="hint"></p><details><summary>分析依据</summary><pre id="aiStyleEvidence" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details><button type="button" class="ghost" id="aiStyleSaveAnalysis">编辑并保存为模板</button></div>
-<p class="hint">风格随生成内容一起保存到草稿，预览确认后发布；模板更新不会改变已经生成的网站。</p>
+
 <div id="aiStyleMsg" class="msg" role="status" aria-live="polite"></div>
-</fieldset>
-<fieldset id="aiContextOptions"><legend>建站参考资料（已有站点，可选）</legend><label><input type="checkbox" value="client">客户资料</label><label><input type="checkbox" value="brand">品牌与风格</label><label><input type="checkbox" value="pages">现有页面</label><label><input type="checkbox" value="media">素材目录</label><p class="hint">所选资料会发送至当前模型服务商，并随任务记录来源。外部资料仅作为参考，不能覆盖基本原则与美学标准。</p><label><input id="aiAutoResearch" type="checkbox">允许 AI 自动查询已授权的 MCP 只读资料（最多 4 次）</label><div id="aiContextList"></div><button type="button" class="ghost" id="aiChooseContext">从运营助手选择 MCP 资料</button></fieldset>
-<div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求 / 额外补充</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍企业和主营服务、目标客户、网站风格、要突出的信息，以及真实的联系方式。例：新加坡室内设计工作室，服务住宅与小型办公室。风格简洁温暖，突出设计咨询、空间规划、施工跟进，希望访客通过联系表单预约。"></textarea></div>
-<label id="aiReplaceWrap" class="hint" style="display:block;margin:12px 0"><input id="aiReplace" type="checkbox"> 如果已有未发布草稿，我确认用本次结果替换（系统会备份原草稿）</label>
+</div></details>
+<details id="aiContextOptions" class="optional-options"><summary>建站参考资料（已有站点，可选）</summary><div class="optional-content"><label><input type="checkbox" value="client">客户资料</label><label><input type="checkbox" value="brand">品牌与风格</label><label><input type="checkbox" value="pages">现有页面</label><label><input type="checkbox" value="media">素材目录</label><p class="hint">所选资料会发送至当前模型服务商，请先确认可用于建站。</p><label><input id="aiAutoResearch" type="checkbox">允许 AI 自动查询已授权的 MCP 只读资料（最多 4 次）</label><div id="aiContextList"></div><button type="button" class="ghost" id="aiChooseContext">从运营助手选择 MCP 资料</button></div></details>
+
+<label id="aiReplaceWrap" class="hint" style="display:block;margin:12px 0"><input id="aiReplace" type="checkbox"> 允许替换未发布草稿（原草稿会备份）</label>
 <button id="aiGenerate" type="submit">生成整站草稿</button><span id="aiBuildMsg" class="msg" role="status" aria-live="polite"></span>
 </form>
 <details id="styleManager" style="margin-top:24px"><summary>风格模板管理</summary>
@@ -2464,7 +2472,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-llm" class="hidden"><details open id="aiSettings" style="margin-top:28px"><summary style="cursor:pointer">服务商与模型配置（管理员）</summary>
-<p class="hint">可保存多套模型。API 地址支持服务商 Base URL 或完整接口地址；模型 ID 按服务商提供的名称填写。密钥仅保存在服务器。</p>
+<details class="page-help"><summary>模型配置说明</summary><div class="help-content"><p class="hint">可保存多套模型。API 地址支持服务商 Base URL 或完整接口地址；模型 ID 按服务商提供的名称填写。密钥仅保存在服务器。</p></div></details>
 <div id="aiProfilesList"></div>
 <form id="aiConfigForm" style="margin-top:16px">
 <div class="formrow">
@@ -2488,7 +2496,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="submit">保存配置</button><button type="button" class="ghost" id="aiResetConfig">新建配置</button><span id="aiConfigMsg" class="msg" role="status"></span></div>
 </form></details></div>
 <div id="p-automation" class="hidden">
-<p class="hint">查询资料与健康状态、生成草稿，或先预览再确认发布、DNS 修改和邮件发送。执行记录用于核对结果与恢复流程。</p>
+<details class="page-help"><summary>操作流程说明</summary><div class="help-content"><p class="hint">查询资料与健康状态、生成草稿，或先预览再确认发布、DNS 修改和邮件发送。执行记录用于核对结果与恢复流程。</p></div></details>
 <div class="formrow"><div class="field"><label for="autoSite">站点</label><select id="autoSite"></select></div><div class="field"><label for="autoPurpose">功能</label><select id="autoPurpose"><option value="build">AI 建站</option><option value="dns">DNS</option><option value="mail">邮件</option><option value="maintenance">运营巡检</option></select></div><button id="autoRefresh" type="button" class="ghost">刷新记录</button></div>
 <form id="autoForm"><div class="formrow"><div class="field"><label for="autoSource">工具来源</label><select id="autoSource"><option value="builtin">MVP 内置业务</option></select></div><div class="field"><label for="autoTool">操作</label><select id="autoTool"></select></div></div>
 <div id="autoFields"></div><button type="submit" id="autoPrepare">生成操作预览</button><div id="autoMsg" class="msg" role="status"></div></form>
@@ -2503,15 +2511,15 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <details id="autoMailConfig"><summary>本站点邮件发送账号（管理员）</summary><form id="autoMailForm"><label for="autoMailAccount">邮件供应商账号</label><select id="autoMailAccount"></select><p class="hint">未绑定时使用系统默认发送配置。绑定后影响运营助手与交付流程的邮件；保存不会发送邮件。</p><button type="submit">保存邮件账号绑定</button><div id="autoMailMsg" class="msg" role="status"></div></form></details><h3>操作记录</h3><div id="autoActions"></div>
 </div>
 <div id="p-providers" class="hidden">
-<p class="hint">统一管理云平台、DNS 和邮件账号。凭据加密保存且不回显；为每个账号选择站点与能力，再在运营助手绑定使用。云资源清单覆盖账号授权范围，IAM / RAM / RBAC 应同时限制实际资源。</p>
+<details class="page-help"><summary>账号与权限说明</summary><div class="help-content"><p class="hint">统一管理云平台、DNS 和邮件账号。凭据加密保存且不回显；为每个账号选择站点与能力，再在运营助手绑定使用。云资源清单覆盖账号授权范围，IAM / RAM / RBAC 应同时限制实际资源。</p></div></details>
 <div class="formrow"><div class="field"><label for="providerSearch">搜索供应商账号</label><input id="providerSearch" type="search"></div><button id="providerNew" type="button">添加供应商账号</button><button id="providerRefresh" type="button" class="ghost">刷新</button></div>
 <div id="providerList"></div><div id="providerMsg" class="msg" role="status"></div>
 <form id="providerForm" class="hidden"><h3>供应商账号配置</h3><div class="formrow"><div class="field"><label for="providerId">账号 ID</label><input id="providerId" required pattern="[a-z][a-z0-9_-]{1,39}"></div><div class="field"><label for="providerName">账号名称</label><input id="providerName" required></div><div class="field"><label for="providerKind">供应商</label><select id="providerKind"></select></div></div>
 <div id="providerFields" class="formrow"></div><fieldset><legend>允许使用的能力</legend><div id="providerCaps"></div></fieldset><label for="providerSites">允许使用的站点（可多选）</label><select id="providerSites" multiple size="4" style="width:100%"></select><label><input id="providerEnabled" type="checkbox" checked>启用账号</label><div><button type="submit">保存供应商账号</button><button type="button" class="ghost" id="providerCancel">取消</button></div><div id="providerFormMsg" class="msg" role="status"></div></form>
 <details><summary>供应商能力对照</summary><div id="providerMatrix" style="overflow:auto"></div><p class="hint">通用 SMTP 可连接支持密码或应用密码认证的企业邮箱；OAuth-only SMTP 尚未支持。AWS role 使用服务器 SDK 凭据链，keys 使用所填凭据。复杂 DNS 路由、云主机创建/销毁、CDN 配置和数据库迁移不在本页直接执行范围内。</p></details></div>
 <div id="p-mcp" class="hidden">
-<p class="hint">管理远程 MCP 服务，测试连接并查看工具、资源及提示词。配置用途、站点范围与白名单后，可在运营助手调用，并将只读结果用于 AI 建站。</p>
-<p class="hint">支持公开 HTTPS（443 端口）的 Streamable HTTP，协议 2025-06-18 / 2025-03-26；认证支持无认证、Bearer Token 或已保存的 AWS / Cloudflare 账号。暂不支持本地 stdio、旧 SSE 端点或 OAuth 登录。</p>
+<details class="page-help"><summary>连接与权限说明</summary><div class="help-content"><p class="hint">管理远程 MCP 服务，测试连接并查看工具、资源及提示词。配置用途、站点范围与白名单后，可在运营助手调用，并将只读结果用于 AI 建站。</p><p class="hint">支持公开 HTTPS（443 端口）的 Streamable HTTP，协议 2025-06-18 / 2025-03-26；认证支持无认证、Bearer Token 或已保存的 AWS / Cloudflare 账号。暂不支持本地 stdio、旧 SSE 端点或 OAuth 登录。</p></div></details>
+
 <div class="formrow"><div class="field"><label for="mcpPreset">官方 MCP 预设</label><select id="mcpPreset"><option value="">请选择</option><option value="cloudflare-docs">Cloudflare 文档</option><option value="cloudflare-api">Cloudflare API</option><option value="aws-knowledge">AWS Knowledge</option><option value="aws-api">AWS MCP（新加坡）</option><option value="custom">其他标准 HTTPS MCP</option></select></div><button id="mcpUsePreset" type="button" class="ghost">使用预设</button></div><div class="formrow"><div class="field"><label for="mcpSearch">搜索 MCP 名称、地址或说明</label><input id="mcpSearch" type="search"></div><button id="mcpRefresh" type="button" class="ghost">刷新</button><button id="mcpNew" type="button">添加 MCP 服务</button></div>
 <div id="mcpList" style="margin-top:16px"></div><div id="mcpMsg" class="msg" role="status"></div>
 <form id="mcpForm" class="hidden"><h3 id="mcpFormTitle">MCP 服务配置</h3>
@@ -2533,7 +2541,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <section id="mcpResult" class="hidden" style="margin-top:20px" aria-live="polite"></section>
 </div>
 <div id="p-prompts" class="hidden">
-<p class="hint">模板定义场景，模块组织目标、结构、风格、文案与检查标准。运营可选择使用；管理员可编辑、复制、停用并恢复历史版本。</p>
+<details class="page-help"><summary>提示词使用说明</summary><div class="help-content"><p class="hint">模板定义场景，模块组织目标、结构、风格、文案与检查标准。运营可选择使用；管理员可编辑、复制、停用并恢复历史版本。</p></div></details>
 <div class="formrow"><div class="field"><label for="promptLibraryKind">查看</label><select id="promptLibraryKind"><option value="templates">场景模板</option><option value="modules">可复用模块</option></select></div><div class="field"><label for="promptLibrarySearch">搜索名称、分类或用途</label><input id="promptLibrarySearch" type="search"></div><button class="ghost" id="promptLibraryRefresh">刷新</button><button class="ghost" id="promptLibraryExport">导出提示词库</button><button id="promptLibraryNew">新建</button></div>
 <div id="promptLibraryList" style="margin-top:16px"></div><div id="promptLibraryMsg" class="msg" role="status"></div>
 <form id="promptEditForm" class="hidden">
@@ -2594,7 +2602,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-domain" class="hidden">
-<p class="hint">查询域名、管理机构、后台地址、账号与配置信息。已保存密码只在 TOTP 验证成功后显示。</p>
+<p class="hint">密码查看需 TOTP 验证。</p>
 <div class="formrow"><div class="field"><label for="domainSearch">搜索域名、机构、用户名或配置</label><input id="domainSearch" type="search"></div><button id="domainRefresh" type="button" class="ghost">刷新</button></div>
 <div id="dList" style="margin-top:14px"></div>
 <div class="msg" id="dMsg" role="status"></div>
@@ -2627,7 +2635,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-maint" class="hidden">
-<div class="callout">镜像更新检查：拉取 wordpress / mariadb / wp-cli 三个镜像，比对运行中容器的 image ID。定时任务每周一 09:00 自动执行。</div>
+<p class="hint">每周一 09:00 自动检查更新。</p><details class="page-help"><summary>更新检查说明</summary><div class="help-content"><div class="callout">镜像更新检查：拉取 wordpress / mariadb / wp-cli 三个镜像，比对运行中容器的 image ID。定时任务每周一 09:00 自动执行。</div></div></details>
 <div class="formrow" style="margin-top:14px">
 <div class="field" style="flex:0 0 auto"><label>&nbsp;</label><button id="mtCheck">立即检查</button></div>
 <div class="field" style="flex:0 0 auto"><label>&nbsp;</label><button class="ghost" id="mtApply">重建过期站点</button></div>
@@ -2676,7 +2684,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-team" class="hidden">
-<div class="callout">每个员工一个账号，所有写操作都会记进审计日志。只有管理员能管理账号。</div>
+<div class="callout">仅管理员可管理账号；修改会记录在操作日志中。</div>
 <div id="tmSec" style="margin-top:14px"></div>
 <div id="tmMe" style="margin-top:14px"></div>
 <div class="callout" style="margin-top:12px"><b style="color:var(--fg)">修改密码</b>

@@ -161,6 +161,7 @@ print(json.dumps(result))
  calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
  assert.equal(calls.find(c=>c.path==='/api/ai/build').body.prompt_selection.template_id,'company');
  assert.equal(await page.locator('#promptServices').inputValue(),'真实设计服务');
+ await page.locator('#aiReferenceOptions > summary').click();
  await page.locator('#aiReferenceUrl').fill('https://example.com/');await page.locator('#aiAnalyzeStyle').click();
  await page.waitForFunction(()=>document.querySelector('#aiStyleTemplate').value==='@analysis');
  assert.ok((await page.locator('#aiStyleSummary').textContent()).includes('serif'));

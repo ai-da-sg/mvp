@@ -1,5 +1,21 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+介绍主营业务、目标客户和希望访客完成的操作。|Describe your services, audience and the action visitors should take.
+模拟模式：不调用模型，不产生费用。|Mock mode: no model calls or charges.
+暂无任务。填写需求后生成草稿。|No jobs yet. Add a brief to generate a draft.
+允许替换未发布草稿（原草稿会备份）|Replace unpublished draft (a backup will be kept)
+建站说明|Building guide
+模型配置说明|Model setup help
+操作流程说明|Workflow help
+账号与权限说明|Account and permission help
+连接与权限说明|Connection and permission help
+提示词使用说明|Prompt library help
+更新检查说明|Update check details
+密码查看需 TOTP 验证。|Verify TOTP to view passwords.
+新站会创建 WordPress、数据库和套餐账单，内容先保存为草稿。|New sites create WordPress, a database and a plan invoice. Content is saved as a draft.
+所选资料会发送至当前模型服务商，请先确认可用于建站。|Selected material is sent to the model provider. Confirm it can be used for this website.
+仅管理员可管理账号；修改会记录在操作日志中。|Only administrators can manage accounts. Changes are logged.
+每周一 09:00 自动检查更新。|Updates are checked automatically every Monday at 09:00.
 KampongFlow 控制台|KampongFlow Console
 登录 · KampongFlow|Sign in · KampongFlow
 员工登录|Staff sign in
