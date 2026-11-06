@@ -40,6 +40,7 @@ import kf_workflows
 import kf_publications
 from kf_health_cache import HealthCache
 import kf_operations_inbox
+import kf_leads
 from kf_publication_wp import WordPressSnapshot
 
 from reportlab.lib import colors
@@ -197,7 +198,7 @@ DEFAULT_ROLES = {
     "admin": {"label": "管理员", "write": None},
     "ops": {"label": "运营", "write": [
         "/api/spec", "/api/design", "/api/media/", "/api/dns/", "/api/domain/manage",
-        "/api/clients/save", "/api/operations/ack", "/api/shares", "/api/publish", "/api/create", "/api/suspend", "/api/site/archive",
+        "/api/clients/save", "/api/leads/followup", "/api/operations/ack", "/api/shares", "/api/publish", "/api/create", "/api/suspend", "/api/site/archive",
         "/api/mfa", "/api/invoice/issue", "/api/ledger", "/api/ai/build", "/api/wordpress/login", "/api/domain/accounts", "/api/domain/records", "/api/automation/",
     ]},
     "finance": {"label": "财务", "write": [
@@ -254,7 +255,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -1525,38 +1526,38 @@ def run_update(mode):
         _update_state["mode"] = ""
 
 
-LEADS_PHP = (
-    '<?php $o=[]; foreach(get_posts(["post_type"=>"kf_lead","numberposts"=>100,'
-    '"post_status"=>"any"]) as $p){ $o[]=["id"=>$p->ID,"title"=>$p->post_title,'
-    '"date"=>$p->post_date,"msg"=>$p->post_content,'
-    '"email"=>get_post_meta($p->ID,"_kf_email",true),'
-    '"phone"=>get_post_meta($p->ID,"_kf_phone",true),'
-    '"sent"=>get_post_meta($p->ID,"_kf_mail_sent",true)]; }'
-    ' echo json_encode($o, JSON_UNESCAPED_UNICODE);'
-)
+_LEADS_CACHE = HealthCache(ttl=60, workers=3, limit=128)
 
 
 def list_leads(slug):
-    site = SITES / slug
-    tmp = site / "_leads_tmp.php"
+    return kf_leads.read_page(SITES / slug)['items']
+
+
+def enquiry_page(key):
+    slug, page = key
     try:
-        tmp.write_text(LEADS_PHP)
-        r = subprocess.run(
-            ["docker", "run", "--rm", "--env-file", str(site / "wp.env"),
-             "--network", "kf-%s_default" % slug,
-             "-v", "%s/html:/var/www/html" % site,
-             "-v", "%s:/tmp/leads.php:ro" % tmp,
-             "--user", "33:33", WPCLI_IMG, "wp", "eval-file", "/tmp/leads.php"],
-            capture_output=True, text=True, timeout=120)
-        out = (r.stdout or "").strip()
-        return json.loads(out) if out.startswith("[") else []
-    except Exception:
-        return []
-    finally:
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
+        return kf_leads.read_page(SITES / slug, page)
+    except kf_leads.LeadReadError:
+        return {'items': [], 'total': None, 'has_more': False, 'error': 'read_failed'}
+
+
+def enquiries(slug='', page=1, archived=False, force=False):
+    sites = [d for d in sorted(SITES.iterdir()) if d.is_dir() and (d / 'meta.json').is_file()
+             and (not slug or slug == d.name) and (archived or not site_archive(d.name)['archived'])]
+    results = _LEADS_CACHE.many([(d.name, page) for d in sites], enquiry_page, force)
+    rows, sources = [], []
+    for site in sites:
+        source = results[(site.name, page)]
+        meta = load_meta(site.name)
+        records = kf_leads.Followups(BASE, site.name).all()
+        sources.append({'slug': site.name, 'company': meta.get('company', site.name),
+                        **{k: source[k] for k in ('total', 'has_more', 'checked_at', 'error') if k in source}})
+        for item in source['items']:
+            rows.append(dict(item, slug=site.name, company=meta.get('company', site.name),
+                             domain=meta.get('domain', ''), archived=site_archive(site.name)['archived'],
+                             followup=records.get(str(item['id']), kf_leads.Followups.empty())))
+    return {'items': sorted(rows, key=lambda x: (x.get('date', ''), x['slug'], x['id']), reverse=True),
+            'sources': sources, 'page': page, 'has_more': any(x.get('has_more') for x in sources)}
 
 
 def host_map():
@@ -2868,12 +2869,9 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-leads" class="hidden">
-<div class="formrow">
-<div class="field"><label>站点</label><select id="ldSlug"></select></div>
-<div class="field" style="flex:0 0 auto"><label>&nbsp;</label><button class="ghost" id="ldRefresh">刷新</button></div>
-</div>
-<div id="ldList" style="margin-top:16px"></div>
-<div class="msg" id="ldMsg"></div>
+<div class="site-toolbar"><div class="search-field"><label for="ldSearch" data-lead-text="search"></label><input type="search" id="ldSearch"></div><div class="status-field"><label for="ldSlug" data-lead-text="site"></label><select id="ldSlug"></select></div><div class="status-field"><label for="ldStatus" data-lead-text="status"></label><select id="ldStatus"></select></div><label><input id="ldArchived" type="checkbox"><span data-lead-text="archived"></span></label><button class="ghost" id="ldRefresh" type="button" data-lead-text="refresh"></button></div>
+<p id="ldCount" class="hint"></p><div id="ldFailures" role="status"></div><div id="ldList"></div><button id="ldMore" class="ghost" type="button" hidden data-lead-text="more"></button><div id="ldMsg" class="msg" role="status"></div>
+<form id="leadForm" class="hidden"><h3 id="leadDialogTitle" data-lead-text="detail"></h3><div id="leadOriginal"></div><label for="leadStatus" data-lead-text="status"></label><select id="leadStatus"></select><label for="leadNote" data-lead-text="note"></label><textarea id="leadNote" maxlength="2000" rows="3"></textarea><div class="domain-dialog-actions"><button type="submit" id="leadSave" data-lead-text="save"></button><button type="button" class="ghost" id="leadCancel" data-lead-text="close"></button></div><div id="leadMsg" class="msg" role="status"></div><h4 data-lead-text="history"></h4><div id="leadHistory"></div></form>
 </div>
 
 <div id="p-maint" class="hidden">
@@ -3688,41 +3686,6 @@ function initMaint(){
   pollUpdates();
 }
 
-// ---------------- 线索 ----------------
-async function loadLeads(slug){
-  if(!slug){$('#ldList').innerHTML='<p class="hint">没有可选站点</p>';return;}
-  $('#ldMsg').textContent='读取中…';
-  const r=await fetch('/api/leads/'+encodeURIComponent(slug));
-  const d=await r.json();
-  const items=d.items||[];
-  $('#ldMsg').textContent = items.length ? ('共 '+items.length+' 条') : '';
-  const box=$('#ldList');
-  if(!items.length){
-    box.innerHTML='<div style="text-align:center;padding:26px 12px">'
-      +'<div style="color:var(--dim);font-size:13px;margin-bottom:6px">还没有收到提交</div>'
-      +'<div style="color:var(--dim);font-size:12px">客户提交联系表单后，线索会出现在这里</div></div>';
-    return; }
-  box.innerHTML=items.map(x=>`
-    <div class="lead-card">
-      <div class="lead-top"><b>${esc(x.title.split(' — ')[0])}</b>
-        <span style="color:var(--acc)">${esc(x.email||'')}</span>
-        ${x.phone?`<span style="color:var(--dim)">${esc(x.phone)}</span>`:''}
-        ${x.sent==='0'?'<span class="badge-warn">邮件未发送</span>':''}
-        <span class="t">${esc(x.date||'')}</span></div>
-      <div class="lead-msg">${esc(x.msg||'')}</div>
-    </div>`).join('');
-}
-function initLeads(){
-  const sel=$('#ldSlug');
-  SiteContext.fill(sel);
-  if(!sel.dataset.initialized){
-    sel.dataset.initialized='1';
-    sel.onchange=()=>loadLeads(sel.value);
-    $('#ldRefresh').onclick=()=>loadLeads(sel.value);
-  }
-  loadLeads(sel.value);
-}
-
 // ---------------- 域名 ----------------
 async function initDomain(){ return loadDomainRegistry(); }
 
@@ -4313,7 +4276,7 @@ let REFRESH_RUNNING=false;
 async function refreshConsole(force=false){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;$('#siteHealthRefresh').disabled=true;try{await load(force);}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;$('#siteHealthRefresh').disabled=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -5215,7 +5178,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
@@ -5473,13 +5436,27 @@ class Handler(BaseHTTPRequestHandler):
                               "links": by_slug.get(d.name, [])})
             return self._send(200, {"items": items})
 
+        if path == '/api/leads':
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            slug = query.get('slug', [''])[0]
+            try:
+                page = int(query.get('page', ['1'])[0])
+                if not 1 <= page <= 100000 or (slug and (not SLUG_RE.fullmatch(slug) or not (SITES / slug / 'meta.json').is_file())):
+                    raise ValueError()
+            except ValueError:
+                return self._send(400, {'error': 'Invalid enquiry query'})
+            return self._send(200, enquiries(slug, page, query.get('archived') == ['1'], query.get('refresh') == ['1']))
+
         m = re.match(r"^/api/leads/([a-z0-9-]+)$", path)
         if m:
             slug = m.group(1)
             if not (SITES / slug).exists():
                 return self._send(404, {"error": "站点不存在"})
-            items = list_leads(slug)
-            return self._send(200, {"items": items, "count": len(items)})
+            try:
+                items = list_leads(slug)
+                return self._send(200, {"items": items, "count": len(items)})
+            except kf_leads.LeadReadError:
+                return self._send(503, {"error": "Unable to read enquiries from this site"})
 
         m = re.match(r"^/api/shares/([a-z0-9-]+)$", path)
         if m:
@@ -5747,6 +5724,25 @@ class Handler(BaseHTTPRequestHandler):
             return self._share_create(body)
         if path == "/api/shares/revoke":
             return self._share_revoke(body)
+        if path == '/api/leads/followup':
+            slug, ident = body.get('slug'), body.get('id')
+            if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug) or not (SITES / slug / 'meta.json').is_file():
+                return self._send(400, {'error': 'Invalid site'})
+            if type(ident) is not int or ident <= 0:
+                return self._send(400, {'error': 'Invalid enquiry ID'})
+            try:
+                source = kf_leads.read_page(SITES / slug, lead_id=ident)
+                if not any(x['id'] == ident for x in source['items']):
+                    return self._send(404, {'error': 'Enquiry no longer exists'})
+                item = kf_leads.Followups(BASE, slug).save(ident, body.get('status'), body.get('note', ''), body.get('version'), self.user)
+            except kf_tool_runtime.ActionConflict as exc:
+                return self._send(409, {'error': str(exc)})
+            except kf_leads.LeadReadError as exc:
+                return self._send(503, {'error': str(exc)})
+            except kf_ai.AIError as exc:
+                return self._send(400, {'error': str(exc)})
+            audit(self.user, 'lead_followup', slug, str(ident))
+            return self._send(200, {'item': item})
         if path == '/api/operations/ack':
             if self.user_role not in ('admin', 'ops'):
                 return self._send(403, {'error': '当前角色无权处理运营待办'})

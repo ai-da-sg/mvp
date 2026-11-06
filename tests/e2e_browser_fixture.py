@@ -19,6 +19,25 @@ try:
     users = m.load_users()
     users['mfa-test'] = dict(users['ops-test'], mfa_secret='JBSWY3DPEHPK3PXP')
     m._write(m.USERS_F, users)
+    if os.environ.get('KF_E2E_LEADS') == '1':
+        # Exercise real HTTP, authorization and persistent follow-ups without
+        # starting WordPress containers in CI. Live WP reads have opt-in proof.
+        for slug in ('other', 'archived', 'broken'):
+            site = m.SITES / slug
+            site.mkdir()
+            (site / 'meta.json').write_text(json.dumps({'company': slug, 'domain': slug+'.test', 'port': 0}))
+        (m.SITES / 'archived/archive.json').write_text('{"archived":true}')
+        failures = [0]
+        def read_enquiries(site, page=1, lead_id=None):
+            if site.name == 'broken' and not failures[0]:
+                failures[0] += 1
+                raise m.kf_leads.LeadReadError('Fixture unavailable')
+            count = 102 if site.name == 'demo' else 1
+            ids = [lead_id] if lead_id is not None and 1 <= lead_id <= count else (list(range(count, 0, -1))[(page-1)*100:page*100] if lead_id is None else [])
+            items = [{'id': ident, 'title': 'Enquiry '+str(ident), 'email': 'test@example.test', 'phone': '',
+                      'msg': '<script>window.leadUnsafe=true</script> Service enquiry', 'date': '2026-11-01 09:00:00', 'sent': '1'} for ident in ids]
+            return {'items': items, 'total': count, 'has_more': page*100<count, 'checked_at': 1}
+        m.kf_leads.read_page = read_enquiries
     if os.environ.get('KF_E2E_OPERATIONS') == '1':
         store = m.ai_store()
         job = store.create_job('demo', store.resolve('mock')[0], 'ops-test', 'existing')

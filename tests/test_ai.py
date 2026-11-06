@@ -148,7 +148,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
+        for filename in ('leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -178,7 +178,8 @@ class ConsoleTests(unittest.TestCase):
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def tearDown(self):
-        self.server.shutdown(); self.server.server_close(); self.m._HEALTH_CACHE.close(); self.env.stop(); self.tmp.cleanup()
+        self.server.shutdown(); self.server.server_close(); self.m._HEALTH_CACHE.close()
+        self.m._LEADS_CACHE.close(); self.env.stop(); self.tmp.cleanup()
 
     def request(self, path, data=None, user='admin'):
         headers = {'Content-Type':'application/json'}
@@ -194,6 +195,40 @@ class ConsoleTests(unittest.TestCase):
         try: body = json.loads(raw)
         except ValueError: body = raw.decode()
         return r.status, body
+
+    def test_enquiries_cross_site_followup_conflicts_and_permissions(self):
+        for slug in ('other', 'archived', 'broken'):
+            site = self.base / 'sites' / slug
+            site.mkdir()
+            ai.atomic_json(site / 'meta.json', {'company': slug})
+        ai.atomic_json(self.base / 'sites/archived/archive.json', {'archived': True})
+        def read(site, page=1, lead_id=None):
+            if site.name == 'broken':
+                raise self.m.kf_leads.LeadReadError('read failure')
+            return {'items': [{'id': 7, 'title': 'Contact', 'date': '2026-11-01', 'msg': 'Original'}],
+                    'total': 1, 'has_more': False, 'checked_at': 1}
+        with patch.object(self.m.kf_leads, 'read_page', side_effect=read):
+            self.assertEqual(self.request('/api/leads', user='finance-test')[0], 403)
+            code, data = self.request('/api/leads', user='ops-test')
+            self.assertEqual(code, 200)
+            self.assertEqual({x['slug'] for x in data['items']}, {'demo', 'other'})
+            self.assertEqual(next(x for x in data['sources'] if x['slug'] == 'broken')['error'], 'read_failed')
+            self.assertEqual(len(self.request('/api/leads?archived=1')[1]['items']), 3)
+            self.assertEqual(self.request('/api/leads/broken')[0], 503)
+            for query in ('page=0', 'page=x', 'slug=missing'):
+                self.assertEqual(self.request('/api/leads?'+query)[0], 400)
+            body = {'slug': 'demo', 'id': 7, 'status': 'contacted', 'note': 'Call tomorrow', 'version': 0}
+            self.assertEqual(self.request('/api/leads/followup', body, user='finance-test')[0], 403)
+            self.assertEqual(self.request('/api/leads/followup', body, user='ops-test')[0], 200)
+            self.assertEqual(self.request('/api/leads/followup', body)[0], 409)
+            rows = self.request('/api/leads')[1]['items']
+            self.assertEqual(next(x for x in rows if x['slug'] == 'demo')['followup']['status'], 'contacted')
+            self.assertEqual(next(x for x in rows if x['slug'] == 'other')['followup']['version'], 0)
+            body.update(version=1, status='won', note='Converted')
+            self.assertEqual(self.request('/api/leads/followup', body)[0], 200)
+            history = self.m.kf_leads.Followups(self.base, 'demo').all()['7']['history']
+            self.assertEqual([h['by'] for h in history], ['ops-test', 'admin'])
+            self.assertNotIn('Call tomorrow', self.m.AUDIT_F.read_text())
 
     def test_registered_domain_links_to_new_site_without_duplicate_or_lost_accounts(self):
         body={'domain':'future.sg','registrar':'Existing registrar'}

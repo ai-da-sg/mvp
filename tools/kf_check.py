@@ -20,6 +20,12 @@ with tempfile.TemporaryDirectory() as tmp:
         if path.suffix == '.py':
             tree = ast.parse(path.read_bytes(), filename=name)
             compile(tree, name, 'exec')
+            if name == 'core/kf_leads.py' and not args.skip_php:
+                snippet = next(ast.literal_eval(stmt.value) for stmt in tree.body
+                               if isinstance(stmt, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '_FIELDS' for t in stmt.targets))
+                target = Path(tmp) / 'leads.php'
+                target.write_text('<?php\n' + snippet)
+                subprocess.run(['php', '-l', str(target)], check=True)
             if name == 'core/kf_publication_wp.py' and not args.skip_php:
                 snippets = {target.id: ast.literal_eval(stmt.value)
                             for stmt in tree.body if isinstance(stmt, ast.Assign)
