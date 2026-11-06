@@ -148,7 +148,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
+        for filename in ('publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -163,6 +163,17 @@ class ConsoleTests(unittest.TestCase):
         self.original = ai.mock_spec('Original', 'Original brief', PAGES, 'en')
         ai.atomic_json(self.base/'sites/demo/site-spec.json', self.original)
         ai.atomic_json(self.base/'sites/demo/meta.json', {'company':'Demo', 'domain':'example.test', 'port':0})
+        # This disposable console fixture has no WordPress process. Publication
+        # transport is isolated here; real WordPress snapshot/restore has separate
+        # integration coverage. HTTP authorization and journal persistence are real.
+        class FixtureSnapshot:
+            def __init__(adapter, slug, pages, design=False, navigation=False):
+                adapter.slug, adapter.pages = slug, pages
+            def capture(adapter):
+                return {'pages': {p['slug']: p for p in m.read_spec(adapter.slug).get('pages', []) if p['slug'] in adapter.pages}}
+            def restore(adapter, before, expected, created_ids):
+                return before
+        m.publication_adapter = FixtureSnapshot
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), m.Handler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
@@ -596,6 +607,39 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(status,200,result); self.assertEqual(result['pages'],2)
         self.assertEqual(self.m.read_spec('demo')['pages'],draft['pages'])
         self.assertFalse(self.m.is_dirty('demo'))
+
+    def test_publication_history_restore_permissions_and_draft_preservation(self):
+        draft = ai.mock_spec('Changed', 'New copy', PAGES, 'zh')
+        ai.atomic_json(self.base/'sites/demo/site-draft.json', draft)
+        with patch.object(self.m.Handler, '_render_check', return_value={'ok': True}):
+            code, result = self.request('/api/publish', {'slug': 'demo'}, user='ops-test')
+        self.assertEqual(code, 200, result)
+        ident = result['publication_id']
+        self.assertEqual(result['publication_state'], 'published')
+        self.assertEqual(self.request('/api/publications/demo', user='finance-test')[0], 403)
+        code, data = self.request('/api/publications/demo', user='ops-test')
+        self.assertEqual(code, 200)
+        item = data['items'][0]
+        self.assertEqual(item['user'], 'ops-test')
+        self.assertNotIn('before', item)
+        self.assertNotIn('after', item)
+        body = dict(slug='demo', id=ident, version=item['version'], confirmed=True)
+        self.assertEqual(self.request('/api/publish/restore', body, user='finance-test')[0], 403)
+        self.assertEqual(self.request('/api/publish/restore', dict(body, confirmed=False))[0], 400)
+        self.assertEqual(self.request('/api/publish/restore', dict(body, version=0))[0], 409)
+        code, restored = self.request('/api/publish/restore', body, user='ops-test')
+        self.assertEqual(code, 200, restored)
+        self.assertEqual(self.m.read_spec('demo'), self.original)
+        self.assertEqual(self.m.read_draft('demo'), draft)
+        self.assertTrue(restored['dirty'])
+        self.assertEqual(self.request('/api/publications/demo')[1]['items'][0]['state'], 'restored')
+
+    def test_publication_transport_failure_is_visible_as_interrupted(self):
+        with patch.object(self.m.Handler, '_render_check', side_effect=OSError('transport lost')):
+            code, result = self.request('/api/publish', {'slug': 'demo'})
+        self.assertEqual(code, 409, result)
+        self.assertEqual(self.request('/api/publications/demo')[1]['items'][0]['state'], 'interrupted')
+        self.assertEqual(self.m.read_spec('demo'), self.original)
 
     def test_partial_publish_tracks_pages_that_reached_wordpress(self):
         draft=ai.mock_spec('Changed', 'New copy', PAGES, 'zh')

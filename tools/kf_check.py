@@ -20,6 +20,14 @@ with tempfile.TemporaryDirectory() as tmp:
         if path.suffix == '.py':
             tree = ast.parse(path.read_bytes(), filename=name)
             compile(tree, name, 'exec')
+            if name == 'core/kf_publication_wp.py' and not args.skip_php:
+                snippets = {target.id: ast.literal_eval(stmt.value)
+                            for stmt in tree.body if isinstance(stmt, ast.Assign)
+                            for target in stmt.targets if isinstance(target, ast.Name)
+                            and target.id in ('PHP_CAPTURE', 'PHP_RESTORE')}
+                target = Path(tmp) / 'publication.php'
+                target.write_text('<?php\n' + snippets['PHP_CAPTURE'] + '\n' + snippets['PHP_RESTORE'])
+                subprocess.run(['php', '-l', str(target)], check=True)
             if name == 'console/kf_console.py':
                 for stmt in tree.body:
                     if isinstance(stmt, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'PAGE' for t in stmt.targets):

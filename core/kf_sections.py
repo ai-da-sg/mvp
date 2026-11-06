@@ -605,6 +605,7 @@ def save_page(site, slug, sections, title=None, spec_all=None, write=True):
         # This ID was created by this invocation; never delete pre-existing pages.
         removed = wp(site, "post", "delete", pid, "--force")
         return {"ok": False, "stage": "verify" if not valid else "publish", "rolled_back": removed.returncode == 0,
+                "created": removed.returncode != 0, "post_id": pid,
                 "errors": ["New page could not be verified or published"], "length": len(after)}
 
     before = get_content(site, pid)
@@ -639,14 +640,14 @@ def save_page(site, slug, sections, title=None, spec_all=None, write=True):
             "length": len(after), "sections": len(sections)}
 
 # ---------------------------------------------------------------- 命令行
-def wp(site, *args, stdin=None):
+def wp(site, *args, stdin=None, timeout=180):
     import subprocess
     cmd = ["docker", "run", "--rm", "-i",
            "--env-file", f"{site}/wp.env",
            "--network", f"kf-{Path(site).name}_default",
            "-v", f"{site}/html:/var/www/html",
            "--user", "33:33", REG, "wp", *args]
-    return subprocess.run(cmd, capture_output=True, text=True, input=stdin)
+    return subprocess.run(cmd, capture_output=True, text=True, input=stdin, timeout=timeout)
 
 
 def main():

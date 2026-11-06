@@ -1,5 +1,49 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+站点标识无效|Invalid site identifier
+站点已有发布或恢复任务，请稍后重试|A publication or recovery is already running for this site. Try again later.
+发布记录目录无效|Invalid publication record directory
+发布记录文件无效|Invalid publication record file
+发布记录 ID 无效|Invalid publication record ID
+发布记录不存在|Publication record not found
+发布记录无法读取，请检查备份|Cannot read the publication record. Check the backup.
+发布记录与站点不匹配|The publication record does not belong to this site.
+发布快照格式无效|Invalid publication snapshot
+发布快照过大，尚未修改网站|The publication snapshot is too large. The website has not been changed.
+发布操作账号无效|Invalid publication operator
+恢复操作账号无效|Invalid recovery operator
+发布页面列表无效|Invalid publication page list
+发布任务已经结束|This publication has already finished.
+发布步骤无效|Invalid publication step
+新建页面 ID 无效|Invalid newly created page ID
+发布任务状态已改变|Publication status has changed.
+请确认恢复到本次发布前的内容|Confirm restoration of the pre-publication content.
+发布记录已变化，请刷新后重试|The publication record has changed. Refresh and try again.
+该发布记录不能直接恢复，请先核实当前站点状态|This publication cannot be restored directly. Verify the current site state first.
+网站在发布后发生了修改，请先核实，避免覆盖新内容|The website has changed since publication. Review those changes before restoring.
+发布前快照校验失败，恢复未执行|The pre-publication snapshot failed verification. Recovery was not performed.
+恢复后的回读校验失败，请核实站点|Recovery verification failed. Check the website.
+恢复未完成，请核实站点；快照已保留|Recovery is incomplete. Check the website; snapshots are retained.
+WordPress 快照或恢复失败，请检查站点后重试|WordPress snapshot or recovery failed. Check the site and retry.
+无法读取 WordPress 快照，请检查站点连接|Cannot read the WordPress snapshot. Check the site connection.
+WordPress 快照格式无效|Invalid WordPress snapshot
+发布状态待核实；快照和草稿已保留，请查看发布记录|Publication needs verification. Snapshots and drafts are retained; check publication history.
+建站任务正在运行，请完成后再恢复|Site generation is running. Wait for it to finish before restoring.
+结果|Result
+发布与恢复记录|Publication and recovery history
+发布时间|Published at
+操作账号|Operator
+发布中|Publishing
+全部发布成功|Fully published
+部分发布|Partially published
+发布失败|Publication failed
+恢复中|Restoring
+已恢复|Restored
+恢复未完成|Recovery incomplete
+恢复发布前内容|Restore pre-publication content
+恢复仅涉及本次发布的页面、设计和导航，草稿保留。|Recovery covers only this publication’s pages, design and navigation. Drafts are retained.
+恢复到本次发布前的页面、设计和导航？本次新建的页面将移除，草稿保留。|Restore the pages, design and navigation from before this publication? Newly created pages will be removed. Drafts will be retained.
+已恢复发布前内容，草稿保留。|Pre-publication content restored. Drafts retained.
 包含归档站点|Include archived sites
 没有可选站点|No available sites
 认证方式|Authentication

@@ -34,11 +34,13 @@ print(json.dumps(result))
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
   assert.equal(u.hostname,'review.invalid','Unexpected external request');
   if(p==='/'||p==='/login')return route.fulfill({contentType:'text/html',body:pages[p==='/'?'console':'login']});
-  if(['/admin-ui.js','/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
+  if(['/publications.js','/admin-ui.js','/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
+  if(p.startsWith('/api/publications/'))data={items:[]};
   if(p==='/api/automation/config')await new Promise(resolve=>setTimeout(resolve,100));
+  if(p.startsWith('/api/publications/'))data={items:[]};
   if(p==='/api/automation/config')data={tools:[{name:'site.context',purpose:'build'},{name:'site.publish',purpose:'build'}],dns_providers:[],provider_accounts:providerItems,can_configure:role==='admin'};
   if(p==='/api/automation/providers'){
    if(req.method()==='POST'){const {values,...b}=req.postDataJSON();providerItems=b.action==='delete'?[]:[{...b,version:(b.version||0)+1,config:Object.fromEntries(Object.entries(values).filter(([k])=>!pages.providerCatalog[b.provider].fields.find(f=>f.key===k).secret))}];}

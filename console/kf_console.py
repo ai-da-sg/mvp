@@ -37,6 +37,8 @@ import kf_builtin_tools
 import kf_dns_provider
 import kf_stepup
 import kf_workflows
+import kf_publications
+from kf_publication_wp import WordPressSnapshot
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -250,7 +252,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -2747,6 +2749,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <span id="lDirty" class="pill"></span>
 <span id="lMsg" class="msg" role="status" aria-live="polite"></span>
 </div>
+<details id="publicationHistory" class="optional-options"><summary>发布与恢复记录</summary><p class="hint">恢复仅涉及本次发布的页面、设计和导航，草稿保留。</p><button type="button" class="ghost" id="publicationRefresh">刷新</button><div id="publicationList"></div><div id="publicationMsg" class="msg" role="status"></div></details>
 <div id="lDiffBox" class="diff-box hidden"></div>
 </div>
 
@@ -4045,6 +4048,7 @@ async function loadSpec(slug, force=false){
   LPAGE=$('#lPage').value;LW=null;
   $('#lType').innerHTML=d.types.map(t=>`<option value="${esc(t)}">${esc((LSCHEMAS[t]||{}).label||t)}</option>`).join('');
   renderSecList();renderForm();paintDirty();
+  await loadPublications().catch(e=>aiMessage('#publicationMsg',e.message,true));
  }catch(e){$('#lMsg').className='msg bad';$('#lMsg').textContent=e.message;$('#lSlug').value=LSLUG;}
  finally{editorBusy(false);}
 }
@@ -4082,6 +4086,7 @@ async function publish(slug, page){
   await saveDrafts();
   const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(page?{slug,page}:{slug})});
   const d=await r.json();
+  await loadPublications().catch(e=>aiMessage('#publicationMsg',e.message,true));
   LSPEC.dirty=r.ok?d.dirty:true;
   if(!r.ok)throw Error('发布失败：'+(d.error||'请重试')+'；草稿已保留，请查看改动后重试。');
   $('#lMsg').className='msg ok';$('#lMsg').textContent='已发布 '+d.pages+' 个页面';$('#lDiffBox').classList.add('hidden');
@@ -4239,7 +4244,7 @@ let REFRESH_RUNNING=false;
 async function refreshConsole(){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;try{await load();}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/admin-ui.js"></script><script src="/ai.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/ai.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -4509,10 +4514,80 @@ def render_check( slug, page, title, sections, write=False):
         tmp.unlink(missing_ok=True)
 
 
-def publish_site(body,render):
-    with kf_tool_runtime.release_guard(BASE):return _publish_site(body,render)
+def publication_adapter(slug, pages, design=False, navigation=False):
+    return WordPressSnapshot(SITES / slug, pages, design=design, navigation=navigation)
 
-def _publish_site(body, render):
+
+def publication_snapshot(slug, adapter):
+    files = {}
+    for name in ('site-spec.json', 'design.json'):
+        path = SITES / slug / name
+        files[name] = json.loads(path.read_text()) if path.exists() else None
+    return {'wordpress': adapter.capture(), 'files': files}
+
+
+def publish_site(body, render, user='system'):
+    slug = str(body.get('slug', '')).strip().lower()
+    page = str(body.get('page', '')).strip()
+    if not SLUG_RE.fullmatch(slug) or not (SITES / slug / 'meta.json').exists():
+        return 400, {'ok': False, 'error': '站点不存在'}
+    with draft_lock(slug), kf_tool_runtime.release_guard(BASE), kf_publications.PublicationStore(BASE, slug).locked() as journal:
+        draft = read_draft(slug)
+        targets = [p['slug'] for p in draft.get('pages', []) if not page or p['slug'] == page]
+        if not targets:
+            return 404, {'ok': False, 'error': '草稿里没有这一页'}
+        navigation = not page and draft.get('ai', {}).get('mode') == 'new' and bool(draft.get('ai', {}).get('style', {}))
+        adapter = publication_adapter(slug, targets, bool(draft.get('design')), navigation)
+        before = publication_snapshot(slug, adapter)
+        record = journal.begin(user, targets, before)
+        def step(stage, ok, error='', created_id=None):
+            journal.result(record['id'], stage, ok, error, created_id)
+        try:
+            code, result = _publish_site(body, render, step)
+            after = publication_snapshot(slug, adapter)
+            state = 'published' if code < 400 else ('partial' if after != before else 'failed')
+            record = journal.finish(record['id'], state, after, result.get('error', ''))
+            result.update(publication_id=record['id'], publication_state=state)
+            audit(user, 'site_publish', slug, state + ':' + record['id'])
+            return code, result
+        except Exception:
+            # Do not claim a rollback when a write or read-back result is unknown.
+            # The next lock acquisition marks the durable journal as interrupted.
+            audit(user, 'site_publish_interrupted', slug, record['id'])
+            raise kf_ai.AIError('发布状态待核实；快照和草稿已保留，请查看发布记录') from None
+
+
+def restore_publication(body, user):
+    slug = str(body.get('slug', '')).strip().lower()
+    with draft_lock(slug), kf_tool_runtime.release_guard(BASE), kf_publications.PublicationStore(BASE, slug).locked() as journal:
+        if ai_store().busy(slug):
+            raise kf_ai.AIError('建站任务正在运行，请完成后再恢复')
+        record = journal.get(body.get('id'))
+        old_wp = record['before']['wordpress']
+        adapter = publication_adapter(slug, record['targets'], 'design' in old_wp, 'navigation' in old_wp)
+        created = {r['stage']: r['created_id'] for r in record['results'] if r.get('created_id')}
+        def capture():
+            return publication_snapshot(slug, adapter)
+        def apply(snapshot):
+            expected = record['recovery_after'] if record['state'] == 'restore_failed' else record['after']
+            adapter.restore(snapshot['wordpress'], expected['wordpress'], created)
+            for name in ('site-spec.json', 'design.json'):
+                value = snapshot['files'][name]
+                path = SITES / slug / name
+                if value is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    kf_ai.atomic_json(path, value)
+        try:
+            restored = journal.restore(record['id'], version=body.get('version'), user=user,
+                                       confirmed=body.get('confirmed'), capture=capture, apply=apply)
+        except Exception:
+            audit(user, 'site_restore_failed', slug, record['id'])
+            raise
+        audit(user, 'site_publication_restore', slug, restored['id'])
+        return {'ok': True, 'id': restored['id'], 'dirty': is_dirty(slug)}
+
+def _publish_site(body, render, step=lambda *args: None):
     slug = str(body.get('slug', '')).strip().lower()
     page_slug = str(body.get('page', '')).strip()
     if not SLUG_RE.match(slug) or not (SITES / slug).exists():
@@ -4524,19 +4599,25 @@ def _publish_site(body, render):
         return (404, {'ok': False, 'error': '草稿里没有这一页'})
     if draft.get('design'):
         tokens = sanitize_design(draft['design'])
-        if not apply_design(slug, tokens):
+        design_ok = apply_design(slug, tokens)
+        step('design', design_ok, '' if design_ok else '风格同步失败')
+        if not design_ok:
             return (500, {'ok': False, 'error': '风格同步失败，页面尚未发布，请重试'})
     failed = []
     published = []
     for page in targets:
         res = render(slug, page['slug'], page.get('title', page['slug']), page.get('sections', []), write=True)
+        created_id = int(res['post_id']) if res.get('created') and str(res.get('post_id', '')).isdigit() else None
+        step(page['slug'], bool(res.get('ok')), '；'.join(res.get('errors', [])), created_id)
         if not res.get('ok'):
             failed.append({'page': page['slug'], 'error': '；'.join(res.get('errors', ['失败']))})
             break
         published.append(page)
     template_navigation = not page_slug and draft.get('ai',{}).get('mode')=='new' and bool(draft.get('ai',{}).get('style',{}))
     if not failed and template_navigation:
-        if not ks().sync_template_navigation(str(SITES / slug), pages):
+        navigation_ok = ks().sync_template_navigation(str(SITES / slug), pages)
+        step('navigation', navigation_ok, '' if navigation_ok else '模板导航同步失败')
+        if not navigation_ok:
             return (500, {'ok': False, 'error': '页面已写入，模板导航同步失败；草稿保留，请重试发布'})
         # Only new-site template publication replaces the base template's page list.
         # WordPress pages and unrelated menus remain available; no content is deleted.
@@ -4624,7 +4705,7 @@ def automation_publish(item,context):
         if ai_store().busy(slug):raise kf_ai.AIError('建站任务正在运行，请完成后再发布')
         if kf_tool_runtime.fingerprint(read_draft(slug))!=item['snapshot']['draft']:
             raise kf_tool_runtime.ActionConflict('草稿已改变，请重新预览并确认发布')
-        code,data=publish_site({'slug':slug,'page':item['arguments'].get('page','')},render_check)
+        code,data=publish_site({'slug':slug,'page':item['arguments'].get('page','')},render_check,item['user'])
         if code>=400:raise kf_ai.AIError(data.get('error','发布失败，请核实各页面状态'))
         return data
 
@@ -5065,7 +5146,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
@@ -5247,6 +5328,19 @@ class Handler(BaseHTTPRequestHandler):
             if s.get("api_key"):
                 s["api_key"] = "********"
             return self._send(200, {"smtp": s})
+
+        if path.startswith('/api/publications/'):
+            slug = path[len('/api/publications/'):]
+            try:
+                journal = kf_publications.PublicationStore(BASE, slug)
+                try:
+                    with journal.locked():
+                        items = journal.history()
+                except kf_publications.PublicationConflict:
+                    items = journal.history()
+                return self._send(200, {'items': items})
+            except kf_ai.AIError as exc:
+                return self._send(400, {'error': str(exc)})
 
         if path == "/api/roles":
             return self._send(200, {"items": roles()})
@@ -5574,6 +5668,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._share_create(body)
         if path == "/api/shares/revoke":
             return self._share_revoke(body)
+        if path == "/api/publish/restore":
+            try:
+                return self._send(200, restore_publication(body, self.user))
+            except kf_publications.PublicationConflict as exc:
+                return self._send(409, {'error': str(exc)})
+            except kf_ai.AIError as exc:
+                return self._send(400, {'error': str(exc)})
+            except Exception:
+                return self._send(500, {'error': '恢复未完成，请核实站点；快照已保留'})
         if path == "/api/publish":
             return self._publish(body)
         if path == "/api/media/delete":
@@ -6403,7 +6506,7 @@ class Handler(BaseHTTPRequestHandler):
 
     @draft_operation
     def _publish(self,body):
-        try:code,data=publish_site(body,self._render_check)
+        try:code,data=publish_site(body,self._render_check,self.user)
         except kf_ai.AIError as exc:return self._send(409,{'error':str(exc)})
         return self._send(code,data)
 

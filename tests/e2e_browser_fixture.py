@@ -19,6 +19,15 @@ try:
     users = m.load_users()
     users['mfa-test'] = dict(users['ops-test'], mfa_secret='JBSWY3DPEHPK3PXP')
     m._write(m.USERS_F, users)
+    if os.environ.get('KF_E2E_PUBLICATION') == '1':
+        # The fixture has no WordPress service; use its explicit in-memory
+        # transport while exercising the real publication journal and HTTP UI.
+        import kf_ai
+        draft = json.loads(json.dumps(fixture.original))
+        draft['pages'][0]['title'] = 'Publication recovery fixture'
+        kf_ai.atomic_json(m.SITES / 'demo' / 'site-draft.json', draft)
+        code, result = m.publish_site({'slug': 'demo'}, lambda *a, **kw: {'ok': True}, 'admin')
+        assert code == 200, result
     # Deliberately provide no preauthenticated cookie: tests must log in through the UI.
     print(json.dumps({'origin': 'http://127.0.0.1:' + str(fixture.server.server_port),
                       'password': 'Test-Password-123'}), flush=True)
