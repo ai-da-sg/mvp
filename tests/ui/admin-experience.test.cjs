@@ -31,7 +31,7 @@ const {ConsolePage}=require('./pages/console.cjs');
   await ui.navigate('客户管理');assert.equal(await page.locator('#clSlug').inputValue(),'');assert.equal(await page.locator('.site-archive-toggle').count(),0);
   await ui.navigate('咨询线索');assert.equal(await page.locator('#ldSlug option[value="demo"]').count(),0);assert.equal(await page.locator('#ldArchived').count(),0);
   await page.reload();await page.waitForFunction(()=>STATE.sites.length>0);await ui.navigate('客户管理');assert.equal(await page.locator('#clSlug').inputValue(),'');
-  await page.evaluate(async()=>{await aiRequest('/api/site/archive',{slug:'demo',archived:false,version:1});await load();});await ui.navigate('咨询线索');assert.equal(await page.locator('#ldSlug').inputValue(),'demo');
+  await page.evaluate(async()=>{await aiRequest('/api/site/archive',{slug:'demo',archived:false,version:1});await load();});await ui.navigate('咨询线索');assert.equal(await page.locator('#ldSlug option[value="demo"]').count(),1);await page.locator('#ldSlug').selectOption('demo');await ui.navigate('客户管理');assert.equal(await page.locator('#clSlug').inputValue(),'demo');
   assert.deepEqual(errors,[]);console.log('PASS real provider/MCP CRUD, pagination, details, dirty Escape protection, secret clearing, mobile modal and shared archive context');
  }finally{if(browser)await browser.close();child.stdin.end('\n');await once(child,'exit');}
 })().catch(e=>{console.error(e);process.exitCode=1});
