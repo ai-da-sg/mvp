@@ -50,7 +50,18 @@ jobs:
       - run: python -m pip install -r requirements.txt -c constraints.txt
       - run: npm ci --prefix tests/ui
       - run: npx --prefix tests/ui playwright install --with-deps chromium
-      - run: npm test --prefix tests/ui
+      - name: Browser regression
+        run: |
+          mkdir -p output/ci
+          set -o pipefail
+          npm test --prefix tests/ui 2>&1 | tee output/ci/browser.log
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-failure-${{ github.sha }}
+          path: output/
+          retention-days: 7
   dependencies:
     runs-on: ubuntu-24.04
     steps:
@@ -77,3 +88,32 @@ jobs:
           name: release-${{ github.sha }}
           path: dist/
           retention-days: 14
+  preproduction:
+    needs: package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements.txt -c constraints.txt
+      - run: npm ci --prefix tests/ui
+      - run: npx --prefix tests/ui playwright install --with-deps chromium
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-${{ github.sha }}
+          path: dist/
+      - name: Verify packaged application before production
+        run: python tools/kf_preproduction.py dist/release.tgz --revision "$GITHUB_SHA" --output output/preproduction
+      - name: Preserve preproduction result and evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: preproduction-${{ github.sha }}
+          path: output/preproduction/
+          retention-days: 7
