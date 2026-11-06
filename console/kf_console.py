@@ -254,7 +254,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -2626,9 +2626,11 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div id="p-ai" class="hidden">
 <details class="page-help"><summary>建站说明</summary><div class="help-content"><p class="hint">描述企业、服务与风格，自动生成整站页面草稿。预览、调整后发布到网站。</p><p class="hint">模板影响内容结构与语气；配色、字体仍由视觉模板负责。模拟模式用于流程验证，不代表真实模型效果。</p><p class="hint">读取公开页面与样式，提取颜色、字体和布局线索。不复制原站品牌或图片；动态页面可能无法完整分析。</p><p class="hint">风格随生成内容一起保存到草稿，预览确认后发布；模板更新不会改变已经生成的网站。</p></div></details>
 <div class="callout" id="aiModeNotice">GPT 模拟模式无需密钥；真实模型请由管理员配置。</div>
-<form id="aiBuildForm">
+<form id="aiBuildForm" novalidate>
+<nav id="aiBuildSteps" class="ai-build-steps" aria-label="建站步骤"></nav>
+<section id="aiBuildStep1" aria-labelledby="aiStepTitle1"><h3 id="aiStepTitle1" tabindex="-1"></h3>
 <div class="formrow">
-<div class="field"><label for="aiMode">建站方式</label><select id="aiMode"><option value="existing">为已有站点生成</option><option value="new">新建站点并生成</option></select></div>
+<div class="field"><label for="aiMode">建站方式</label><select id="aiMode" disabled><option value="existing">为已有站点生成</option><option value="new">新建站点并生成</option></select></div>
 <div class="field" id="aiExistingWrap"><label for="aiSite">选择站点</label><select id="aiSite"></select></div>
 <div class="field"><label for="aiProfile">模型配置</label><select id="aiProfile"></select></div>
 <div class="field"><label for="aiLanguage">页面语言</label><select id="aiLanguage"><option value="zh">中文</option><option value="en">English</option></select></div>
@@ -2640,8 +2642,11 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="field"><label for="aiPlan">套餐</label><select id="aiPlan"></select></div>
 <div class="field"><label for="aiIndustry">基础行业（未选择风格模板时使用）</label><select id="aiIndustry"></select></div>
 </div><p class="hint">新站会创建 WordPress、数据库和套餐账单，内容先保存为草稿。</p></div>
-<div class="formrow"><div class="field"><label for="aiStyleSector">模板行业</label><select id="aiStyleSector"><option value="">全部行业</option></select></div><div class="field"><label for="aiStyleTemplate">本次生成使用的风格</label><select id="aiStyleTemplate"><option value="">保持站点当前风格</option></select></div><button type="button" class="ghost" id="aiStyleManage">管理风格模板</button></div>
 <div class="fld" style="margin-top:16px"><label for="aiBrief">建站要求 / 额外补充</label><textarea id="aiBrief" required maxlength="6000" rows="6" placeholder="介绍主营业务、目标客户和希望访客完成的操作。"></textarea></div>
+</section>
+<section id="aiBuildStep2" hidden aria-labelledby="aiStepTitle2"><h3 id="aiStepTitle2" tabindex="-1"></h3>
+<div class="formrow"><div class="field"><label for="aiStyleSector">模板行业</label><select id="aiStyleSector"><option value="">全部行业</option></select></div><div class="field"><label for="aiStyleTemplate">本次生成使用的风格</label><select id="aiStyleTemplate"><option value="">保持站点当前风格</option></select></div><button type="button" class="ghost" id="aiStyleManage">管理风格模板</button></div>
+
 <fieldset class="prompt-composer" style="margin-top:20px;border:1px solid var(--line);border-radius:10px;padding:16px">
 <legend>提示词方案</legend>
 <div class="formrow"><div class="field"><label for="aiPromptCategory">场景分类</label><select id="aiPromptCategory"><option value="">全部场景</option></select></div><div class="field"><label for="aiPromptTemplate">选择模板</label><select id="aiPromptTemplate"><option value="">自由输入（不使用模板）</option></select></div></div>
@@ -2654,7 +2659,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <details><summary>调整模块与顺序</summary><div id="aiPromptModules"></div></details>
 <button type="button" class="ghost" id="aiPromptPreviewBtn" style="margin-top:12px">预览组合后的提示词</button>
 <details id="aiPromptPreviewBox"><summary>最终提示词预览</summary><textarea id="aiPromptPreview" class="json-edit" readonly aria-label="组合后的提示词"></textarea></details>
-<div id="aiPromptMsg" class="msg" role="status"></div></div>
+<div id="aiPromptMsg" class="msg" role="status"></div></div><button id="aiBuildRefreshPrompts" type="button" class="ghost"></button>
 
 </fieldset>
 <details id="aiReferenceOptions" class="optional-options"><summary>参考网站与风格模板</summary><div class="optional-content">
@@ -2667,8 +2672,11 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div></details>
 <details id="aiContextOptions" class="optional-options"><summary>建站参考资料（已有站点，可选）</summary><div class="optional-content"><label><input type="checkbox" value="client">客户资料</label><label><input type="checkbox" value="brand">品牌与风格</label><label><input type="checkbox" value="pages">现有页面</label><label><input type="checkbox" value="media">素材目录</label><p class="hint">所选资料会发送至当前模型服务商，请先确认可用于建站。</p><label><input id="aiAutoResearch" type="checkbox">允许 AI 自动查询已授权的 MCP 只读资料（最多 4 次）</label><div id="aiContextList"></div><button type="button" class="ghost" id="aiChooseContext">从运营助手选择 MCP 资料</button></div></details>
 
+</section>
+<section id="aiBuildStep3" hidden aria-labelledby="aiStepTitle3"><h3 id="aiStepTitle3" tabindex="-1"></h3><div id="aiBuildReview"></div>
 <label id="aiReplaceWrap" class="hint" style="display:block;margin:12px 0"><input id="aiReplace" type="checkbox"> 允许替换未发布草稿（原草稿会备份）</label>
-<button id="aiGenerate" type="submit">生成整站草稿</button><span id="aiBuildMsg" class="msg" role="status" aria-live="polite"></span>
+<button id="aiGenerate" type="submit">生成整站草稿</button></section>
+<div class="ai-build-controls"><button id="aiBuildBack" type="button" class="ghost" hidden></button><button id="aiBuildNext" type="button"></button></div><span id="aiBuildMsg" class="msg" role="status" aria-live="polite"></span>
 </form>
 <h3 style="margin-top:28px">建站任务</h3>
 <div id="aiJobs" aria-live="polite"></div>
@@ -4280,7 +4288,7 @@ function enhanceAccessibility(){
 }
 function renderValidation(form, focus=false){
  let summary=form.querySelector('.form-error-summary');
- const invalid=[...form.elements].filter(c=>c.willValidate&&!c.validity.valid);
+ const invalid=[...(form.validationControls?form.validationControls():form.elements)].filter(c=>c.willValidate&&!c.validity.valid);
  form.querySelectorAll('.field-error').forEach(e=>e.remove());
  [...form.elements].forEach(c=>{c.removeAttribute('aria-invalid');if(c.dataset.errorId){const ids=(c.getAttribute('aria-describedby')||'').split(' ').filter(id=>id!==c.dataset.errorId);if(ids.length)c.setAttribute('aria-describedby',ids.join(' '));else c.removeAttribute('aria-describedby');delete c.dataset.errorId;}});
  if(!invalid.length){summary?.remove();return;}
@@ -4305,7 +4313,7 @@ let REFRESH_RUNNING=false;
 async function refreshConsole(force=false){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;$('#siteHealthRefresh').disabled=true;try{await load(force);}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;$('#siteHealthRefresh').disabled=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -5207,7 +5215,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})

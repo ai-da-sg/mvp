@@ -42,6 +42,7 @@ const {ConsolePage}=require('./pages/console.cjs');
   await page.locator('#styleSearch').fill('E2E editorial');await page.locator(`[data-style-use="${item.id}"]`).evaluate(e=>{const d=e.closest('details');if(d)d.open=true;});await page.locator(`[data-style-use="${item.id}"]`).click();await page.locator('#aiBrief').fill('Create a concise restaurant website with truthful sample content.');await page.locator('#aiProfile').selectOption('mock');
   assert.equal(await page.locator('#aiStyleTemplate').inputValue(),item.id);assert.equal(await page.locator('#aiStyleSector').inputValue(),'restaurant');
   assert.equal(await page.locator('#aiStyleTemplate option[data-user-content]').count(),counts.restaurant+1);
+  await ui.buildStep(3);
   const build=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/ai/build'&&r.request().method()==='POST');await page.locator('#aiGenerate').click();const job=(await(await build).json()).job;assert(job);
   await page.waitForFunction(async id=>{const r=await fetch('/api/ai/jobs');const d=await r.json();return d.jobs.find(j=>j.id===id)?.status==='completed';},job.id);
   const completed=(await(await page.request.get(cfg.origin+'/api/ai/jobs')).json()).jobs.find(j=>j.id===job.id);assert.equal(completed.style.tokens.advanced.heading_size,84);assert.equal(completed.style.industry,'restaurant');assert.equal(completed.style.sector,'restaurant');

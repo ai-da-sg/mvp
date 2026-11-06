@@ -2,7 +2,7 @@
   "name": "kampongflow-ui-regression",
   "private": true,
   "scripts": {
-    "test": "node console.test.cjs && node security.test.cjs && node real-api.test.cjs && node english.test.cjs && node readability.test.cjs && node styles.test.cjs && node catalog.test.cjs && node template-experience.test.cjs && node domains-list.test.cjs && node admin-experience.test.cjs && node publications.test.cjs && node operations.test.cjs",
+    "test": "node console.test.cjs && node security.test.cjs && node real-api.test.cjs && node english.test.cjs && node readability.test.cjs && node styles.test.cjs && node catalog.test.cjs && node template-experience.test.cjs && node domains-list.test.cjs && node admin-experience.test.cjs && node publications.test.cjs && node operations.test.cjs && node builder-workflow.test.cjs",
     "test:real": "node real-api.test.cjs",
     "test:live-mcp": "E2E_REMOTE_MCP=1 node real-api.test.cjs",
     "test:showcases": "node showcases.test.cjs",

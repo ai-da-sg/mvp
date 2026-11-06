@@ -67,6 +67,7 @@ function totp(){const key=Buffer.from('48656c6c6f21deadbeef','hex'),b=Buffer.all
    await page.getByLabel('建站要求 / 额外补充',{exact:true}).fill('保留已输入的业务需求');
    await help.locator('summary').focus();await page.keyboard.press('Enter');assert.equal(await help.evaluate(e=>e.open),true);
    await help.locator('summary').press('Enter');
+   await ui.buildStep(2);
    await page.locator('#aiReferenceOptions > summary').click();await page.getByLabel('参考网站地址',{exact:true}).fill('https://example.com/');
    await page.locator('#aiReferenceOptions > summary').click();await page.locator('#aiReferenceOptions > summary').click();
    assert.equal(await page.getByLabel('参考网站地址',{exact:true}).inputValue(),'https://example.com/');
@@ -76,7 +77,7 @@ function totp(){const key=Buffer.from('48656c6c6f21deadbeef','hex'),b=Buffer.all
    }
    await page.selectOption('#uiLanguage','en');await page.waitForFunction(()=>document.querySelector('#p-ai > .page-help > summary').textContent==='Building guide');
    assert.equal(await page.locator('#aiBrief').inputValue(),'保留已输入的业务需求');
-   assert.equal(await page.locator('#aiGenerate').isVisible(),true);
+   assert.equal(await page.locator('#aiGenerate').isVisible(),false);await ui.buildStep(3);assert.equal(await page.locator('#aiGenerate').isVisible(),true);
   });
   if(process.env.E2E_REMOTE_MCP==='1')for(const preset of ['cloudflare-docs','aws-knowledge']){
    await scenario('live-mcp-'+preset,async({page,ui})=>{

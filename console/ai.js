@@ -84,7 +84,7 @@ async function aiJobs() {
       <div class="h"><b>${esc(j.slug)}</b><span class="pill">${esc(labels[j.status]||j.status)}</span>
       <span>${esc(j.provider)} / ${esc(j.model)}</span>${j.simulated?'<span class="pill">模拟</span>':''}
       <span class="hint">${esc(new Date(j.created*1000).toLocaleString())}</span></div>
-      <p style="margin:8px 0">${esc(j.message)}</p>${j.style?`<p>参考风格：${esc(j.style.name)}${j.style.version?` · v${Number(j.style.version)}`:""}（随草稿发布）</p>`:""}${j.prompt?`<details><summary>提示词：${esc(j.prompt.template.name)} · v${j.prompt.template.version}</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(j.prompt.preview)}</pre></details>`:''}
+      <p style="margin:8px 0">${esc(j.message)}</p>${j.style?`<p>参考风格：${esc(j.style.name)}${j.style.version?` · v${Number(j.style.version)}`:""}（随草稿发布）</p>`:""}${j.prompt?`<details><summary>提示词：${esc(j.prompt.template.name)} · v${j.prompt.template.version}</summary><ol>${j.prompt.modules.map(m=>`<li data-user-content>${esc(m.name)} · v${Number(m.version)}</li>`).join('')}</ol><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(j.prompt.preview)}</pre></details>`:''}
       ${j.status==='completed'?`<a href="/preview/${encodeURIComponent(j.slug)}/home" target="_blank" rel="noopener">预览草稿</a>
       <button type="button" data-ai-editor="${esc(j.slug)}">编辑页面</button>
       <button type="button" data-ai-publish="${esc(j.slug)}">发布当前草稿</button>
@@ -106,8 +106,8 @@ async function initAI() {
       AI_READY=true;
     }
     if(window.aiContextTarget){$('#aiMode').value='existing';$('#aiSite').value=window.aiContextTarget;window.aiContextTarget=null;}
-    renderAIContext();aiMode(); await aiJobs();
-    if (!AI_POLL) AI_POLL=setInterval(()=>{if(!$('#p-ai').classList.contains('hidden')) aiJobs();},3000);
+    renderAIContext();aiMode();buildReconcile();$('#aiMode').disabled=false;buildRender(); await aiJobs();
+    if (!AI_POLL) AI_POLL=setInterval(()=>{if(!document.hidden&&!$('#p-ai').classList.contains('hidden')) aiJobs();},3000);
   } catch(e) { aiMessage('#aiBuildMsg', e.message, true); }
 }
 $('#aiMode').onchange=aiMode;
@@ -119,7 +119,7 @@ $('#aiPreset').onchange=()=>{
   $('#aiConfigName').value=preset.name;
 };
 $('#aiBuildForm').onsubmit=async e=>{
-  e.preventDefault(); const button=$('#aiGenerate'); button.disabled=true;
+  e.preventDefault(); if(!buildCanSubmit())return; const button=$('#aiGenerate'); button.disabled=true;
   aiMessage('#aiBuildMsg','正在提交任务…');
   try {
     const mode=$('#aiMode').value;

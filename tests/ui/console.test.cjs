@@ -1,3 +1,4 @@
+const {ConsolePage}=require('./pages/console.cjs');
 /* Run production HTML/JS against isolated API fixtures; never connect to live services. */
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -34,7 +35,7 @@ print(json.dumps(result))
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
   assert.equal(u.hostname,'review.invalid','Unexpected external request');
   if(p==='/'||p==='/login')return route.fulfill({contentType:'text/html',body:pages[p==='/'?'console':'login']});
-  if(['/operations.js','/publications.js','/admin-ui.js','/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
+  if(['/ai-workflow.js','/operations.js','/publications.js','/admin-ui.js','/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
@@ -146,7 +147,7 @@ print(json.dumps(result))
  await page.setViewportSize({width:1440,height:1000});
  assert.equal(await page.locator('.kf-wp-entry').getAttribute('href'),'https://demo.example/?kf_mvp_sso=begin');
  await nav('ai');await page.waitForFunction(()=>document.querySelector('#aiPromptTemplate').options.length>1);
- await page.selectOption('#aiPromptTemplate','company');await page.locator('#promptServices').fill('真实设计服务');
+ await new ConsolePage(page).buildStep(2);await page.selectOption('#aiPromptTemplate','company');await page.locator('#promptServices').fill('真实设计服务');
  await page.locator('#aiPromptPreviewBtn').click();await page.waitForFunction(()=>document.querySelector('#aiPromptPreview').value.includes('真实设计服务'));
  assert.equal(await page.locator('#aiBrief').getAttribute('required'),null);
  await page.selectOption('#uiTheme','light');await page.selectOption('#uiLanguage','en');
@@ -159,17 +160,17 @@ print(json.dumps(result))
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'AI composer must fit mobile');
  if(out)await page.screenshot({path:path.join(out,'ai-mobile-en.png'),fullPage:true});
  await page.setViewportSize({width:1440,height:1000});
- calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
+ await new ConsolePage(page).buildStep(3);calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
  assert.equal(calls.find(c=>c.path==='/api/ai/build').body.prompt_selection.template_id,'company');
  assert.equal(await page.locator('#promptServices').inputValue(),'真实设计服务');
- await page.locator('#aiReferenceOptions > summary').click();
+ await new ConsolePage(page).buildStep(2);await page.locator('#aiReferenceOptions > summary').click();
  await page.locator('#aiReferenceUrl').fill('https://example.com/');await page.locator('#aiAnalyzeStyle').click();
  await page.waitForFunction(()=>document.querySelector('#aiStyleTemplate').value==='@analysis');
  assert.ok((await page.locator('#aiStyleSummary').textContent()).includes('serif'));
  await page.locator('#aiStyleSaveAnalysis').click();await page.locator('#styleName').fill('参考风格测试');
  await page.locator('#styleEditForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#styleEditForm').classList.contains('hidden'));
  let style=styleAPI('read').templates.find(t=>t.name==='参考风格测试');assert(style);await nav('ai');
- calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
+ await new ConsolePage(page).buildStep(3);calls.length=0;await page.locator('#aiGenerate').click();await page.waitForFunction(()=>!document.querySelector('#aiGenerate').disabled);
  assert.equal(calls.find(c=>c.path==='/api/ai/build').body.style_template_id,style.id);
  await nav('styles');await page.locator(`[data-style-edit="${style.id}"]`).evaluate(e=>{const d=e.closest('details');if(d)d.open=true;});await page.locator(`[data-style-edit="${style.id}"]`).click();await page.locator('#styleName').fill('已修改风格');await page.locator('#styleEnabled').uncheck();
  await page.locator('#styleEditForm button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#styleEditForm').classList.contains('hidden'));
@@ -218,7 +219,7 @@ print(json.dumps(result))
  page.once('dialog',d=>d.accept());await page.locator('[data-mcp-delete]').click();await page.waitForFunction(()=>!document.querySelector('[data-mcp-edit]'));
  await nav('automation');await page.locator('#autoPrepare').click();await page.waitForSelector('#autoConfirmForm');
  await page.locator('#autoConfirmForm button[type=submit]').click();await page.waitForSelector('#autoUseContext');
- await page.locator('#autoUseContext').click();await page.waitForSelector('#p-ai:not(.hidden)');assert.match(await page.locator('#aiContextList').textContent(),/Fixture context/);await page.locator('[data-context-remove]').click();
+ await page.locator('#autoUseContext').click();await page.waitForSelector('#p-ai:not(.hidden)');assert.match(await page.locator('#aiContextList').textContent(),/Fixture context/);await new ConsolePage(page).buildStep(2);if(!await page.locator('#aiContextOptions').evaluate(e=>e.open))await page.locator('#aiContextOptions > summary').click();await page.locator('[data-context-remove]').click();
  await nav('automation');await page.selectOption('#autoTool','site.publish');await page.locator('#autoPrepare').click();await page.waitForSelector('#autoConfirmed');assert.equal(await page.locator('#autoConfirmed').isChecked(),false);
  await page.setViewportSize({width:375,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Operations assistant must fit mobile');
  if(out)await page.screenshot({path:path.join(out,'automation-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});

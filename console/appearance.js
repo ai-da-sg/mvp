@@ -115,6 +115,7 @@
  body .optional-options{border-radius:6px;background:var(--card)}
  body .optional-options>summary{font-size:14px}
  body .editor-actions{border-radius:6px;box-shadow:0 3px 12px #00000010;padding:16px}
+ .ai-build-steps,.ai-build-controls{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}.ai-build-controls{margin-top:20px}.ai-build-steps [aria-current=step]{border-color:var(--acc);color:var(--acc)}.ai-build-review{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}.ai-build-review dt{color:var(--dim);font-size:13px}.ai-build-review dd{margin:4px 0 0;overflow-wrap:anywhere}.ai-build-prompt{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}
  .site-toolbar{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin:0 0 20px}
  .site-toolbar .search-field{flex:1;min-width:200px}
  .site-toolbar .status-field{width:180px}

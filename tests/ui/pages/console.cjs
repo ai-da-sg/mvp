@@ -15,5 +15,14 @@ class ConsolePage {
   await button.click();
  }
  async logout(){await this.page.getByRole('link',{name:'退出',exact:true}).click();await this.page.waitForURL('**/login');}
+ async buildStep(step){
+  for(let attempt=0;attempt<3;attempt++){
+   const current=Number(await this.page.locator('#aiBuildSteps [aria-current="step"]').getAttribute('data-build-step'));
+   if(current===step)return;
+   await this.page.locator(current>step?'#aiBuildBack':'#aiBuildNext').click();
+   await this.page.waitForFunction(before=>Number(document.querySelector('#aiBuildSteps [aria-current="step"]').dataset.buildStep)!==before,current);
+  }
+  throw Error('Build step did not become available');
+ }
 }
 module.exports={ConsolePage};
