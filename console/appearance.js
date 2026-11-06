@@ -29,6 +29,17 @@
  `;document.head.append(css);
  const messages=window.KF_MESSAGES||{},reverse=Object.fromEntries(Object.entries(messages).map(([zh,en])=>[en,zh]));
  const patterns=[
+  [/^(.+)（留空保留已保存值）$/,v=>`${translate(v)} (leave blank to keep existing)`],
+  [/^(\d+) 个站点$/,n=>`${n} site(s)`],[/^(\d+) 个邮箱$/,n=>`${n} mailbox(es)`],
+  [/^(\d+) 个账号未开两步验证$/,n=>`${n} account(s) without two-step verification`],
+  [/^(\d+) 天前$/,n=>`${n} day(s) ago`],
+  [/^· 登录 (.+)$/,v=>`· Sign-in: ${translate(v)}`],
+  [/^(?:恢复码|码) (\d+)$/,n=>`Recovery codes: ${n}`],
+  [/^(.+)（我）$/,v=>`${v} (me)`],
+  [/^收支流水（(\d+)）$/,n=>`Transactions (${n})`],
+  [/^第 (\d+) 项$/,n=>`Item ${n}`],
+  [/^续费待办 · 共 (\d+) 个域名，(\d+) 个 (\d+) 天内到期$/,(n,d,days)=>`Renewals · ${n} domains, ${d} due within ${days} days`],
+  [/^(管理员|运营|财务)（(admin|ops|finance)）$/,(r,id)=>`${translate(r)} (${id})`],
   [/^未保存 · (\d+) 页$/,n=>`Unsaved · ${n} page(s)`],
   [/^已发布 (\d+) 个页面$/,n=>`Published ${n} page(s)`],
   [/^导航菜单 · (.+)$/,v=>'Navigation · '+translate(v)],
@@ -62,8 +73,9 @@
   for(const [prefix,label] of [['失败：','Failed: '],['已保存','Saved'],['编辑中：','Editing: '],['已复制：','Copied: '],['已发送到 ','Sent to '],['已生成，有效期至 ','Created, valid until '],['有效至 ','Valid until '],['上次检查：','Last checked: '],['已创建 ','Created '],['新密码：','New password: ']]){
    if(value.startsWith(prefix))return label+translate(value.slice(prefix.length));
   }
-  if(value.includes(' / '))return value.split(' / ').map(v=>messages[v]||v).join(' / ');
-  if(value.includes(' · '))return value.split(' · ').map(v=>messages[v]||v).join(' · ');
+  for(const separator of [' · ',' / ','、']){
+   if(value.includes(separator))return value.split(separator).map(v=>translate(v.trim())).join(separator==='、'?', ':separator);
+  }
   return value;
  }
  window.kfText=translate;window.kfLanguage=()=>language;

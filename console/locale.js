@@ -1,5 +1,165 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+模型配置 ID（留空使用默认模型）|Model profile ID (blank for default)
+允许替换未发布草稿（旧草稿会备份）|Allow replacing the unpublished draft (a backup will be kept)
+页面标识（留空发布全部页面）|Page ID (blank to publish all pages)
+检查域名与邮件解析|Check domain and email DNS
+修改 DNS 记录|Change DNS records
+验证已提交的 DNS 变更|Verify submitted DNS changes
+DKIM 选择器（可选，逗号分隔）|DKIM selectors (optional, comma-separated)
+修改|Edit
+现有记录（修改或删除时选择）|Existing record (select to edit or delete)
+尚未获取记录|Records not loaded
+记录名|Record name
+记录值|Record value
+TTL（秒，1 为自动）|TTL (seconds; 1 for automatic)
+MX 优先级|MX priority
+Cloudflare 代理|Cloudflare proxy
+尚未为此站点配置 DNS 执行服务商，请先配置并检查公网委托|Configure a DNS provider for this site and check public delegation first
+已完成的 DNS 操作 ID|Completed DNS operation ID
+检查邮件域名配置|Check email domain configuration
+生成邮件草稿|Generate email draft
+发送邮件|Send email
+查询邮件投递状态|Check email delivery status
+收件人|Recipient
+邮件要求|Email brief
+已完成的邮件发送操作 ID|Completed email operation ID
+运行运营健康检查|Run operations health check
+检查 HTTPS 与证书|Check HTTPS and certificates
+查询供应商资源与域名|Query provider resources and domains
+供应商账号（已授权当前站点）|Provider account (authorized for this site)
+查询账号授权范围内的云资源、托管域名或服务到期信息；只读取，不修改或续费。|Read cloud resources, hosted domains and service expiry within the account's authorized scope. No changes or renewals.
+供应商账号|Provider accounts
+律所|Law firm
+My Little Gems（定制）|My Little Gems (custom)
+教育|Education
+幼儿园|Preschool
+餐饮|Food and dining
+科技|Technology
+贸易|Trading
+/ 首年|/ first year
+取消|Cancel
+关闭|Close
+功能|Function
+邮件|Email
+运营巡检|Operations checks
+服务商|Provider
+未启用|Not enabled
+本机权威 DNS|Local authoritative DNS
+阿里云 DNS|Alibaba Cloud DNS
+腾讯云 DNSPod|Tencent Cloud DNSPod
+通用 cPanel|Generic cPanel
+使用下方 Cloudflare Token / 本机|Use the Cloudflare token below / local DNS
+DNS 区域（Zone ID / Managed Zone 名称 / 区域域名）|DNS zone (Zone ID, managed zone name or domain)
+API Token（留空保留）|API token (leave blank to keep existing)
+清除凭据|Clear credentials
+建站要求|Website brief
+模型配置 ID（留空使用默认）|Model profile ID (blank for default)
+交付邮件收件人（留空跳过发送）|Delivery email recipient (blank to skip)
+沿用 AI 建站页当前选择的提示词、风格和参考资料（须为同一站点）|Use the AI builder's selected prompt, style and reference material (same site only)
+允许替换当前未发布草稿（旧草稿会备份）|Allow replacement of the unpublished draft (a backup will be kept)
+可选 DNS 变更|Optional DNS changes
+变更数组（JSON，最多 5 条）|Change array (JSON, up to 5 entries)
+本站点邮件发送账号（管理员）|Site email account (administrator)
+邮件供应商账号|Email provider account
+保存邮件账号绑定|Save email account binding
+搜索供应商账号|Search provider accounts
+添加供应商账号|Add provider account
+供应商账号配置|Provider account settings
+账号 ID|Account ID
+账号名称|Account name
+供应商|Provider
+允许使用的能力|Allowed capabilities
+允许使用的站点（可多选）|Allowed sites (select multiple)
+启用账号|Enable account
+保存供应商账号|Save provider account
+供应商能力对照|Provider capabilities
+官方 MCP 预设|Official MCP presets
+请选择|Select an option
+Cloudflare 文档|Cloudflare documentation
+AWS MCP（新加坡）|AWS MCP (Singapore)
+其他标准 HTTPS MCP|Other HTTPS MCP service
+使用预设|Use preset
+供应商账号认证（可选）|Provider account authentication (optional)
+使用下方 Bearer Token|Use the Bearer token below
+使用 Bearer Token|Use a Bearer token
+例如：教育、科技、医疗|For example: education, technology, healthcare
+{"audience":"企业客户","goal":"提交咨询","tone":"专业清晰"}|{"audience":"business customers","goal":"submit an enquiry","tone":"clear and professional"}
+例如 Cloudflare|For example, Cloudflare
+记录 DNS 地址、NS 服务器、解析配置、账号归属和操作说明|Record DNS addresses, nameservers, record settings, account ownership and instructions
+读取建站资料|Read website context
+生成网站草稿|Generate website draft
+发布网站页面|Publish website pages
+选择建站资料|Select website context
+无需账号|No account required
+暂无交付流程。|No delivery workflows yet.
+系统默认发送配置|System default email settings
+暂无操作记录。|No operations recorded yet.
+没有匹配的域名或管理账号。|No matching domains or provider accounts.
+还没有检查记录，点上面的「立即检查」。|No checks recorded. Select Check now to begin.
+GPT 模拟（不调用外部模型）|GPT simulation (no external model calls)
+尚未选择 MCP 资料；可先在运营助手运行已授权的只读工具或资源读取。|No MCP context selected. Run an authorized read-only tool or resource request in the operations assistant first.
+尚无匹配模板。分析参考网站后可保存为模板。|No matching templates. Analyze a reference website to save a new template.
+自定义|Custom
+还没有图片|No images yet
+上传第一张图片|Upload your first image
+还没有分享链接，生成一条发给客户审阅|No sharing links yet. Create one for customer review.
+未记录|Not recorded
+未指定|Not assigned
+还没有流水|No transactions yet
+还没有收到提交|No enquiries yet
+客户提交联系表单后，线索会出现在这里|Enquiries will appear here when a visitor submits the contact form.
+OpenAI 兼容|OpenAI compatible
+通义|Qwen
+Ollama（本机）|Ollama (local)
+尚未配置供应商账号。|No provider accounts configured yet.
+已接入能力|Supported capabilities
+资源与域名清单（只读）|Resource and domain inventory (read-only)
+官方 MCP 认证|Official MCP authentication
+阿里云|Alibaba Cloud
+腾讯云|Tencent Cloud
+通用 SMTP（企业邮箱 / 邮件服务商）|Generic SMTP (business email / email provider)
+CLDY（新加坡）|CLDY (Singapore)
+通用 cPanel（CLDY / Oryon / HostSG 等）|Generic cPanel (CLDY / Oryon / HostSG and others)
+Vodien / Dreamscape 经销商|Vodien / Dreamscape reseller
+API 用户名|API username
+Basic 密码|Basic password
+Basic 用户名|Basic username
+SMTP 密码 / 应用密码|SMTP password / app password
+SMTP 用户名|SMTP username
+Session Token（临时凭据）|Session token (temporary credentials)
+临时 Token|Temporary token
+SES 发件人|SES sender
+TLS 端口：465 或 587|TLS port: 465 or 587
+cPanel HTTPS 地址（例如 https://panel.example.com:2083）|cPanel HTTPS URL (for example, https://panel.example.com:2083)
+cPanel 用户名|cPanel username
+API 区域：us 或 eu|API region: us or eu
+API 环境：production 或 ote|API environment: production or ote
+API 环境：production 或 test|API environment: production or test
+发送域名|Sending domain
+区域|Region
+认证方式：bearer 或 basic|Authentication: bearer or basic
+认证：keys 或 role|Authentication: keys or role
+同一 IP 15 分钟内失败 20 次会被临时拦截|An IP address is temporarily blocked after 20 failures within 15 minutes.
+启用 ·|Enabled ·
+重置 MFA|Reset MFA
+查询资料与健康状态、生成草稿，或先预览再确认发布、DNS 修改和邮件发送。执行记录用于核对结果与恢复流程。|Look up context and health status or generate drafts. Review and confirm publishing, DNS changes and email delivery. Operation records help verify results and resume workflows.
+仅为当前站点配置。Cloudflare 请使用仅授权对应 Zone 的 DNS API Token。其他服务商请先在系统设置保存账号；AWS 填 Hosted Zone ID，Google 填 Managed Zone 名称，Azure / 阿里云 / 腾讯云填区域域名。保存配置不会修改解析。|Applies to this site only. Use a Cloudflare DNS API token restricted to its zone. Save other provider accounts in system settings first. Enter an AWS hosted zone ID, Google managed zone name, or zone domain for Azure, Alibaba Cloud and Tencent Cloud. Saving does not change DNS records.
+为当前站点生成草稿，预览确认后发布，再执行所选 DNS 变更、检查 HTTPS，最后预览确认交付邮件。已完成步骤不会重复执行。|Generate a draft for this site, review and publish it, apply selected DNS changes, check HTTPS, then review and confirm the delivery email. Completed steps are not repeated.
+每条包含 operation（add/update/delete）、record_id（修改/删除）和 record（新增/修改）。留空数组保持现有解析。每项变更会在执行前单独预览确认。|Each entry contains operation (add/update/delete), record_id (update/delete) and record (add/update). An empty array keeps existing DNS records. Each change is reviewed and confirmed before execution.
+未绑定时使用系统默认发送配置。绑定后影响运营助手与交付流程的邮件；保存不会发送邮件。|Without a binding, system email settings apply. A binding controls email from the operations assistant and delivery workflows. Saving does not send email.
+统一管理云平台、DNS 和邮件账号。凭据加密保存且不回显；为每个账号选择站点与能力，再在运营助手绑定使用。云资源清单覆盖账号授权范围，IAM / RAM / RBAC 应同时限制实际资源。|Manage cloud, DNS and email accounts. Credentials are encrypted and never displayed. Set each account's sites and capabilities, then bind it in the operations assistant. Resource listings follow the account's permissions; restrict actual resources with IAM, RAM or RBAC too.
+通用 SMTP 可连接支持密码或应用密码认证的企业邮箱；OAuth-only SMTP 尚未支持。AWS role 使用服务器 SDK 凭据链，keys 使用所填凭据。复杂 DNS 路由、云主机创建/销毁、CDN 配置和数据库迁移不在本页直接执行范围内。|Generic SMTP supports business email using passwords or app passwords; OAuth-only SMTP is not supported. AWS role uses the server SDK credential chain; keys uses the entered credentials. Complex DNS routing, VM creation/deletion, CDN configuration and database migration are not executed from this page.
+管理远程 MCP 服务，测试连接并查看工具、资源及提示词。配置用途、站点范围与白名单后，可在运营助手调用，并将只读结果用于 AI 建站。|Manage remote MCP services, test connections and inspect tools, resources and prompts. Configure purposes, site scope and allowlists before using them in the operations assistant or supplying read-only results to the AI builder.
+支持公开 HTTPS（443 端口）的 Streamable HTTP，协议 2025-06-18 / 2025-03-26；认证支持无认证、Bearer Token 或已保存的 AWS / Cloudflare 账号。暂不支持本地 stdio、旧 SSE 端点或 OAuth 登录。|Supports public HTTPS on port 443 with Streamable HTTP, protocol versions 2025-06-18 and 2025-03-26. Authentication can use no credentials, a Bearer token or a saved AWS/Cloudflare account. Local stdio, legacy SSE endpoints and OAuth sign-in are not supported.
+未选择用途和站点时仅可测试连接。工具权限由管理员配置，外部服务的描述不会自动授予执行权限。|Without a purpose and site scope, only connection testing is available. Administrators set tool permissions; external service descriptions cannot grant execution rights.
+工具规则包含 name、mode 和 bindings。mode 为 read（自动只读）、confirm（确认执行）或 totp（确认并验证）。bindings 可将 domain 绑定为 $domain、站点参数绑定为 $site。仅将已确认无副作用的工具设为 read。|Tool rules contain name, mode and bindings. Modes are read (automatic read-only), confirm (confirm execution) and totp (confirm and verify). Bind domain to $domain and site parameters to $site. Use read only for tools verified to have no side effects.
+Core API：DNS 查询与变更；域名必须使用 Name.com 权威 DNS。不包含注册、续费和转移。|Core API supports DNS queries and changes for domains using Name.com authoritative DNS. Registration, renewal and transfers are not included.
+通过 SMTP 发送邮件。主机、端口和邮箱凭据以 CLDY 开通信息为准；DNS / 主机管理请使用 CLDY 或 cPanel 后台。尚未接入 CLDY 管理 API。|Send email via SMTP using the host, port and mailbox credentials supplied by CLDY. Manage DNS and hosting in CLDY or cPanel. The CLDY management API is not integrated.
+经销商 DNS API v2；需开通 API 并设置服务器出口 IP 白名单。公网 DNS 绑定仅支持 production。保留同名记录集其他值；不购买域名或订阅。|Reseller DNS API v2 requires API access and an allowlisted server egress IP. Public DNS bindings support production only. Other values in the record set are preserved. No domains or subscriptions are purchased.
+需供应商套餐开放 cPanel API Token 和 DNS 权限。支持 DNS 变更及托管域名清单；要求有效 TLS 证书和公网地址。供应商品牌本身不保证 API 可用。|Your hosting plan must allow cPanel API tokens and DNS access. Supports DNS changes and hosted domain listings, with a valid TLS certificate and public address. A provider's brand alone does not guarantee API access.
+使用 Dreamscape SOAP 2.1 经销商 API 查询域名清单；当前站点恰为注册域名时查询到期信息。需经销商 API 权限，普通门户密码不可代替；暂不支持 DNS 写入、注册或续费。|Uses the Dreamscape SOAP 2.1 reseller API to list domains and check expiry when the site exactly matches a registered domain. Requires reseller API access, not a portal password. DNS writes, registration and renewal are not supported.
+仅查询新加坡账户的域名、服务和到期信息。优先使用完成供应商授权后的 Bearer Token；过期需更新，不自动绕过 MFA 或续费。|Read Singapore account domains, services and expiry information. Prefer a Bearer token obtained through provider authorization. Replace expired tokens; MFA is not bypassed and renewals are not automatic.
 介绍主营业务、目标客户和希望访客完成的操作。|Describe your services, audience and the action visitors should take.
 模拟模式：不调用模型，不产生费用。|Mock mode: no model calls or charges.
 暂无任务。填写需求后生成草稿。|No jobs yet. Add a brief to generate a draft.
