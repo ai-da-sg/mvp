@@ -86,17 +86,35 @@ document.addEventListener('DOMContentLoaded',()=>{
  let target=null,snapshot='',contextStamp='',busy=false,epoch=0;
  const ids=['aiBrief','promptServices','promptFacts','styleSummary','styleGuidance','promptEditBody','promptEditDescription','workflowBrief','auto-brief','auto-body','auto-subject'];
  function context(el){
-  const scope=el.id.startsWith('promptEdit')?'prompts':el.id.startsWith('auto-')||el.id==='workflowBrief'?'automation':'build';
-  const data={field:el.id,language:scope==='build'?label('aiLanguage'):document.documentElement.lang};
-  const map=scope==='prompts'?{name:'promptEditName',category:'promptEditCategory',description:'promptEditDescription'}:scope==='automation'?{site:'autoSite',purpose:'autoPurpose',operation:'autoTool'}:{company:'aiCompany',site:'aiSite',industry:'aiIndustry',requirements:'aiBrief',facts:'promptFacts',category:'aiPromptCategory',style:'aiStyleTemplate',template:'aiPromptTemplate',audience:'promptAudience',services:'promptServices',goal:'promptGoal',tone:'promptTone'};
-  for(const [k,id] of Object.entries(map))data[k]=label(id);
-  if(scope==='automation'){
-   if(el.id==='workflowBrief'){data.purpose='Website delivery';data.operation='Generate, review and deliver website';data.requirements=value('workflowBrief');}
-   else{data.requirements=value('auto-brief');data.name=value('auto-subject');data.description=value('auto-body');}
+  const scope=el.id.startsWith('promptEdit')?'prompts':el.id.startsWith('style')?'styles':el.id.startsWith('auto-')||el.id==='workflowBrief'?'automation':'build';
+  const data={field:el.id,language:scope==='build'?value('aiLanguage'):document.documentElement.lang};
+  function buildContext(){
+   const out={};for(const [k,id] of Object.entries({company:'aiCompany',site:'aiSite',industry:'aiIndustry',requirements:'aiBrief',facts:'promptFacts',category:'aiPromptCategory',style:'aiStyleTemplate',template:'aiPromptTemplate',audience:'promptAudience',services:'promptServices',goal:'promptGoal',tone:'promptTone'}))out[k]=label(id);
+   if(value('aiMode')==='existing'){out.company=label('aiSite');delete out.industry;}else out.site=value('aiDomain');
+   const selectedStyle=STYLE_LIBRARY?.templates.find(t=>t.id===value('aiStyleTemplate'));
+   out.pages=JSON.stringify(selectedStyle?.pages||[]);
+   if(selectedStyle)out.style=JSON.stringify({name:selectedStyle.name,summary:selectedStyle.summary,guidance:selectedStyle.guidance,sector:selectedStyle.sector,tokens:selectedStyle.tokens});
+   const selectedPrompt=PROMPTS?.templates.find(t=>t.id===value('aiPromptTemplate'));
+   if(selectedPrompt)out.template=JSON.stringify({name:selectedPrompt.name,body:selectedPrompt.body,sector:selectedPrompt.sector});
+   out.modules=JSON.stringify(PROMPT_MODULES.map(id=>PROMPTS?.modules.find(m=>m.id===id)).filter(Boolean).map(({name,body,category,sector})=>({name,body,category,sector})));
+   return out;
   }
-  if(scope==='prompts'){data.language=value('promptEditLanguage');data.defaults=value('promptEditDefaults')||'{}';data.modules=JSON.stringify(PROMPT_EDIT_MODULES.map(id=>PROMPTS?.modules.find(m=>m.id===id)?.name||id));data.requirements=value('promptEditBody');}
-  if(scope==='build'){if(value('aiMode')==='existing'){data.company=label('aiSite');delete data.industry;}else data.site=value('aiDomain');data.modules=JSON.stringify(PROMPT_MODULES.map(id=>PROMPTS?.modules.find(m=>m.id===id)?.name||id));}
-  return {scope,context:data,...(scope==='prompts'?{prompt:{kind:PROMPT_EDIT_KIND,revision:Number($('#promptEditForm').dataset.revision),module_ids:PROMPT_EDIT_KIND==='templates'?[...PROMPT_EDIT_MODULES]:[]}}:{})};
+  if(scope==='build')Object.assign(data,buildContext());
+  if(scope==='styles'){
+   const style=styleReadForm();Object.assign(data,{name:style.name,category:style.category,industry:label('styleSector'),summary:style.summary,guidance:style.guidance,style:JSON.stringify(style.tokens),pages:JSON.stringify(style.pages),modules:JSON.stringify(style.blueprint),purpose:JSON.stringify(style.site_types),tags:JSON.stringify(style.tags)});
+  }
+  if(scope==='automation'){
+   data.site=label('autoSite');data.site_id=value('autoSite');
+   if(el.id==='workflowBrief'){
+    Object.assign(data,{purpose:'Website delivery',operation:'Generate, review and deliver website',operation_id:'workflow.delivery',requirements:value('workflowBrief'),recipient:value('workflowRecipient')});
+    if($('#workflowInherit').checked&&value('aiMode')==='existing'&&value('aiSite')===value('autoSite')){Object.assign(data,buildContext());data.requirements=value('workflowBrief');data.language=value('aiLanguage');data.site=label('autoSite');}
+   }else{
+    Object.assign(data,{purpose:label('autoPurpose'),operation:label('autoTool'),operation_id:value('autoTool'),requirements:value('auto-brief')});
+    if(['mail.draft','mail.send'].includes(value('autoTool')))Object.assign(data,{recipient:value('auto-to'),name:value('auto-subject'),description:value('auto-body')});
+   }
+  }
+  if(scope==='prompts')Object.assign(data,{language:value('promptEditLanguage'),name:value('promptEditName'),category:value('promptEditCategory'),industry:label('promptEditSector'),description:value('promptEditDescription'),defaults:value('promptEditDefaults')||'{}',modules:JSON.stringify(PROMPT_EDIT_MODULES.map(id=>PROMPTS?.modules.find(m=>m.id===id)?.name||id)),requirements:value('promptEditBody')});
+  return {scope,context:data,...(scope==='prompts'?{prompt:{kind:PROMPT_EDIT_KIND,sector:value('promptEditSector'),revision:Number($('#promptEditForm').dataset.revision),module_ids:PROMPT_EDIT_KIND==='templates'?[...PROMPT_EDIT_MODULES]:[]}}:{})};
  }
  function translate(){
   const labels={aiAssistLanguageLabel:['输出语言','Output language'],aiAssistInstructionLabel:['补充要求（可选）','Additional instructions (optional)'],aiAssistTitle:['AI 补写','AI writing'],aiAssistProfileLabel:['模型','Model'],aiAssistNotice:['将当前业务选项与已有文本发送至所选模型。审核结果后再插入或替换。','Sends current business options and text to the selected model. Review before inserting or replacing.'],aiAssistGenerate:busy?['正在生成…','Generating…']:['生成建议','Generate suggestion'],aiAssistResultLabel:['建议内容（可编辑）','Suggested text (editable)'],aiAssistReplace:['替换原文','Replace text'],aiAssistAppend:['追加到末尾','Append text'],aiAssistClose:['取消','Cancel']};

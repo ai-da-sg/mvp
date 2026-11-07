@@ -962,6 +962,23 @@ class ConsoleTests(unittest.TestCase):
             self.assertEqual(self.request('/api/ai/assist', dict(body, context=dict(body['context'], field='promptEditDescription'), limit=300))[0], 200)
         self.assertEqual(self.request('/api/ai/prompts')[1]['revision'], library['revision'])
 
+    def test_writing_field_contracts_and_scope_isolation(self):
+        cfg=dict(id='writing',name='Writing',protocol='openai_chat',model='test',base_url='https://example.test/v1',api_key='private-key')
+        self.request('/api/ai/config',cfg)
+        for field,(scope,contract) in self.m.kf_ai.WRITING_FIELDS.items():
+            with self.subTest(field=field),patch.object(self.m.kf_ai,'complete',return_value='Scoped suggestion') as complete:
+                body=dict(scope=scope,profile_id='writing',text='',context={'field':field,'name':'Current item','industry':'Healthcare','company':'Unrelated builder','summary':'Style description','operation_id':'mail.send'},limit=300)
+                self.assertEqual(self.request('/api/ai/assist',body)[0],200)
+                self.assertIn(contract,complete.call_args.args[2])
+                context=json.loads(complete.call_args.args[3])['context']
+                if scope in ('styles','prompts'):self.assertNotIn('company',context)
+                if scope!='styles':self.assertNotIn('summary',context)
+        with patch.object(self.m.kf_ai,'complete') as complete:
+            self.assertEqual(self.request('/api/ai/assist',dict(scope='build',profile_id='writing',text='',context={'field':'styleSummary'}))[0],400)
+            self.assertEqual(self.request('/api/ai/assist',dict(scope='automation',profile_id='writing',text='',context={'field':'auto-subject','operation_id':'dns.change'}))[0],400)
+            self.assertEqual(self.request('/api/ai/assist',dict(scope='styles',profile_id='writing',text='',context={'field':'styleSummary'}),user='ops-test')[0],403)
+            complete.assert_not_called()
+
     def test_writing_assistance_permissions_context_and_limits(self):
         cfg = dict(id='writing', name='Writing', protocol='openai_chat', model='test', base_url='https://example.test/v1', api_key='private-key')
         self.assertEqual(self.request('/api/ai/config', cfg)[0], 200)

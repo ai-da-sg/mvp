@@ -1,6 +1,8 @@
 /* Shared template/module library. Composition is validated on the server before generation. */
 let PROMPTS=null, PROMPT_MODULES=[], PROMPT_EDIT_MODULES=[], PROMPT_EDIT_KIND='templates';
 const promptLanguage=item=>item?.language||'zh';
+function promptSectorLabel(sector){const item=PROMPTS?.sectors?.find(s=>s.id===sector);return item?AdminUI.text(item.label,item.label_en):sector||AdminUI.text('通用','General');}
+function promptSectorOptions(){for(const id of ['aiPromptSector','promptLibrarySector','promptEditSector']){const el=$('#'+id),old=el.value;el.innerHTML=(id==='promptEditSector'?'':'<option value="">'+AdminUI.text('全部行业','All industries')+'</option>')+(PROMPTS.sectors||[]).map(s=>`<option value="${esc(s.id)}">${esc(promptSectorLabel(s.id))}</option>`).join('');el.value=old||(id==='promptEditSector'?'general':'');}}
 const promptVariableIds={audience:'promptAudience',services:'promptServices',goal:'promptGoal',tone:'promptTone',facts:'promptFacts'};
 function promptSelection(){
  if(!$('#aiPromptTemplate').value)return null;
@@ -15,14 +17,14 @@ function promptModuleList(target,selected,admin=false){
 }
 function promptRenderOptions(){
  const category=$('#aiPromptCategory').value,old=$('#aiPromptTemplate').value;
- const options=PROMPTS.templates.filter(t=>t.enabled&&(!category||t.category===category)&&(!$('#aiPromptLanguage').value||promptLanguage(t)===$('#aiPromptLanguage').value));
+ const options=PROMPTS.templates.filter(t=>t.enabled&&(!$('#aiPromptSector').value||t.sector===$('#aiPromptSector').value||t.sector==='general')&&(!category||t.category===category)&&(!$('#aiPromptLanguage').value||promptLanguage(t)===$('#aiPromptLanguage').value));
  $('#aiPromptTemplate').innerHTML='<option value="">自由输入（不使用模板）</option>'+options.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} · v${t.version}</option>`).join('');
  if(options.some(t=>t.id===old))$('#aiPromptTemplate').value=old;
  if(old&&!$('#aiPromptTemplate').value)promptChoose();
  else if(old){promptModuleList('#aiPromptModules',PROMPT_MODULES);promptInvalidate();}
 }
 async function loadPromptLibrary(){
- PROMPTS=await aiRequest('/api/ai/prompts');
+ PROMPTS=await aiRequest('/api/ai/prompts');promptSectorOptions();
  const selected=$('#aiPromptCategory').value;
  $('#aiPromptCategory').innerHTML='<option value="">全部场景</option>'+[...new Set(PROMPTS.templates.filter(t=>t.enabled).map(t=>t.category))].map(c=>`<option>${esc(c)}</option>`).join('');
  $('#aiPromptCategory').value=selected;promptRenderOptions();
@@ -47,7 +49,7 @@ function promptChoose(){
  }
  promptInvalidate();
 }
-$('#aiPromptLanguage').onchange=$('#aiPromptCategory').onchange=()=>{promptRenderOptions();promptChoose();};
+$('#aiPromptSector').onchange=$('#aiPromptLanguage').onchange=$('#aiPromptCategory').onchange=()=>{promptRenderOptions();promptChoose();};
 $('#aiPromptTemplate').onchange=promptChoose;
 for(const id of [...Object.values(promptVariableIds),'aiBrief'])$('#'+id).addEventListener('input',promptInvalidate);
 for(const [target,isEdit] of [['#aiPromptModules',false],['#promptEditModules',true]]){
@@ -82,17 +84,17 @@ const PROMPT_DIALOG=AdminUI.form('promptEditForm','',()=>{});
 function renderPromptLibrary(){
  if(!PROMPTS)return;
  const kind=$('#promptLibraryKind').value,q=$('#promptLibrarySearch').value.toLowerCase(),admin=PROMPTS.can_manage;
- const items=PROMPTS[kind].filter(t=>(!$('#promptLibraryLanguage').value||promptLanguage(t)===$('#promptLibraryLanguage').value)&&(t.name+' '+t.category+' '+t.description).toLowerCase().includes(q));
+ const items=PROMPTS[kind].filter(t=>(!$('#promptLibrarySector').value||t.sector===$('#promptLibrarySector').value)&&(!$('#promptLibraryLanguage').value||promptLanguage(t)===$('#promptLibraryLanguage').value)&&(t.name+' '+t.category+' '+t.description).toLowerCase().includes(q));
  $('#promptLibraryNew').hidden=!admin;
- AdminUI.table('promptLibraryList',items,['name','category','version','status','actions'].map(promptText),t=>`<tr><td data-user-content><b>${esc(t.name)}</b> <span class="hint">${promptLanguage(t).toUpperCase()}</span></td><td>${esc(PROMPTS.categories[t.category]||t.category)}</td><td>v${t.version}</td><td>${promptText(t.enabled?'enabled':'disabled')}</td><td><div class="domain-row-actions"><button type="button" class="ghost" data-view-prompt="${esc(t.id)}">${promptText('view')}</button>${kind==='templates'?`<button type="button" class="ghost" data-use-prompt="${esc(t.id)}" ${t.enabled?'':'disabled'}>${promptText('use')}</button>`:''}${admin?`<button type="button" class="ghost" data-edit-prompt="${esc(t.id)}">${promptText('edit')}</button><button type="button" class="ghost" data-copy-prompt="${esc(t.id)}">${promptText('copy')}</button><button type="button" class="ghost" data-toggle-prompt="${esc(t.id)}">${promptText(t.enabled?'disable':'enable')}</button><button type="button" class="ghost danger" data-delete-prompt="${esc(t.id)}">${promptText('remove')}</button>`:''}</div></td></tr>`);
+ AdminUI.table('promptLibraryList',items,['name','category','version','status','actions'].map(promptText),t=>`<tr><td data-user-content><b>${esc(t.name)}</b> <span class="hint">${promptLanguage(t).toUpperCase()} · ${esc(promptSectorLabel(t.sector))}</span></td><td>${esc(PROMPTS.categories[t.category]||t.category)}</td><td>v${t.version}</td><td>${promptText(t.enabled?'enabled':'disabled')}</td><td><div class="domain-row-actions"><button type="button" class="ghost" data-view-prompt="${esc(t.id)}">${promptText('view')}</button>${kind==='templates'?`<button type="button" class="ghost" data-use-prompt="${esc(t.id)}" ${t.enabled?'':'disabled'}>${promptText('use')}</button>`:''}${admin?`<button type="button" class="ghost" data-edit-prompt="${esc(t.id)}">${promptText('edit')}</button><button type="button" class="ghost" data-copy-prompt="${esc(t.id)}">${promptText('copy')}</button><button type="button" class="ghost" data-toggle-prompt="${esc(t.id)}">${promptText(t.enabled?'disable':'enable')}</button><button type="button" class="ghost danger" data-delete-prompt="${esc(t.id)}">${promptText('remove')}</button>`:''}</div></td></tr>`);
  $('#promptSources').innerHTML=PROMPTS.sources.map(s=>`<p><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a></p>`).join('');
 }
 function viewPrompt(item){
  AdminUI.detail(item.name,`<dl class="domain-meta"><dt>ID</dt><dd data-user-content>${esc(item.id)}</dd><dt>${promptText('version')}</dt><dd>v${item.version}</dd><dt>${promptText('description')}</dt><dd data-user-content>${esc(item.description||'—')}</dd>${item.module_ids?`<dt>${promptText('modules')}</dt><dd data-user-content>${item.module_ids.map(id=>esc(PROMPTS.modules.find(m=>m.id===id)?.name||id)).join(', ')}</dd>`:''}</dl><h4>${promptText('body')}</h4><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(item.body)}</pre>`);
 }
-new MutationObserver(renderPromptLibrary).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+new MutationObserver(()=>{if(PROMPTS)promptSectorOptions();renderPromptLibrary();}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
 async function initPrompts(){await loadPromptLibrary();renderPromptLibrary();}
-$('#promptLibraryLanguage').onchange=$('#promptLibraryKind').onchange=$('#promptLibrarySearch').oninput=()=>{AdminUI.pages.set('promptLibraryList',0);renderPromptLibrary();};
+$('#promptLibrarySector').onchange=$('#promptLibraryLanguage').onchange=$('#promptLibraryKind').onchange=$('#promptLibrarySearch').oninput=()=>{AdminUI.pages.set('promptLibraryList',0);renderPromptLibrary();};
 $('#promptLibraryRefresh').onclick=async()=>{try{await initPrompts();aiMessage('#promptLibraryMsg','提示词库已刷新');}catch(e){aiMessage('#promptLibraryMsg',e.message,true);}};
 function editPrompt(item=null,copy=false){
  PROMPT_EDIT_KIND=$('#promptLibraryKind').value;
@@ -105,6 +107,7 @@ function editPrompt(item=null,copy=false){
  $('#promptEditEnabled').checked=item?.enabled??true;
  $('#promptCategories').innerHTML=PROMPT_EDIT_KIND==='modules'?Object.entries(PROMPTS.categories).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join(''):'';
  $('#promptEditTemplateFields').hidden=PROMPT_EDIT_KIND!=='templates';
+ $('#promptEditSector').value=item?.sector||$('#promptLibrarySector').value||'general';
  $('#promptEditLanguage').value=promptLanguage(item);
  PROMPT_EDIT_MODULES=[...(item?.module_ids||[])];promptModuleList('#promptEditModules',PROMPT_EDIT_MODULES,true);
  $('#promptEditDefaults').value=JSON.stringify(item?.defaults||{},null,2);
@@ -120,7 +123,7 @@ $('#promptLibraryList').onclick=async e=>{
  const item=PROMPTS[$('#promptLibraryKind').value].find(t=>t.id===id);if(!item)return;
  if(b.dataset.viewPrompt){viewPrompt(item);return;}
  if(b.dataset.deletePrompt){if(!confirm(promptText('deleteConfirm')+'\n'+item.name))return;b.disabled=true;try{PROMPTS=await aiRequest('/api/ai/prompts',{kind:$('#promptLibraryKind').value,id,action:'delete',revision:PROMPTS.revision});renderPromptLibrary();promptRenderOptions();AdminUI.message('#promptLibraryMsg',PROMPT_UI.deleted);}catch(err){aiMessage('#promptLibraryMsg',err.message,true);}finally{b.disabled=false;}return;}
- if(b.dataset.usePrompt){navigateTo('ai');$('#aiPromptCategory').value='';$('#aiPromptLanguage').value=promptLanguage(item);promptRenderOptions();$('#aiPromptTemplate').value=id;promptChoose();return;}
+ if(b.dataset.usePrompt){navigateTo('ai');$('#aiPromptCategory').value='';$('#aiPromptSector').value=item.sector||'general';$('#aiPromptLanguage').value=promptLanguage(item);promptRenderOptions();$('#aiPromptTemplate').value=id;promptChoose();return;}
  if(b.dataset.editPrompt||b.dataset.copyPrompt){editPrompt(item,!!b.dataset.copyPrompt);return;}
  if(!confirm((item.enabled?'停用':'启用')+'「'+item.name+'」？已创建任务保留原版本。'))return;
  b.disabled=true;
@@ -130,9 +133,9 @@ $('#promptLibraryList').onclick=async e=>{
 $('#promptEditForm').onsubmit=async e=>{
  e.preventDefault();const button=e.submitter;button.disabled=true;
  try{
-  const body={action:'save',language:$('#promptEditLanguage').value,kind:PROMPT_EDIT_KIND,revision:Number($('#promptEditForm').dataset.revision),id:$('#promptEditId').value,name:$('#promptEditName').value,category:$('#promptEditCategory').value,description:$('#promptEditDescription').value,body:$('#promptEditBody').value,enabled:$('#promptEditEnabled').checked};
+  const body={action:'save',sector:$('#promptEditSector').value,language:$('#promptEditLanguage').value,kind:PROMPT_EDIT_KIND,revision:Number($('#promptEditForm').dataset.revision),id:$('#promptEditId').value,name:$('#promptEditName').value,category:$('#promptEditCategory').value,description:$('#promptEditDescription').value,body:$('#promptEditBody').value,enabled:$('#promptEditEnabled').checked};
   if(PROMPT_EDIT_KIND==='templates'){body.module_ids=PROMPT_EDIT_MODULES;body.defaults=JSON.parse($('#promptEditDefaults').value||'{}');}
-  PROMPTS=await aiRequest('/api/ai/prompts',body);if(!$('#promptEditId').readOnly){$('#promptLibrarySearch').value='';$('#promptLibraryLanguage').value=body.language;AdminUI.reveal('promptLibraryList',PROMPTS[PROMPT_EDIT_KIND],t=>t.id===body.id);}renderPromptLibrary();promptRenderOptions();PROMPT_DIALOG.close(true);aiMessage('#promptLibraryMsg','新版本已保存；已创建任务的提示词不受影响。');
+  PROMPTS=await aiRequest('/api/ai/prompts',body);if(!$('#promptEditId').readOnly){$('#promptLibrarySearch').value='';$('#promptLibraryLanguage').value=body.language;$('#promptLibrarySector').value=body.sector;AdminUI.reveal('promptLibraryList',PROMPTS[PROMPT_EDIT_KIND],t=>t.id===body.id);}renderPromptLibrary();promptRenderOptions();PROMPT_DIALOG.close(true);aiMessage('#promptLibraryMsg','新版本已保存；已创建任务的提示词不受影响。');
  }catch(err){aiMessage('#promptEditMsg',err.message,true);}finally{button.disabled=false;}
 };
 $('#promptEditHistory').onclick=async e=>{

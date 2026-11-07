@@ -79,6 +79,21 @@ class PromptTests(unittest.TestCase):
         selection['revision']=self.store.read()['revision'];selection['variables']['facts']='x'*1500
         with self.assertRaises(ai.AIError):self.store.compose(selection)
 
+    def test_industry_defaults_edit_history_and_writing_context(self):
+        library=self.store.public(True)
+        self.assertIn('healthcare',[x['id'] for x in library['sectors']])
+        template=next(t for t in library['templates'] if t['id']=='preschool-showcase')
+        self.assertEqual(template['sector'],'education')
+        updated=self.store.change(dict(template,kind='templates',revision=1,sector='healthcare'))
+        self.assertEqual(updated['sector'],'healthcare')
+        context=self.store.writing_request({'prompt':{'kind':'templates','revision':2,'module_ids':template['module_ids'],'sector':'healthcare'},'context':{'defaults':'{}'}})['context']
+        self.assertIn('Healthcare',context['industry'])
+        with self.assertRaises(ai.AIError):self.store.change(dict(updated,kind='templates',revision=2,sector='invalid'))
+        restored=self.store.change({'kind':'templates','id':template['id'],'action':'restore','revision':2,'version':1})
+        self.assertEqual(restored['sector'],'education')
+        self.assertEqual(prompts.prompt_sector({'id':'tcm-showcase-en'}),'healthcare')
+        self.assertEqual(prompts.prompt_sector({'id':'custom'}),'general')
+
     def test_guidance_reaches_provider_with_output_constraints(self):
         from unittest.mock import patch
         pages=[{'slug':'home','title':'Home'}]

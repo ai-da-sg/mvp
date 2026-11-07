@@ -1,5 +1,7 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+行业分类|Industry
+Invalid writing field for module|Invalid writing field for module
 提示词语言|Prompt language
 全部语言|All languages
 英文|English

@@ -8,11 +8,25 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from kf_ai import AIError, atomic_json, read_json, text
+from kf_style_catalog_v2 import SECTORS
 
 VARIABLES = {'audience': '目标客户', 'services': '主营服务/产品', 'goal': '主要转化目标',
              'tone': '品牌语气', 'facts': '已核实信息与联系方式'}
 VARIABLES_EN = {'audience': 'Target audience', 'services': 'Services / products', 'goal': 'Primary conversion goal',
                 'tone': 'Brand voice', 'facts': 'Verified facts and contact details'}
+
+
+PROMPT_SECTORS = {
+    'saas':'technology', 'studio':'creative', 'education':'education', 'catalog':'industrial',
+    'campaign':'events', 'consulting':'professional', 'preschool-showcase':'education',
+    'robotics-showcase':'industrial', 'tcm-showcase':'healthcare', 'product':'technology',
+    'portfolio':'creative', 'robotics':'industrial', 'clinic-scope':'healthcare',
+    'ui-nursery':'education', 'ui-robotics':'industrial', 'ui-wellness':'healthcare',
+}
+
+def prompt_sector(item):
+    return item.get('sector', PROMPT_SECTORS.get(item.get('id', '').removesuffix('-en'), 'general'))
+
 
 def prompt_language(item):
     return item.get('language', 'zh')
@@ -113,11 +127,14 @@ class PromptStore:
 
     def read(self):
         with self.locked():
-            return read_json(self.path,defaults())
+            data=read_json(self.path,defaults())
+            for kind in ('modules','templates'):
+                for item in data[kind]:item.setdefault('sector',prompt_sector(item))
+            return data
 
     def public(self, admin=False):
         data=self.read()
-        data.update(variables=VARIABLES,categories=CATEGORIES,sources=SOURCES,can_manage=admin)
+        data.update(sectors=[dict(id=k,label=v[0],label_en=v[1]) for k,v in SECTORS.items()],variables=VARIABLES,categories=CATEGORIES,sources=SOURCES,can_manage=admin)
         if not admin:
             for kind in ('modules','templates'):
                 data[kind]=[{k:v for k,v in item.items() if k!='history'} for item in data[kind] if item['enabled']]
@@ -148,7 +165,9 @@ class PromptStore:
         if not isinstance(values, dict) or set(values) - set(VARIABLES):
             raise AIError('默认变量不合法')
         values = {k: text(v, VARIABLES[k], 1500) for k, v in values.items()}
-        context.update(prompt_kind=kind, defaults=json.dumps(values, ensure_ascii=False),
+        sector=meta.get('sector','general')
+        if sector not in SECTORS:raise AIError('模板行业分类无效')
+        context.update(industry=json.dumps(dict(id=sector,label=SECTORS[sector][0],label_en=SECTORS[sector][1]),ensure_ascii=False),prompt_kind=kind, defaults=json.dumps(values, ensure_ascii=False),
                        variables=json.dumps(VARIABLES, ensure_ascii=False),
                        modules=json.dumps([{k: modules[mid][k] for k in
                            ('id', 'name', 'category', 'body', 'version', 'enabled')} for mid in ids], ensure_ascii=False))
@@ -165,6 +184,7 @@ class PromptStore:
             item_id=text(body.get('id',''),'ID',40,True)
             if not re.fullmatch('[a-z][a-z0-9_-]{1,39}',item_id):raise AIError('ID 为 2–40 位小写字母、数字、短横线或下划线，字母开头')
             old=next((x for x in data[kind] if x['id']==item_id),None)
+            if old:old.setdefault('sector',prompt_sector(old))
             action=body.get('action','save')
             if action=='delete':
                 if not old:raise AIError('条目不存在')
@@ -188,7 +208,9 @@ class PromptStore:
                       'category':text(body.get('category',''),'分类',40,True),
                       'description':text(body.get('description',''),'用途说明',300),
                       'language':body.get('language', prompt_language(old or {})),
+                      'sector':body.get('sector',prompt_sector(old or {'id':item_id})),
                       'body':validate_body(body.get('body','')), 'enabled':body.get('enabled',True) is True}
+                if item['sector'] not in SECTORS:raise AIError('模板行业分类无效')
                 if item['language'] not in ('zh', 'en'):raise AIError('提示词语言必须是中文或英文')
                 if kind=='templates':
                     item['module_ids']=checked_ids(body.get('module_ids',[]),'模块')
@@ -198,6 +220,7 @@ class PromptStore:
                     item['defaults']={k:text(v,VARIABLES[k],1500) for k,v in values.items()}
                 elif item['category'] not in CATEGORIES:raise AIError('模块分类不支持')
             else:raise AIError('不支持的管理操作')
+            item.setdefault('sector',prompt_sector(item))
             if kind=='templates':
                 modules={m['id']:m for m in data['modules']}
                 if any(mid not in modules or (item['enabled'] and not modules[mid]['enabled']) for mid in item['module_ids']):
