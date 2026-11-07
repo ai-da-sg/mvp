@@ -4,6 +4,7 @@
 单文件，依赖：reportlab（用于中文 PDF）。
 """
 import base64
+import hashlib
 import hmac as _h
 import sys
 import time
@@ -26,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 import kf_ai
 import kf_prompts
+import kf_design_profiles
 import kf_styles
 import kf_sso
 import kf_domain_vault
@@ -84,6 +86,13 @@ LEDGER_F   = CONSOLE / "ledger.json"
 
 def load_users():
     return _read(USERS_F, {})
+
+
+def user_version(record):
+    public = {k: record.get(k) for k in ("name", "role", "active", "created", "_version")}
+    public["mfa"] = bool(record.get("mfa_secret"))
+    public["recovery_left"] = len(record.get("recovery") or [])
+    return hashlib.sha256(json.dumps(public, sort_keys=True).encode()).hexdigest()
 
 
 def ensure_admin():
@@ -256,7 +265,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -1149,24 +1158,42 @@ MEDIA_DIR = "wp-content/uploads/kampong"
 MAX_UPLOAD = 8 * 1024 * 1024
 
 
+def media_variants(path):
+    return [q for q in path.parent.glob(path.stem + "-*" + path.suffix)
+            if q.is_file() and not q.is_symlink()
+            and re.fullmatch(re.escape(path.stem) + r"-\d{3,4}" + re.escape(path.suffix), q.name)]
+
+
 def media_list(slug):
     d = SITES / slug / "html" / MEDIA_DIR
     if not d.exists():
         return []
-    pages = read_spec(slug).get("pages", [])
+    metadata = _read(SITES / slug / "media-metadata.json", {})
+    pages = read_spec(slug).get("pages", []) + read_draft(slug).get("pages", [])
     blobs = [(p.get("title", p.get("slug")), json.dumps(p, ensure_ascii=False)) for p in pages]
     out = []
-    for f in sorted(d.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-        if f.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+    for f in sorted(d.iterdir(), key=lambda x: x.stat().st_mtime if x.is_file() else 0, reverse=True):
+        if f.is_symlink() or not f.is_file() or f.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
             continue
         if re.search(r"-\d{3,4}\.[a-z]+$", f.name):
-            continue  # 多尺寸变体，不单独展示
+            continue
+        try:
+            preview_asset(slug, "uploads/kampong/" + f.name)
+        except FileNotFoundError:
+            continue
         url = f"/{MEDIA_DIR}/{f.name}"
-        used = [name for name, blob in blobs if url in blob]
+        variants = media_variants(f)
+        urls = [url] + [f"/{MEDIA_DIR}/{q.name}" for q in variants]
+        thumbnail = min(variants, key=lambda q: int(q.stem.rsplit("-", 1)[1])) if variants else f
+        used = sorted(set(name for name, blob in blobs if any(value in blob for value in urls)))
         st = f.stat()
-        out.append({"name": f.name, "url": url, "size": st.st_size,
-                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
-                    "used_by": used})
+        info = metadata.get(f.name, {})
+        fields = {key: info.get(key, "") for key in ("title", "alt", "caption")}
+        version = hashlib.sha256(json.dumps([st.st_mtime_ns, st.st_size, fields], sort_keys=True).encode()).hexdigest()
+        out.append({"name": f.name, "url": url, "size": st.st_size, **fields, "version": version,
+                    "preview_url": f"/pa/{slug}/uploads/kampong/{urllib.parse.quote(f.name)}",
+                    "thumbnail_url": f"/pa/{slug}/uploads/kampong/{urllib.parse.quote(thumbnail.name)}",
+                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)), "used_by": used})
     return out
 
 
@@ -1282,7 +1309,7 @@ def ledger():
     return _read(LEDGER_F, [])
 
 
-def client_of(slug):
+def client_of(slug, records=None):
     meta = load_meta(slug)
     base = {
         "company": meta.get("company", slug),
@@ -1291,7 +1318,8 @@ def client_of(slug):
         "service_start": "", "service_end": "",
         "scope": [], "annual_fee": 0, "notes": "", "owner": "",
     }
-    base.update(clients().get(slug) or {})
+    base.update((clients() if records is None else records).get(slug) or {})
+    base.pop("_version", None)
     return base
 
 
@@ -2785,12 +2813,15 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 
 <div id="p-layout" class="hidden">
 <div class="formrow">
-<div class="field"><label>站点</label><select id="lSlug"></select></div>
+<div class="field"><label for="lSlug" data-page-text="site"></label><select id="lSlug"></select></div><div class="field"><label for="pageSearch" data-page-text="search"></label><input id="pageSearch" type="search"></div><button id="pageNew" type="button" data-page-text="create"></button><button id="pageRefresh" type="button" class="ghost" data-page-text="refresh"></button><button class="ghost" id="lPublishAll">全部发布</button></div>
+<div id="pageInventory"></div><div id="pageMsg" class="msg" role="status"></div>
+<form id="pageCreateForm" class="hidden"><h3 data-page-text="create"></h3><label for="pageCreateSlug" data-page-text="slug"></label><input id="pageCreateSlug" pattern="[a-z0-9][a-z0-9-]{0,79}" maxlength="80" required><label for="pageCreateTitle" data-page-text="title"></label><input id="pageCreateTitle" maxlength="120" required><p class="hint" data-page-text="draftHint"></p><div class="domain-form-actions"><button id="pageCreateSave" type="submit" data-page-text="create"></button><button id="pageCreateCancel" type="button" class="ghost" data-page-text="cancel"></button></div><div id="pageCreateMsg" class="msg" role="status"></div></form>
+<dialog id="pageEditorDialog" class="domain-dialog" aria-labelledby="pageEditorHeading"><div class="domain-dialog-heading"><h3 id="pageEditorHeading" data-page-text="edit"></h3><button id="pageEditorClose" type="button" class="ghost" data-page-text="close"></button></div><div class="formrow">
 <div class="field"><label>页面</label><select id="lPage"></select></div>
 <div class="field"><label>新增区块</label><select id="lType"></select></div>
 <button class="ghost" id="lAdd">添加</button>
 </div>
-<div class="sec-list" id="lList"></div>
+<label for="pageEditTitle" data-page-text="title"></label><input id="pageEditTitle" maxlength="120" required><div class="sec-list" id="lList"></div>
 <div id="lForm" class="form-area"></div>
 <details class="adv"><summary>高级：直接编辑 JSON</summary>
 <textarea id="lJson" class="json-edit" spellcheck="false"></textarea>
@@ -2801,22 +2832,18 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <button class="ghost" id="lPreview">保存并预览</button>
 <button class="ghost" id="lDiff">查看改动</button>
 <button id="lPublish">发布本页</button>
-<button class="ghost" id="lPublishAll">全部发布</button>
 <span id="lDirty" class="pill"></span>
 <span id="lMsg" class="msg" role="status" aria-live="polite"></span>
 </div>
-<details id="publicationHistory" class="optional-options"><summary>发布与恢复记录</summary><p class="hint">恢复仅涉及本次发布的页面、设计和导航，草稿保留。</p><button type="button" class="ghost" id="publicationRefresh">刷新</button><div id="publicationList"></div><div id="publicationMsg" class="msg" role="status"></div></details>
-<div id="lDiffBox" class="diff-box hidden"></div>
+<div id="lDiffBox" class="diff-box hidden"></div></dialog>
+<details id="publicationHistory" class="optional-options"><summary>发布与恢复记录</summary><p class="hint" data-page-text="historyHint"></p><button type="button" class="ghost" id="publicationRefresh">刷新</button><div id="publicationList"></div><div id="publicationMsg" class="msg" role="status"></div></details>
+
 </div>
 
 <div id="p-media" class="hidden">
-<div class="formrow">
-<div class="field"><label>站点</label><select id="mSlug"></select></div>
-<div class="field" style="flex:0 0 auto"><label>&nbsp;</label><button id="mUpload">上传图片</button></div>
-<input type="file" id="mFile" accept="image/*" style="display:none">
-</div>
-<div class="media-grid" id="mGrid"></div>
-<div class="msg" id="mMsg"></div>
+<div class="formrow"><div class="field"><label for="mSlug" data-media-text="site"></label><select id="mSlug"></select></div><div class="field"><label for="mSearch" data-media-text="search"></label><input id="mSearch" type="search"></div><button id="mUpload" type="button" data-media-text="upload"></button><button id="mRefresh" type="button" class="ghost" data-media-text="refresh"></button><input type="file" id="mFile" accept="image/jpeg,image/png,image/webp,image/gif" hidden></div>
+<div id="mGrid"></div><div class="msg" id="mMsg" role="status"></div>
+<form id="mEditForm" class="hidden"><h3 data-media-text="edit"></h3><div id="mEditPreview"></div><p id="mEditName" data-user-content></p><label for="mTitle" data-media-text="title"></label><input id="mTitle" maxlength="160"><label for="mAlt" data-media-text="alt"></label><input id="mAlt" maxlength="300"><label for="mCaption" data-media-text="caption"></label><textarea id="mCaption" maxlength="2000" rows="4"></textarea><p class="hint" data-media-text="metadataHint"></p><div class="domain-form-actions"><button id="mSave" type="submit" data-media-text="save"></button><button id="mCancel" type="button" class="ghost" data-media-text="cancel"></button></div><div id="mEditMsg" class="msg" role="status"></div></form>
 </div>
 
 <div id="p-share" class="hidden">
@@ -2899,19 +2926,22 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 </div>
 
 <div id="p-client" class="hidden">
-<div class="formrow">
-<div class="field"><label>客户</label><select id="clSlug"></select></div>
-<div class="field" style="flex:0 0 auto"><label>预付款余额</label>
-  <div id="clBal" style="font-size:16px;font-weight:650;padding-top:6px">—</div></div>
-</div>
-<div id="clBoard" style="margin-top:16px"></div>
-<div id="clForm" style="margin-top:16px"></div>
-<div id="clLedger" style="margin-top:18px"></div>
-<div class="msg" id="clMsg"></div>
+<div class="formrow"><div class="field"><label for="clSlug" data-client-text="site"></label><select id="clSlug"></select></div><div class="field"><label for="clSearch" data-client-text="search"></label><input id="clSearch" type="search"></div><button id="clNew" type="button" data-client-text="create"></button><button id="clRefresh" type="button" class="ghost" data-client-text="refresh"></button></div><div id="clientList"></div><div id="clMsg" class="msg" role="status"></div>
+<details class="optional-options"><summary data-client-text="renewals"></summary><div id="clBoard"></div></details>
+<form id="clientForm" class="hidden"><h3 data-client-text="edit"></h3><label for="clientSite" data-client-text="site"></label><select id="clientSite" required></select><div id="clientFields" class="formrow"></div><label for="cOwner" data-client-text="owner"></label><select id="cOwner"></select><fieldset><legend data-client-text="scope"></legend><div id="clientScopes"></div></fieldset><label for="cNotes" data-client-text="notes"></label><textarea id="cNotes" maxlength="2000" rows="4"></textarea><div class="domain-form-actions"><button id="clientSave" type="submit" data-client-text="save"></button><button id="clientCancel" type="button" class="ghost" data-client-text="cancel"></button></div><div id="clientFormMsg" class="msg" role="status"></div></form>
+<form id="clientLedgerForm" class="hidden"><h3 data-client-text="record"></h3><p id="clientLedgerTarget" data-user-content></p><label for="lgType" data-client-text="type"></label><select id="lgType"><option value="topup" data-client-text="income"></option><option value="cost" data-client-text="cost"></option></select><label for="lgAmt" data-client-text="amount"></label><input id="lgAmt" type="number" min="0.01" max="100000000" step="0.01" required><label for="lgCat" data-client-text="category"></label><input id="lgCat" maxlength="120" required><label for="lgNote" data-client-text="notes"></label><input id="lgNote" maxlength="500"><div class="domain-form-actions"><button id="clientLedgerSave" type="submit" data-client-text="record"></button><button id="clientLedgerCancel" type="button" class="ghost" data-client-text="cancel"></button></div><div id="clientLedgerMsg" class="msg" role="status"></div></form>
 </div>
 
 <div id="p-team" class="hidden">
-<div class="callout">仅管理员可管理账号；修改会记录在操作日志中。</div>
+<div class="site-toolbar"><div class="search-field"><label for="tmSearch">搜索账号</label><input id="tmSearch" type="search" oninput="renderTeam()"></div><button type="button" onclick="editTeam()">新建账号</button><button type="button" class="ghost" onclick="loadTeam()">刷新</button></div>
+<div id="tmList"></div>
+<form id="tmForm" class="hidden"><h3>账号</h3><div class="formrow">
+<div class="field"><label for="tmUser">用户名</label><input id="tmUser" required maxlength="24" pattern="[a-z0-9_.-]+" autocomplete="off"></div>
+<div class="field"><label for="tmName">显示名</label><input id="tmName" required maxlength="30"></div>
+<div class="field"><label for="tmRole">角色</label><select id="tmRole"><option value="ops">运营</option><option value="finance">财务</option><option value="admin">管理员</option></select></div></div>
+<label><input id="tmActive" type="checkbox">启用</label><div class="domain-form-actions"><button type="submit">保存</button></div><div id="tmEditMsg" class="msg" role="status"></div></form>
+<div class="msg" id="tmMsg"></div>
+<details><summary>账号安全</summary><div class="callout">仅管理员可管理账号；修改会记录在操作日志中。</div>
 <div id="tmSec" style="margin-top:14px"></div>
 <div id="tmMe" style="margin-top:14px"></div>
 <div class="callout" style="margin-top:12px"><b style="color:var(--fg)">修改密码</b>
@@ -2923,16 +2953,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
     <div class="msg" id="pwMsg"></div>
   </div></div>
 <div id="tmRecovery"></div>
-<div id="tmList" style="margin-top:14px"></div>
-<div class="formrow" style="margin-top:14px">
-  <div class="field" style="flex:0 0 140px"><label>用户名</label><input id="tmUser" placeholder="alice"></div>
-  <div class="field" style="flex:0 0 140px"><label>显示名</label><input id="tmName" placeholder="Alice"></div>
-  <div class="field" style="flex:0 0 120px"><label>角色</label>
-    <select id="tmRole"><option value="ops">运营</option><option value="finance">财务</option><option value="admin">管理员</option></select></div>
-  <button class="ghost" onclick="addUser()">新建账号</button>
-</div>
-<div class="msg" id="tmMsg"></div>
-<div style="font-size:12px;color:var(--dim);margin:18px 0 6px">写入权限（每行一条路径前缀，留空=全禁，管理员固定全开）</div>
+</details><details><summary>权限与操作日志</summary><div style="font-size:12px;color:var(--dim);margin:18px 0 6px">写入权限（每行一条路径前缀，留空=全禁，管理员固定全开）</div>
 <div id="tmRoles"></div>
 <div style="font-size:12px;color:var(--dim);margin:18px 0 6px">操作日志</div>
 <div class="formrow" style="margin-bottom:8px">
@@ -2942,51 +2963,22 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
   <div class="field" style="flex:0 0 150px"><label>止</label><input id="auTo" type="date"></div>
   <div class="field" style="flex:0 0 auto"><label>&nbsp;</label><button class="ghost" onclick="loadAudit()">查询</button></div>
 </div>
-<div id="tmAudit"></div>
+<div id="tmAudit"></div></details>
 </div>
 
 <div id="p-dns" class="hidden">
-<div class="formrow">
-<div class="field"><label>站点</label><select id="dnSlug"></select></div>
-<div class="field" style="flex:0 0 auto"><label>&nbsp;</label><button class="ghost" id="dnRefresh">刷新</button></div>
-</div>
-<div id="dnBody" style="margin-top:16px"></div>
-<div class="msg" id="dnMsg"></div>
+<div class="site-toolbar"><div class="field"><label for="dnSlug" data-dns-text="site"></label><select id="dnSlug"></select></div><div class="field"><label for="dnSource" data-dns-text="source"></label><select id="dnSource"><option value="provider" data-dns-text="providerRecords"></option><option value="local" data-dns-text="localRecords"></option></select></div><div class="search-field"><label for="dnSearch" data-dns-text="search"></label><input id="dnSearch" type="search"></div><button id="dnNew" type="button" data-dns-text="new" disabled></button><button class="ghost" id="dnRefresh" type="button" data-dns-text="refresh"></button></div>
+<div id="dnBody"></div><div id="dnMsg" class="msg" role="status"></div>
+<details><summary data-dns-text="settings"></summary><div class="domain-row-actions"><button id="dnConfigure" class="ghost" type="button" data-dns-text="configure"></button><button id="dnEnable" class="ghost" type="button" data-dns-text="enableLocal" hidden></button><button id="dnLocalCheck" class="ghost" type="button" data-dns-text="localCheck"></button><button id="dnPublicCheck" class="ghost" type="button" data-dns-text="publicCheck"></button></div><div id="dnCheck"></div></details>
+<form id="dnForm" class="hidden"><h3 data-dns-text="edit"></h3><p id="dnEditSite" data-user-content></p><div class="formrow"><div class="field"><label for="dnName" data-dns-text="name"></label><input id="dnName" required maxlength="253" placeholder="@ / www"></div><div class="field"><label for="dnType" data-dns-text="type"></label><select id="dnType"><option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>TXT</option><option>NS</option><option>SRV</option></select></div></div><div class="field"><label for="dnValue" data-dns-text="value"></label><textarea id="dnValue" required maxlength="4000" rows="3"></textarea></div><div class="formrow"><div class="field"><label for="dnTtl">TTL</label><input id="dnTtl" type="number" min="1" max="86400" required value="300"></div><div class="field" id="dnPriorityWrap"><label for="dnPriority" data-dns-text="priority"></label><input id="dnPriority" type="number" min="0" max="65535" value="10"></div></div><label id="dnProxyWrap"><input id="dnProxy" type="checkbox"><span data-dns-text="proxy"></span></label><div class="domain-form-actions"><button id="dnSave" type="submit" data-dns-text="review"></button><button id="dnCancel" type="button" class="ghost" data-dns-text="cancel"></button></div><div id="dnEditMsg" class="msg" role="status"></div></form>
+<form id="dnReviewForm" class="hidden"><h3 data-dns-text="review"></h3><div id="dnReviewBody"></div><label><input id="dnConfirmed" type="checkbox" required><span data-dns-text="confirm"></span></label><div id="dnTotpWrap" class="field"><label for="dnCode" data-dns-text="totp"></label><input id="dnCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></div><div class="domain-form-actions"><button id="dnExecute" type="submit" data-dns-text="execute"></button><button id="dnReviewCancel" type="button" class="ghost" data-dns-text="cancel"></button></div><div id="dnReviewMsg" class="msg" role="status"></div></form>
 </div>
 
 <div id="p-design" class="hidden">
-<div class="formrow">
-<div class="field"><label>站点</label><select id="dSlug"></select></div>
-<div class="field"><label>预设</label><select id="dPreset"></select></div>
-</div>
-<div class="formrow" style="margin-top:10px">
-<div class="field"><label>主色</label><input type="color" id="cPrimary"></div>
-<div class="field"><label>强调色</label><input type="color" id="cAccent"></div>
-<div class="field"><label>背景色</label><input type="color" id="cBg"></div>
-<div class="field"><label>卡片圆角 <span id="rVal"></span></label><input type="range" id="rRadius" min="0" max="28" step="1"></div>
-<div class="field"><label>按钮</label><select id="sButton"><option value="999px">胶囊</option><option value="10px">圆角</option><option value="4px">方正</option></select></div>
-<div class="field"><label>标题字体</label><select id="sHead"><option value="sans">无衬线</option><option value="serif">衬线</option><option value="rounded">圆润</option></select></div>
-</div>
-<div style="margin-top:14px"><button id="dSave">应用设计</button> <span id="dmsg" class="msg"></span></div>
-<div class="design-grid">
-  <div data-user-content class="preview" id="pv">
-    <div class="pv-hero" id="pvHero"><div class="pv-kicker">PRESCHOOL · SINGAPORE</div>
-      <div class="pv-h1">Little Gems</div>
-      <div class="pv-p">A play-based bilingual preschool.</div>
-      <div class="pv-btn" id="pvBtn">Book a Visit</div></div>
-    <div class="pv-card" id="pvCard"><b>Character</b><div class="pv-small">Grounded in solid character.</div></div>
-  </div>
-  <div data-user-content class="preview" style="font-size:12.5px;color:#8b949e">
-    <b style="color:#e6edf3">令牌说明</b>
-    <div style="margin-top:8px;line-height:1.7">
-    主色决定首屏、页脚、按钮与卡片色条；<br>
-    背景色影响整页底色；<br>
-    圆角同时作用于卡片与图片；<br>
-    字体只换标题，正文保持不变。
-    </div>
-    <div style="margin-top:10px;color:#58a6ff" id="pvMeta"></div>
-  </div>
-</div>
+<div class="formrow"><div class="field"><label for="dSlug" data-design-text="site"></label><select id="dSlug"></select></div><div class="field"><label for="dSearch" data-design-text="search"></label><input id="dSearch" type="search"></div><button id="dNew" type="button" data-design-text="create"></button><button id="dRefresh" type="button" class="ghost" data-design-text="refresh"></button></div>
+<div id="designList"></div><div id="dmsg" class="msg" role="status"></div>
+<form id="dEditForm" class="hidden"><h3 data-design-text="edit"></h3><div id="dEditPreview"></div><label for="dName" data-design-text="name"></label><input id="dName" maxlength="120" required><label for="dDescription" data-design-text="description"></label><textarea id="dDescription" maxlength="1000" rows="2"></textarea><div id="dColorFields" class="formrow"></div><details><summary data-design-text="advanced"></summary><div id="dAdvancedColors" class="formrow"></div><div class="formrow"><div class="field"><label for="dRadius" data-design-text="radius"></label><input id="dRadius" type="number" min="0" max="999" required></div><div class="field"><label for="dButton" data-design-text="button"></label><input id="dButton" type="number" min="0" max="999" required></div><div class="field"><label for="dPadding" data-design-text="padding"></label><input id="dPadding" type="number" min="24" max="120" required></div><div class="field"><label for="dHeading" data-design-text="heading"></label><select id="dHeading"><option value="sans">Sans-serif</option><option value="serif">Serif</option><option value="rounded">Rounded</option><option value="mono">Monospace</option></select></div><div class="field"><label for="dOverlay" data-design-text="overlay"></label><input id="dOverlay" type="number" min="0" max="1" step="0.01" required></div></div></details><p class="hint" data-design-text="saveHint"></p><div class="domain-form-actions"><button id="dSave" type="submit" data-design-text="save"></button><button id="dCancel" type="button" class="ghost" data-design-text="cancel"></button></div><div id="dEditMsg" class="msg" role="status"></div></form>
+<form id="dApplyForm" class="hidden"><h3 data-design-text="apply"></h3><p id="dApplyTarget" data-user-content></p><div id="dApplyPreview"></div><p class="hint" data-design-text="applyHint"></p><label><input id="dApplyConfirmed" type="checkbox" required><span data-design-text="confirm"></span></label><div class="domain-form-actions"><button id="dApplyExecute" type="submit" data-design-text="apply"></button><button id="dApplyCancel" type="button" class="ghost" data-design-text="cancel"></button></div><div id="dApplyMsg" class="msg" role="status"></div></form>
 </div>
 
 <footer id="foot"></footer>
@@ -3153,275 +3145,36 @@ $('#pf').addEventListener('submit',async e=>{e.preventDefault();
 
 
 
-// ---------------- DNS ----------------
-let DNSINFO=null;
-function dnsRow(r,i){
-  const locked=(r.type==='SOA'||r.type==='NS')&&r.name==='@';
-  return `<div class="dom-row" style="padding:8px 12px"><div class="h">
-    <span class="name" style="min-width:110px">${esc(r.name)}</span>
-    <span style="min-width:52px;color:var(--fg)">${esc(r.type)}</span>
-    <span class="hint" style="margin:0;flex:1">${esc(r.value)}</span>
-    <span style="color:var(--dim);font-size:11.5px">TTL ${r.ttl}</span>
-    ${locked?'<span style="color:var(--dim);font-size:11.5px">系统</span>'
-            :`<button onclick="delDns(${i})">删除</button>`}
-  </div></div>`;
-}
-async function loadDns(slug){
-  if(!slug){$('#dnBody').innerHTML='<p class="hint">没有可选站点</p>';return;}
-  const r=await fetch('/api/dns/'+encodeURIComponent(slug));
-  const d=await r.json(); DNSINFO=d;
-  const box=$('#dnBody');
-  if(!d.enabled){
-    const noPlan = d.plan_dns === false;
-    box.innerHTML=`<div class="callout">这个站点还没有托管 DNS。启用后会自动创建区，并把 @ 与 www 指到服务器。</div>`
-      + (noPlan
-          ? `<div style="margin-top:14px;color:var(--warn);font-size:13px">当前套餐「${esc(d.plan_name||'')}」不含 DNS 托管，请先升级套餐。</div>`
-          : `<div style="margin-top:14px"><button onclick="enableDns()">启用 DNS 托管</button></div>`);
-    return;
-  }
-  const dm=d.domain_manage||{};
-  const dd=d.domain_days;
-  const recs=(d.zone.records||[]).map(dnsRow).join('');
-  const dmCard=`<div class="callout" style="margin-bottom:14px">
-      <b style="color:var(--fg)">域名代管</b>
-      ${dd===null||dd===undefined?'':`（${dd<0?'已过期 '+(-dd)+' 天':'还剩 '+dd+' 天'}）`}
-      <div class="formrow" style="margin-top:10px">
-        <div class="field" style="flex:0 0 150px"><label>注册商</label>
-          <input id="dmReg" value="${esc(dm.registrar||'')}" placeholder="Vodien / Namecheap"></div>
-        <div class="field" style="flex:0 0 150px"><label>到期日</label>
-          <input id="dmExp" value="${esc(dm.expires||'')}" placeholder="2027-11-02"></div>
-        <div class="field" style="flex:0 0 170px"><label>归属</label>
-          <select id="dmOwner">
-            <option value="us" ${dm.owner!=='client'?'selected':''}>在我们账户（代管）</option>
-            <option value="client" ${dm.owner==='client'?'selected':''}>在客户账户</option>
-          </select></div>
-        <div class="field" style="flex:0 0 auto"><label>&nbsp;</label>
-          <label class="chk" style="margin-top:6px"><input type="checkbox" id="dmAuto" ${dm.auto_renew?'checked':''}> 自动续费</label></div>
-        <div class="field" style="flex:0 0 auto"><label>&nbsp;</label>
-          <button class="ghost" onclick="saveDomain()">保存</button></div>
-      </div></div>`;
-  box.innerHTML=dmCard+`
-    <div class="callout">把域名的 NS 改成下面两条，解析就由我们接管。<br>
-      <b style="color:var(--acc)">${esc(d.ns[0])}</b>　<b style="color:var(--acc)">${esc(d.ns[1])}</b><br>
-      当前演示端口 ${d.demo_port}（生产为 ${d.port}）</div>
-    <div class="formrow" style="margin-top:12px">
-      <div class="field" style="flex:0 0 auto"><label>&nbsp;</label>
-        <button class="ghost" onclick="checkDns('/api/dns/check')">本机解析检查</button>
-        <button class="ghost" onclick="checkDns('/api/dns/delegation')">公网委托检测</button></div>
-      <div class="field"><label>&nbsp;</label><span style="font-size:12px;color:var(--dim)">DNSSEC：未启用（演示解析器不支持签名，生产接 PowerDNS 后可开）</span></div>
-    </div>
-    <div id="dnCheck"></div>
-    <div style="font-size:12px;color:var(--dim);margin:14px 0 6px">本机参考记录（${(d.zone.records||[]).length}）；公网变更将在运营助手核验真实服务商并确认</div>
-    ${recs}
-    <div class="formrow" style="margin-top:14px">
-      <div class="field" style="flex:0 0 130px"><label>名称</label><input id="dnName" placeholder="@ 或 www"></div>
-      <div class="field" style="flex:0 0 110px"><label>类型</label>
-        <select id="dnType"><option>A</option><option>AAAA</option><option>CNAME</option>
-        <option>MX</option><option>TXT</option><option>NS</option><option>SRV</option></select></div>
-      <div class="field"><label>值</label><input id="dnValue" placeholder="101.204.233.11"></div>
-      <div class="field" style="flex:0 0 90px"><label>TTL</label><input id="dnTtl" value="300"></div>
-      <button class="ghost" onclick="addDns()">添加记录</button>
-    </div>`;
-}
-async function enableDns(){
-  const r=await fetch('/api/dns/enable',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({slug:$('#dnSlug').value})});
-  const d=await r.json();
-  $('#dnMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#dnMsg').textContent=r.ok?('已托管 '+d.domain):('失败：'+(d.error||''));
-  loadDns($('#dnSlug').value);
-}
-async function addDns(){
-  const body={slug:$('#dnSlug').value,name:$('#dnName').value||'@',type:$('#dnType').value,
-    value:$('#dnValue').value,ttl:Number($('#dnTtl').value)||300};
-  const r=await fetch('/api/dns/record',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(body)});
-  const d=await r.json();
-  $('#dnMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#dnMsg').textContent=r.ok?'变更方案已生成，等待确认':('失败：'+(d.error||''));
-  if(d.action)openAutoAction(d.action);
-}
-async function delDns(i){
-  const r=await fetch('/api/dns/delete',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({slug:$('#dnSlug').value,index:i})});
-  const d=await r.json();
-  $('#dnMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#dnMsg').textContent=r.ok?'删除方案已生成，等待确认':('失败：'+(d.error||''));
-  if(d.action)openAutoAction(d.action);
-}
-async function saveDomain(){
-  const r=await fetch('/api/domain/manage',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({slug:$('#dnSlug').value, registrar:$('#dmReg').value,
-      expires:$('#dmExp').value, owner:$('#dmOwner').value,
-      auto_renew:$('#dmAuto').checked})});
-  const d=await r.json();
-  $('#dnMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#dnMsg').textContent=r.ok?'域名信息已保存':('失败：'+(d.error||''));
-  if(r.ok) loadDns($('#dnSlug').value);
-}
-async function checkDns(ep){
-  const box=$('#dnCheck');
-  box.innerHTML='<div style="color:var(--dim);font-size:13px;margin-top:10px">检查中…（公网检测需要几秒）</div>';
-  const r=await fetch(ep||'/api/dns/check',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({slug:$('#dnSlug').value})});
-  const d=await r.json();
-  if(!r.ok){ box.innerHTML='<div class="msg bad">'+(d.error||'检查失败')+'</div>'; return; }
-  const ico={ok:'\u2713',warn:'!',fail:'\u2717'};
-  const col={ok:'var(--ok)',warn:'var(--warn)',fail:'var(--bad)'};
-  box.innerHTML='<div style="margin-top:12px">'+d.checks.map(c=>`
-    <div class="dom-row" style="padding:8px 12px"><div class="h">
-      <span style="color:${col[c.status]};min-width:16px">${ico[c.status]}</span>
-      <span class="name" style="min-width:110px">${esc(c.name)}</span>
-      <span class="hint" style="margin:0;flex:1">${esc(c.detail)}</span>
-    </div></div>`).join('')+'</div>';
-}
-function initDns(){
-  const sel=$('#dnSlug');
-  SiteContext.fill(sel);
-  if(!sel.dataset.initialized){
-    sel.dataset.initialized='1';
-    sel.onchange=()=>loadDns(sel.value);
-    $('#dnRefresh').onclick=()=>loadDns(sel.value);
-  }
-  loadDns(sel.value);
-}
-
-// ---------------- 客户 ----------------
-const SCOPE_OPTS=["建站","托管","域名代管","企业邮箱","解析托管","内容维护","技术支持"];
-function clField(id,label,val,ph){
-  return `<div class="field"><label>${label}</label><input id="${id}" value="${esc(val||'')}" placeholder="${esc(ph||'')}"></div>`;
-}
-function renderClient(c, bal){
-  $('#clBal').textContent='S$ '+(bal||0).toLocaleString('en-SG');
-  const scope=SCOPE_OPTS.map(s=>`<label class="chk" style="display:inline-flex;margin-right:14px">
-      <input type="checkbox" class="clScope" value="${s}" ${(c.scope||[]).includes(s)?'checked':''}> ${s}</label>`).join('');
-  $('#clForm').innerHTML=`
-    <div class="formrow">
-      ${clField('cContact','联系人',c.contact,'Ms Tan')}
-      ${clField('cPhone','电话 / WhatsApp',c.phone,'+65 9000 0000')}
-      ${clField('cEmail','邮箱',c.email,'a@b.sg')}
-      ${clField('cUen','UEN / 注册号',c.uen,'201912345K')}
-    </div>
-    <div class="formrow" style="margin-top:10px">
-      ${clField('cAgr','协议编号',c.agreement_no,'KF-A-2026-0001')}
-      ${clField('cAgrDate','签署日',c.agreement_date,'2026-11-02')}
-      ${clField('cStart','服务开始',c.service_start,'2026-11-02')}
-      ${clField('cEnd','服务到期',c.service_end,'2027-11-02')}
-      ${clField('cFee','年费 (SGD)',c.annual_fee,'4200')}
-      <div class="field"><label>负责人</label><select id="cOwner"></select></div>
-    </div>
-    <div class="fld" style="margin-top:12px"><label>服务范围</label><div>${scope}</div></div>
-    <div class="fld"><label>备注</label><textarea id="cNotes" style="min-height:60px">${esc(c.notes||'')}</textarea></div>
-    <button onclick="saveClient()">保存客户档案</button>`;
-  const sel=$('#cOwner');
-  const me=STATE.me||'';
-  sel.innerHTML='<option value="">未指定</option>'+((STATE.staff)||[]).map(u=>
-    `<option value="${esc(u)}" ${u===c.owner?'selected':''}>${esc(u)}${u===me?'（我）':''}</option>`).join('');
-}
-function daysBadge(d, auto){
-  if(d===null||d===undefined) return '<span style="color:var(--dim)">未记录</span>';
-  const col = d<0 ? 'var(--bad)' : d<=30 ? 'var(--warn)' : d<=60 ? 'var(--warn)' : 'var(--dim)';
-  const txt = d<0 ? ('已过期 '+(-d)+' 天') : (d+' 天');
-  return `<span style="color:${col}">${txt}</span>` + (auto?'':' <span style="color:var(--bad);font-size:11px">未开自动续费</span>');
-}
-async function loadBoard(){
-  const r=await fetch('/api/renewals'); const d=await r.json();
-  const items=d.items||[];
-  const urgent=items.filter(x=>x.domain_days!==null && x.domain_days<=60);
-  const head=`<div style="font-size:12px;color:var(--dim);margin-bottom:6px">
-      续费待办 · 共 ${items.length} 个域名，${urgent.length} 个 60 天内到期</div>`;
-  const rows=items.map(x=>{
-    const flag=(x.domain_days!==null&&x.domain_days<=30)?'box-shadow:inset 3px 0 0 var(--warn);':'';
-    return `<div class="dom-row" style="padding:8px 12px;${flag}"><div class="h">
-      <span class="name" style="min-width:120px">${esc(x.company)}</span>
-      <span class="hint" style="margin:0;flex:1">${esc(x.domain||'—')} · ${esc(x.registrar||'未登记')}</span>
-      <span style="min-width:120px;font-size:12px">域名 ${daysBadge(x.domain_days,x.auto_renew)}</span>
-      <span style="min-width:120px;font-size:12px;color:var(--dim)">服务 ${daysBadge(x.service_days,true)}</span>
-      <button onclick="SiteContext.fill($('#clSlug'),'${esc(x.slug)}');loadClient('${esc(x.slug)}');window.scrollTo(0,0)">查看</button>
-    </div></div>`;
-  }).join('');
-  $('#clBoard').innerHTML=head+(rows||'<div style="color:var(--dim);font-size:13px">还没有域名记录</div>');
-}
-async function loadClient(slug){
-  if(!slug){$('#clForm').innerHTML='<p class="hint">没有可选站点</p>';$('#clLedger').innerHTML='';$('#clBal').textContent='—';return;}
-  const [cs, lg]=await Promise.all([
-    fetch('/api/clients').then(r=>r.json()),
-    fetch('/api/ledger/'+encodeURIComponent(slug)).then(r=>r.json())]);
-  const row=(cs.items||[]).find(x=>x.slug===slug);
-  renderClient(row?row.client:{}, lg.balance||0);
-  const rows=lg.items||[];
-  $('#clLedger').innerHTML=`<div style="font-size:12px;color:var(--dim);margin-bottom:6px">收支流水（${rows.length}）</div>`
-    + (rows.length? rows.map(x=>`<div class="dom-row" style="padding:8px 12px"><div class="h">
-        <span class="name" style="min-width:76px">${esc(x.id)}</span>
-        <span style="min-width:52px;color:${x.type==='topup'?'var(--ok)':'var(--warn)'}">${x.type==='topup'?'收入':'支出'}</span>
-        <span class="hint" style="margin:0;flex:1">${esc(x.category)} · ${esc(x.note||'')}</span>
-        <span style="min-width:88px;text-align:right">S$ ${Number(x.amount).toLocaleString('en-SG')}</span>
-        <span style="color:var(--dim);font-size:11.5px;min-width:70px;text-align:right">${esc(x.by||'-')}</span>
-        <span style="color:var(--dim);font-size:11.5px;min-width:112px;text-align:right">${esc(x.ts)}</span>
-      </div></div>`).join('')
-      : '<div style="color:var(--dim);font-size:13px">还没有流水</div>')
-    + `<div class="formrow" style="margin-top:12px">
-        <div class="field" style="flex:0 0 110px"><label>类型</label>
-          <select id="lgType"><option value="topup">收入</option><option value="cost">支出</option></select></div>
-        <div class="field" style="flex:0 0 110px"><label>金额</label><input id="lgAmt" placeholder="1200"></div>
-        <div class="field" style="flex:0 0 130px"><label>类别</label>
-          <select id="lgCat"><option>服务费</option><option>域名</option><option>服务器</option><option>证书</option><option>工时</option><option>其他</option></select></div>
-        <div class="field"><label>备注</label><input id="lgNote" placeholder="首年服务费"></div>
-        <button class="ghost" onclick="addLedger()">记一笔</button>
-      </div>`;
-}
-async function saveClient(){
-  const scope=[...document.querySelectorAll('.clScope:checked')].map(x=>x.value);
-  const body={slug:$('#clSlug').value, contact:$('#cContact').value, phone:$('#cPhone').value,
-    email:$('#cEmail').value, uen:$('#cUen').value, agreement_no:$('#cAgr').value,
-    agreement_date:$('#cAgrDate').value, service_start:$('#cStart').value,
-    service_end:$('#cEnd').value, annual_fee:Number($('#cFee').value)||0,
-    notes:$('#cNotes').value, scope:scope, owner:$('#cOwner').value};
-  const r=await fetch('/api/clients/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const d=await r.json();
-  $('#clMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#clMsg').textContent=r.ok?'客户档案已保存':('失败：'+(d.error||''));
-}
-async function addLedger(){
-  const body={slug:$('#clSlug').value,type:$('#lgType').value,amount:Number($('#lgAmt').value)||0,
-    category:$('#lgCat').value,note:$('#lgNote').value};
-  const r=await fetch('/api/ledger',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const d=await r.json();
-  $('#clMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#clMsg').textContent=r.ok?'已记账':('失败：'+(d.error||''));
-  if(r.ok) loadClient($('#clSlug').value);
-}
-function initClient(){
-  loadBoard();
-  const sel=$('#clSlug');
-  SiteContext.fill(sel);
-  if(!sel.dataset.initialized){
-    sel.dataset.initialized='1';
-    sel.onchange=()=>loadClient(sel.value);
-  }
-  loadClient(sel.value);
-}
-
 // ---------------- 团队 ----------------
+let TEAM_ROWS=[],TEAM_EDIT=null,TEAM_MODAL=null;
+const teamText=(zh,en)=>AdminUI.text(zh,en);
 async function loadTeam(){
-  const [u,a]=await Promise.all([
-    fetch('/api/users').then(r=>r.json()),
-    fetch('/api/audit').then(r=>r.json())]);
-  $('#tmList').innerHTML=(u.items||[]).map(x=>`
-    <div class="dom-row" style="padding:9px 12px"><div class="h">
-      <span class="name" style="min-width:96px">${esc(x.user)}</span>
-      <span style="min-width:110px;color:var(--fg)">${esc(x.name)}</span>
-      <span style="min-width:66px;color:${x.role==='admin'?'var(--acc)':'var(--dim)'}">${x.role==='admin'?'管理员':x.role==='finance'?'财务':'运营'}</span>
-      <span class="hint" style="margin:0;flex:1">${x.active?'启用':'已停用'}${x.mfa?` · <span style="color:var(--ok)">MFA</span> 恢复码 ${x.recovery_left}`:''}${x.locked?` · <span style="color:var(--bad)">已锁定</span>`:''}</span>
-      <button onclick="userAct('${esc(x.user)}','${x.active?'disable':'enable'}')">${x.active?'停用':'启用'}</button>
-      <button onclick="userAct('${esc(x.user)}','reset')">重置密码</button>
-      ${x.mfa?`<button onclick="userAct('${esc(x.user)}','reset_mfa')">重置 MFA</button>`:''}
-      ${x.locked?`<button onclick="userAct('${esc(x.user)}','unlock')">解锁</button>`:''}
-    </div></div>`).join('') || '<div style="color:var(--dim);font-size:13px">还没有账号</div>';
-  const us=$('#auUser');
-  if(us && us.options.length<=1){
-    us.innerHTML='<option value="">全部</option>'+(u.items||[]).map(x=>`<option value="${esc(x.user)}">${esc(x.user)}</option>`).join('');
-  }
+ try{const u=await aiRequest('/api/users');TEAM_ROWS=u.items||[];renderTeam();
+ const us=$('#auUser'),old=us.value;us.innerHTML='<option value="">'+teamText('全部','All')+'</option>'+TEAM_ROWS.map(x=>`<option value="${esc(x.user)}">${esc(x.user)}</option>`).join('');us.value=old;
+ }catch(e){aiMessage('#tmMsg',e.message,true);}
+}
+function renderTeam(){
+ const q=$('#tmSearch').value.toLowerCase(),rows=TEAM_ROWS.filter(x=>[x.user,x.name,x.role].join(' ').toLowerCase().includes(q));
+ AdminUI.table('tmList',rows,[teamText('用户名','Username'),teamText('显示名','Name'),teamText('角色','Role'),teamText('状态','Status'),'MFA',teamText('操作','Actions')],x=>`<tr><td data-user-content>${esc(x.user)}</td><td data-user-content>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${x.active?teamText('启用','Active'):teamText('已停用','Disabled')}${x.locked?' · '+teamText('已锁定','Locked'):''}</td><td>${x.mfa?teamText('已开启','Enabled'):teamText('未开启','Not enabled')}</td><td><div class="domain-row-actions"><button type="button" data-team="detail" data-user="${esc(x.user)}">${teamText('详情','Details')}</button><button type="button" data-team="edit" data-user="${esc(x.user)}">${teamText('编辑','Edit')}</button><button type="button" data-team="delete" data-user="${esc(x.user)}" ${x.user===STATE.me?'disabled':''}>${teamText('删除','Delete')}</button></div></td></tr>`);
+ $('#tmList').onclick=e=>{const b=e.target.closest('[data-team]');if(!b||b.disabled)return;const x=TEAM_ROWS.find(r=>r.user===b.dataset.user);if(b.dataset.team==='edit')editTeam(x);else if(b.dataset.team==='detail')teamDetail(x);else userAct(x.user,'delete');};
+}
+function editTeam(x=null){
+ if(!TEAM_MODAL){TEAM_MODAL=AdminUI.form('tmForm','',()=>{TEAM_EDIT=null;$('#tmForm').reset();});$('#tmForm').onsubmit=saveTeam;}
+ TEAM_EDIT=x;$('#tmForm').reset();$('#tmUser').value=x?.user||'';$('#tmUser').readOnly=!!x;$('#tmName').value=x?.name||'';$('#tmRole').value=x?.role||'ops';$('#tmActive').checked=x?x.active:true;$('#tmActive').disabled=!x;$('#tmEditMsg').textContent='';TEAM_MODAL.open();
+}
+function teamDetail(x){
+ const actions=[['reset',teamText('重置密码','Reset password')],...(x.mfa?[['reset_mfa',teamText('重置 MFA','Reset MFA')]]:[]),...(x.locked?[['unlock',teamText('解锁','Unlock')]]:[])];
+ AdminUI.detail(x.name+' / '+x.user,`<dl><dt>${teamText('角色','Role')}</dt><dd>${esc(x.role)}</dd><dt>${teamText('创建日期','Created')}</dt><dd>${esc(x.created)}</dd><dt>${teamText('剩余恢复码','Recovery codes remaining')}</dt><dd>${Number(x.recovery_left)}</dd></dl><div class="domain-row-actions">${actions.map(([a,label])=>`<button type="button" data-team-action="${a}">${label}</button>`).join('')}</div>`);
+ $('#adminDetailDialog').querySelectorAll('[data-team-action]').forEach(b=>b.onclick=()=>userAct(x.user,b.dataset.teamAction));
+}
+function teamPassword(password){
+ let d=$('#tmPasswordDialog');if(!d){d=document.createElement('dialog');d.id='tmPasswordDialog';d.className='domain-dialog';d.setAttribute('aria-labelledby','tmPasswordTitle');document.body.append(d);d.addEventListener('close',()=>{d.replaceChildren();});}
+ d.innerHTML=`<h3 id="tmPasswordTitle">${teamText('临时密码（关闭后清除）','Temporary password (cleared on close)')}</h3><label for="tmPassword">${teamText('请保存到密码管理器','Save in a password manager')}</label><input id="tmPassword" readonly autocomplete="off"><button type="button">${teamText('关闭','Close')}</button>`;$('#tmPassword').value=password;d.querySelector('button').onclick=()=>d.close();d.showModal();setTimeout(()=>{if(d.open)d.close();},120000);
+}
+async function saveTeam(e){
+ e.preventDefault();const button=e.submitter;button.disabled=true;
+ try{const body={action:TEAM_EDIT?'update':'add',user:$('#tmUser').value,name:$('#tmName').value,role:$('#tmRole').value,active:$('#tmActive').checked,...(TEAM_EDIT?{version:TEAM_EDIT.version}:{})};const d=await aiRequest('/api/users',body);TEAM_MODAL.close(true);await loadTeam();if(d.password)teamPassword(d.password);}
+ catch(err){aiMessage('#tmEditMsg',err.message,true);}finally{button.disabled=false;}
 }
 async function changePw(){
   const r=await fetch('/api/password',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -3509,22 +3262,11 @@ async function mfaAct(act){
   }
   loadMfa();
 }
-async function addUser(){
-  const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'add',user:$('#tmUser').value,name:$('#tmName').value,role:$('#tmRole').value})});
-  const d=await r.json();
-  $('#tmMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#tmMsg').textContent=r.ok?('已创建 '+d.user+'，初始密码：'+d.password):('失败：'+(d.error||''));
-  if(r.ok){ $('#tmUser').value=''; $('#tmName').value=''; loadTeam(); }
-}
 async function userAct(user,act){
-  if(act==='disable' && !confirm('停用 '+user+' ？')) return;
-  const r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:act,user:user})});
-  const d=await r.json();
-  $('#tmMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#tmMsg').textContent=r.ok?(act==='reset'?('新密码：'+d.password):'已更新'):('失败：'+(d.error||''));
-  loadTeam();
+ const x=TEAM_ROWS.find(x=>x.user===user);if(!x)return;
+ if(!confirm(teamText('确认执行此账号操作：','Confirm account action: ')+act+' / '+user+'?'))return;
+ try{const d=await aiRequest('/api/users',{action:act,user,version:x.version,confirmed:true});$('#adminDetailDialog')?.close();await loadTeam();loadSecurity();if(d.password)teamPassword(d.password);else aiMessage('#tmMsg',teamText('已更新','Updated'));}
+ catch(e){aiMessage('#tmMsg',e.message,true);}
 }
 function initTeam(){ loadMfa(); if(STATE.role==='admin'){ loadTeam(); loadSecurity(); loadRoles(); loadAudit(); } }
 
@@ -3706,81 +3448,11 @@ function initShare(){
   loadShares(sel.value);
 }
 
-// ---------------- 媒体 ----------------
-let MSLUG='';
 function humanSize(n){ return n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB'; }
-async function loadGrid(slug){
-  if(!slug){$('#mGrid').innerHTML='<p class="hint">没有可选站点</p>';return;}
-  MSLUG=slug;
-  const r=await fetch('/api/media/'+encodeURIComponent(slug));
-  const d=await r.json();
-  const items=d.items||[];
-  const g=$('#mGrid');
-  if(!items.length){
-    g.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px 12px">'
-      +'<div style="color:var(--dim);font-size:13px;margin-bottom:10px">还没有图片</div>'
-      +'<button onclick="document.querySelector(\'#mFile\').click()">上传第一张图片</button></div>';
-    return; }
-  g.innerHTML=items.map(m=>`
-    <div class="tile">
-      <img src="${m.url}" alt="${esc(m.name)}" loading="lazy">
-      <div class="meta"><b>${esc(m.name)}</b>
-        ${humanSize(m.size)} · ${esc(m.mtime)}
-        ${m.used_by&&m.used_by.length?`<div><span class="used">用于 ${esc(m.used_by.join('、'))}</span></div>`:''}
-      </div>
-      <div class="ops">
-        <button onclick="copyUrl('${m.url}')">复制地址</button>
-        <button class="del" onclick="delMedia('${esc(m.name)}')">删除</button>
-      </div>
-    </div>`).join('');
-  $('#mMsg').textContent='';
-}
-function copyUrl(u){
-  navigator.clipboard.writeText(location.origin+u).then(()=>{
-    $('#mMsg').className='msg ok'; $('#mMsg').textContent='已复制：'+u;
-  }).catch(()=>{ $('#mMsg').className='msg bad'; $('#mMsg').textContent='复制失败，请手动选择'; });
-}
-async function delMedia(name, force){
-  if(!force && !confirm('删除 '+name+' ？此操作不可撤销')) return;
-  const r=await fetch('/api/media/delete',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({slug:MSLUG,name:name,force:!!force})});
-  const d=await r.json();
-  if(r.status===409){
-    if(confirm(d.error+'\n\n仍然删除？删掉后页面会出现裂图。')) return delMedia(name,true);
-    return;
-  }
-  $('#mMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#mMsg').textContent=r.ok?('已删除 '+name):('失败：'+(d.error||''));
-  loadGrid(MSLUG);
-}
-function initMedia(){
-  const sel=$('#mSlug');
-  SiteContext.fill(sel);
-  if(!sel.dataset.initialized){
-    sel.dataset.initialized='1';
-    sel.onchange=()=>loadGrid(sel.value);
-    $('#mUpload').onclick=()=>$('#mFile').click();
-    $('#mFile').onchange=async()=>{
-      const f=$('#mFile').files[0]; if(!f) return;
-      if(f.size>8*1024*1024){ alert('图片超过 8MB，请先压缩'); return; }
-      $('#mMsg').className='msg'; $('#mMsg').textContent='上传中…';
-      const fd=new FormData(); fd.append('file',f);
-      const r=await fetch('/api/upload?slug='+encodeURIComponent(sel.value),{method:'POST',body:fd});
-      const d=await r.json();
-      $('#mMsg').className='msg '+(r.ok?'ok':'bad');
-      if(r.ok){
-        const pct=d.original?Math.round(100-(d.size/d.original)*100):0;
-        $('#mMsg').textContent=`已上传 ${d.name}　${d.original?humanSize(d.original)+' → '+humanSize(d.size)+'（省 '+pct+'%）':''}`;
-      } else $('#mMsg').textContent='失败：'+(d.error||'');
-      $('#mFile').value='';
-      loadGrid(sel.value);
-    };
-  }
-  loadGrid(sel.value);
-}
 
 // ---------------- 结构 ----------------
 let LSPEC={pages:[]}, LSLUG='', LIDX=-1, LW=null, LSCHEMAS={}, LMEDIA=[];
+let PAGE_VERSIONS={},PAGE_DRAFT_VERSION="",PAGE_LIVE=[];
 let EDITOR_BUSY=false, LOCAL_DIRTY=new Set(), JSON_DIRTY=false, LPAGE='';
 
 function curPage(){ return (LSPEC.pages||[]).find(p=>p.slug===(LPAGE||$('#lPage').value)); }
@@ -3817,15 +3489,15 @@ window.addEventListener('beforeunload',e=>{if(LOCAL_DIRTY.size||JSON_DIRTY||EDIT
 function editorBusy(busy){
  EDITOR_BUSY=busy;
  for(const id of ['lList','lForm'])$('#'+id).inert=busy;
- for(const id of ['lSlug','lPage','lType','lAdd','lJson','lApplyJson','lSave','lPreview','lDiff','lPublish','lPublishAll'])$('#'+id).disabled=busy;
+ for(const id of ['pageEditTitle','pageNew','pageRefresh','lSlug','lPage','lType','lAdd','lJson','lApplyJson','lSave','lPreview','lDiff','lPublish','lPublishAll'])$('#'+id).disabled=busy;
 }
 async function saveDrafts(){
  if(!commitJson())throw Error('请先修正 JSON');
  for(const slug of [...LOCAL_DIRTY]){
   const page=LSPEC.pages.find(p=>p.slug===slug);
-  const r=await fetch('/api/spec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:LSLUG,page:slug,sections:page.sections})});
+  const r=await fetch('/api/spec',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:LSLUG,page:slug,sections:page.sections,title:page.title,version:PAGE_VERSIONS[slug]})});
   const d=await r.json();if(!r.ok)throw Error(d.error||'保存失败，请重试');
-  LOCAL_DIRTY.delete(slug);LSPEC.dirty=true;paintDirty();
+  if(d.version)PAGE_VERSIONS[slug]=d.version;if(d.draft_version)PAGE_DRAFT_VERSION=d.draft_version;LOCAL_DIRTY.delete(slug);LSPEC.dirty=true;paintDirty();
  }
 }
 async function editorAction(action){
@@ -3992,6 +3664,7 @@ function renderForm(){
   syncJson();
 }
 function renderSecList(){
+  const current=curPage();if($('#pageEditTitle'))$('#pageEditTitle').value=current?.title||'';
   const page=curPage(); const box=$('#lList');
   if(!page){ box.innerHTML=''; return; }
   box.innerHTML=page.sections.map((s,i)=>
@@ -4026,6 +3699,7 @@ function paintDirty(){
   $('#editorGlobalState').textContent=LOCAL_DIRTY.size||JSON_DIRTY ? '页面编辑有未保存内容' : '';
   el.style.color = LOCAL_DIRTY.size||JSON_DIRTY||LSPEC.dirty ? 'var(--warn)' : 'var(--ok)';
   el.style.borderColor = LOCAL_DIRTY.size||JSON_DIRTY||LSPEC.dirty ? 'var(--warn)' : 'var(--line)';
+  window.renderPageInventory?.();
 }
 async function loadSpec(slug, force=false){
  if(EDITOR_BUSY)return;
@@ -4037,7 +3711,8 @@ async function loadSpec(slug, force=false){
   const r=await fetch('/api/spec/'+encodeURIComponent(slug));
   if(!r.ok)throw Error('读取草稿失败，请重试');
   const d=await r.json();
-  LOCAL_DIRTY.clear();JSON_DIRTY=false;LSPEC=d.spec;LSPEC.dirty=d.dirty;LSLUG=slug;LIDX=-1;LSCHEMAS=d.schemas||{};
+  $('#lMsg').textContent='';$('#lMsg').className='msg';$('#pageMsg').textContent='';$('#lDiffBox').classList.add('hidden');
+  PAGE_VERSIONS=d.versions||{};PAGE_DRAFT_VERSION=d.draft_version||"";PAGE_LIVE=d.live?.pages||[];LOCAL_DIRTY.clear();JSON_DIRTY=false;LSPEC=d.spec;LSPEC.dirty=d.dirty;LSLUG=slug;LIDX=-1;LSCHEMAS=d.schemas||{};
   await loadMedia(slug);
   $('#lPage').innerHTML=(LSPEC.pages||[]).map(p=>`<option value="${esc(p.slug)}">${esc(p.title)}</option>`).join('');
   LPAGE=$('#lPage').value;LW=null;
@@ -4084,6 +3759,7 @@ async function publish(slug, page){
   await loadPublications().catch(e=>aiMessage('#publicationMsg',e.message,true));
   LSPEC.dirty=r.ok?d.dirty:true;
   if(!r.ok)throw Error('发布失败：'+(d.error||'请重试')+'；草稿已保留，请查看改动后重试。');
+  const refreshed=await aiRequest('/api/spec/'+encodeURIComponent(slug));PAGE_LIVE=refreshed.live?.pages||[];
   $('#lMsg').className='msg ok';$('#lMsg').textContent='已发布 '+d.pages+' 个页面';$('#lDiffBox').classList.add('hidden');
  });
 }
@@ -4122,76 +3798,6 @@ async function initLayout(preferredSlug){
   }
   if(preferredSlug) sel.value=preferredSlug;
   await loadSpec(sel.value,!!preferredSlug);
-}
-
-// ---------------- 设计 ----------------
-let DPRESETS={}, DTOK={};
-function previewDesign(){
-  const p=DTOK.palette||{}, s=DTOK.shape||{}, ty=DTOK.type||{};
-  const head={sans:'-apple-system,Segoe UI,Roboto,sans-serif',serif:'Georgia,serif',rounded:'ui-rounded,Quicksand,sans-serif'}[ty.heading||'sans'];
-  $('#pvHero').style.background=`linear-gradient(135deg,${p.primary},${p.primaryDark||p.primary})`;
-  $('#pvHero').style.borderRadius=s.radius||'16px';
-  $('#pvH1');
-  $('#pv').querySelector('.pv-h1').style.fontFamily=head;
-  const btn=$('#pvBtn'); btn.style.borderRadius=s.button||'999px'; btn.style.color=p.primary;
-  const card=$('#pvCard'); card.style.borderRadius=s.radius||'16px'; card.style.borderTop='4px solid '+p.primary;
-  $('#pv').style.background=p.bg||'#f7f9f7';
-  $('#rVal').textContent=(parseInt(s.radius||'16',10))+'px';
-  $('#pvMeta').textContent=`${p.primary} · 圆角 ${s.radius} · ${ty.heading}`;
-}
-function fillDesign(t){
-  DTOK=JSON.parse(JSON.stringify(t||{}));
-  const p=DTOK.palette||{}, s=DTOK.shape||{}, ty=DTOK.type||{};
-  $('#cPrimary').value=p.primary||'#0f5132';
-  $('#cAccent').value=p.accent||'#d4a04a';
-  $('#cBg').value=p.bg||'#f7f9f7';
-  $('#rRadius').value=parseInt(s.radius||'16',10);
-  $('#sButton').value=s.button||'999px';
-  $('#sHead').value=ty.heading||'sans';
-  previewDesign();
-}
-function syncTokens(){
-  DTOK.palette=DTOK.palette||{}; DTOK.shape=DTOK.shape||{}; DTOK.type=DTOK.type||{};
-  DTOK.palette.primary=$('#cPrimary').value;
-  DTOK.palette.accent=$('#cAccent').value;
-  DTOK.palette.bg=$('#cBg').value;
-  DTOK.shape.radius=$('#rRadius').value+'px';
-  DTOK.shape.button=$('#sButton').value;
-  DTOK.type.heading=$('#sHead').value;
-  previewDesign();
-}
-async function fetchDesign(slug){
-  if(!slug) return;
-  const r=await fetch('/api/design/'+encodeURIComponent(slug));
-  if(!r.ok){$('#dmsg').textContent='读取失败';return;}
-  const d=await r.json();
-  DPRESETS=d.presets||{};
-  const ps=$('#dPreset');
-  const labels={nursery:'童趣教育',robotics:'精密科技',wellness:'草木静雅'};
-  ps.innerHTML='<option value="">自定义</option>'+Object.keys(DPRESETS).map(k=>`<option value="${esc(k)}">${esc(labels[k]||k)}</option>`).join('');
-  fillDesign(d.tokens||{});
-  ps.value=d.tokens?.preset||'';
-}
-async function initDesign(){
-  const sel=$('#dSlug');
-  SiteContext.fill(sel);
-  if(!sel.dataset.initialized){
-    sel.dataset.initialized='1';
-    sel.onchange=()=>fetchDesign(sel.value);
-    $('#dPreset').onchange=e=>{const k=e.target.value; if(k&&DPRESETS[k]) fillDesign(DPRESETS[k]);};
-    ['cPrimary','cAccent','cBg','sButton','sHead'].forEach(id=>$('#'+id).oninput=syncTokens);
-    $('#rRadius').oninput=syncTokens;
-    $('#dSave').onclick=async()=>{
-      syncTokens();
-      if($('#dPreset').value) DTOK.preset=$('#dPreset').value;
-      const r=await fetch('/api/design',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(Object.assign({slug:sel.value},DTOK))});
-      const d=await r.json();
-      $('#dmsg').className='msg '+(r.ok?'ok':'bad');
-      $('#dmsg').textContent=r.ok?'已应用到站点，刷新页面即可看到':'失败：'+(d.error||'');
-    };
-  }
-  await fetchDesign(sel.value);
 }
 
 let fieldSequence=0;
@@ -4239,7 +3845,7 @@ let REFRESH_RUNNING=false;
 async function refreshConsole(force=false){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;$('#siteHealthRefresh').disabled=true;try{await load(force);}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;$('#siteHealthRefresh').disabled=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/admin-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/billing.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/clients-ui.js"></script><script src="/page-ui.js"></script><script src="/design-ui.js"></script><script src="/media-ui.js"></script><script src="/dns-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/billing.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script></body></html>"""
 
 
 _AI = None
@@ -4495,9 +4101,9 @@ def publication_adapter(slug, pages, design=False, navigation=False):
     return WordPressSnapshot(SITES / slug, pages, design=design, navigation=navigation)
 
 
-def publication_snapshot(slug, adapter):
+def publication_snapshot(slug, adapter, include_draft=False):
     files = {}
-    for name in ('site-spec.json', 'design.json'):
+    for name in ('site-spec.json', 'design.json') + (('site-draft.json',) if include_draft else ()):
         path = SITES / slug / name
         files[name] = json.loads(path.read_text()) if path.exists() else None
     return {'wordpress': adapter.capture(), 'files': files}
@@ -4540,15 +4146,16 @@ def restore_publication(body, user):
         if ai_store().busy(slug):
             raise kf_ai.AIError('建站任务正在运行，请完成后再恢复')
         record = journal.get(body.get('id'))
+        include_draft = 'site-draft.json' in record['before']['files']
         old_wp = record['before']['wordpress']
         adapter = publication_adapter(slug, record['targets'], 'design' in old_wp, 'navigation' in old_wp)
         created = {r['stage']: r['created_id'] for r in record['results'] if r.get('created_id')}
         def capture():
-            return publication_snapshot(slug, adapter)
+            return publication_snapshot(slug, adapter, include_draft)
         def apply(snapshot):
             expected = record['recovery_after'] if record['state'] == 'restore_failed' else record['after']
             adapter.restore(snapshot['wordpress'], expected['wordpress'], created)
-            for name in ('site-spec.json', 'design.json'):
+            for name in ('site-spec.json', 'design.json') + (('site-draft.json',) if include_draft else ()):
                 value = snapshot['files'][name]
                 path = SITES / slug / name
                 if value is None:
@@ -5042,6 +4649,11 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._send(400, {"error": "请求必须是 JSON 对象"})
         try:
+            if path == "/api/ai/assist":
+                if self.user_role not in ("admin", "ops") or (body.get("scope") == "prompts" and self.user_role != "admin"):
+                    return self._send(403, {"error": "Permission denied"})
+                profile, key = ai_store().resolve(body.get("profile_id"))
+                return self._send(200, {"text": kf_ai.assist(profile, key, body)})
             if path == "/api/ai/styles/preview":
                 return self._send(200, {"html": style_preview_html(body), "tokens": kf_styles.normalize_tokens(body.get("tokens", {})), "recipe": kf_styles.normalize_recipe(body)})
             if path == '/api/ai/styles/preferences':
@@ -5123,7 +4735,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path == "/api/mcp/servers":
             if self.user_role != "admin": return self._send(403, {"error":"仅管理员可管理 MCP"})
@@ -5171,6 +4783,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "can_pay": can_write(self.user_role, "/api/invoice/pay"),
                                     "can_adjust_invoice": can_write(self.user_role, "/api/invoice/adjust"),
                                     "can_renew": can_write(self.user_role, "/api/renew"),
+                                    "can_manage_dns": can_write(self.user_role, "/api/dns/record") and can_write(self.user_role, "/api/automation/prepare"),
                                     "plans": plans(), "settings": pub,
                                     "industries": sorted(INDUSTRIES.items()),
                                     "free_port": free_port()})
@@ -5272,12 +4885,14 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/clients":
             items = []
+            records = clients()
             for d in sorted(SITES.iterdir()):
                 if not d.is_dir():
                     continue
-                c0 = client_of(d.name)
+                c0 = client_of(d.name, records)
                 _, bal = ledger_of(d.name)
-                items.append({"slug": d.name, "client": c0, "balance": bal})
+                items.append({"slug": d.name, "client": c0, "balance": bal, "registered": d.name in records,
+                              "version": kf_design_profiles.fingerprint(records.get(d.name))})
             return self._send(200, {"items": items})
 
         m = re.match(r"^/api/ledger/([a-z0-9-]+)$", path)
@@ -5339,7 +4954,7 @@ class Handler(BaseHTTPRequestHandler):
             users = load_users()
             items = [{"user": k, "name": v.get("name", k), "role": v.get("role", "ops"),
                       "active": bool(v.get("active")), "created": v.get("created", ""),
-                      "mfa": bool(v.get("mfa_secret")),
+                      "mfa": bool(v.get("mfa_secret")), "version": user_version(v),
                       "locked": locked_for(k) > 0,
                       "recovery_left": len(v.get("recovery") or [])}
                      for k, v in sorted(users.items())]
@@ -5424,15 +5039,21 @@ class Handler(BaseHTTPRequestHandler):
             slug = m.group(1)
             if not (SITES / slug).exists():
                 return self._send(404, {"error": "站点不存在"})
-            return self._send(200, {"spec": read_draft(slug), "live": read_spec(slug),
-                                    "dirty": is_dirty(slug),
+            draft, live = read_draft(slug), read_spec(slug)
+            return self._send(200, {"spec": draft, "live": live,
+                                    "dirty": draft != live,
+                                    "draft_version": kf_design_profiles.fingerprint(draft),
+                                    "versions": {p["slug"]: kf_design_profiles.fingerprint(p) for p in live.get("pages", []) + draft.get("pages", [])},
                                     "types": block_types(), "schemas": schemas()})
+        if path == "/api/design/profiles":
+            return self._send(200, kf_design_profiles.DesignProfiles(BASE, presets()).public())
         m = re.match(r"^/api/design/([a-z0-9-]+)$", path)
         if m:
             slug = m.group(1)
             if not (SITES / slug).exists():
                 return self._send(404, {"error": "站点不存在"})
-            return self._send(200, {"tokens": site_design(slug), "presets": presets()})
+            tokens = site_design(slug)
+            return self._send(200, {"tokens": tokens, "presets": presets(), "version": kf_design_profiles.fingerprint(tokens)})
         m = re.match(r"^/api/site/([a-z0-9-]+)/handover\.pdf$", path)
         if m:
             slug = m.group(1)
@@ -5458,7 +5079,7 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------ POST
     def do_POST(self):
         raw_path = self.path.split("?")[0]
-        limit = (MAX_UPLOAD + 65536 if raw_path == "/api/upload" else
+        limit = (MAX_UPLOAD + 65536 if raw_path in ("/api/upload", "/api/media/upload") else
                  8192 if raw_path in ("/login", "/api/wordpress/callback") else
                  1024 * 1024 if raw_path == "/api/spec" else 65536)
         try:
@@ -5488,15 +5109,15 @@ class Handler(BaseHTTPRequestHandler):
             sid = (cookie_value(self.headers.get("Cookie"), "kf_sid") or "").split(".")[0]
             SESSIONS.pop(sid, None); save_sessions()
             return self._send(200, {"ok": True}, extra={"Set-Cookie": "kf_sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax" + ("; Secure" if self._is_secure() else "")})
-        if path != "/api/upload" and self.headers.get_content_type() != "application/json":
+        if path not in ("/api/upload", "/api/media/upload") and self.headers.get_content_type() != "application/json":
             return self._send(415, {"error": "请使用 JSON 请求"})
-        is_prompt_preview = path in ("/api/ai/prompts/preview", "/api/ai/styles/analyze", "/api/ai/styles/preview", "/api/ai/styles/preferences") and self.user_role in ("admin", "ops")
+        is_prompt_preview = path in ("/api/ai/assist", "/api/ai/prompts/preview", "/api/ai/styles/analyze", "/api/ai/styles/preview", "/api/ai/styles/preferences") and self.user_role in ("admin", "ops")
         if not is_prompt_preview and not can_write(getattr(self, "user_role", "ops"), path):
             audit(getattr(self, "user", "-"), "denied", path)
             return self._send(403, {"error": "当前角色无权执行此操作"})
         audit(getattr(self, "user", "-"), "POST " + path, "")
 
-        if path == "/api/upload":
+        if path in ("/api/upload", "/api/media/upload"):
             return self._upload()
 
         if path.startswith(("/api/ai/", "/api/domain/accounts", "/api/mcp/", "/api/automation/")):
@@ -5611,30 +5232,51 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "domain": data})
         if path == "/api/clients/save":
             slug = str(body.get("slug", "")).strip().lower()
-            if not SLUG_RE.match(slug) or not (SITES / slug).exists():
-                return self._send(400, {"error": "站点不存在"})
-            data = clients()
-            cur = client_of(slug)
-            for k in ("contact", "phone", "email", "uen", "address", "agreement_no",
-                      "agreement_date", "service_start", "service_end", "notes", "owner"):
-                if k in body:
-                    cur[k] = str(body[k])[:120]
-            for k in ("agreement_date", "service_start", "service_end"):
-                v = cur.get(k) or ""
-                if v and not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
-                    return self._send(400, {"error": "%s 格式应为 YYYY-MM-DD" % k})
-            if "scope" in body and isinstance(body["scope"], list):
-                cur["scope"] = [str(x)[:30] for x in body["scope"]][:12]
-            try:
-                cur["annual_fee"] = max(0, float(body.get("annual_fee", cur.get("annual_fee", 0))))
-            except Exception:
-                pass
-            before = client_of(slug)
-            data[slug] = cur
-            _write(CLIENTS_F, data)
-            audit(getattr(self, "user", "-"), "client_save", slug,
-                  diff_summary(before, cur))
-            return self._send(200, {"ok": True, "client": cur})
+            if not SLUG_RE.fullmatch(slug) or not (SITES / slug / "meta.json").is_file():
+                return self._send(400, {"error": "Site does not exist"})
+            with _file_lock:
+                data = clients()
+                version = kf_design_profiles.fingerprint(data.get(slug))
+                action = body.get("action", "save")
+                if ("version" in body and body["version"] != version) or (action == "create" and slug in data):
+                    return self._send(409, {"error": "Client changed; refresh before editing"})
+                if action == "delete":
+                    if slug not in data:
+                        return self._send(404, {"error": "Client profile does not exist"})
+                    if body.get("version") != version or body.get("confirmed") is not True:
+                        return self._send(409, {"error": "Review and confirm the current client profile"})
+                    del data[slug]
+                    kf_ai.atomic_json(CLIENTS_F, data)
+                    audit(self.user, "client_delete", slug)
+                    return self._send(200, {"ok": True})
+                if action not in ("save", "create"):
+                    return self._send(400, {"error": "Unknown client action"})
+                before = client_of(slug)
+                cur = dict(before)
+                try:
+                    for key in ("company", "contact", "phone", "email", "uen", "address", "agreement_no", "notes", "owner"):
+                        if key in body:
+                            cur[key] = kf_ai.text(body[key], key, 2000 if key == "notes" else 500 if key == "address" else 120, key == "company")
+                    for key in ("agreement_date", "service_start", "service_end"):
+                        cur[key] = kf_billing.due_date(body.get(key, cur.get(key, "")))
+                    if cur["service_start"] and cur["service_end"] and cur["service_end"] < cur["service_start"]:
+                        raise kf_ai.AIError("Service end must not precede service start")
+                    if cur["email"] and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", cur["email"]):
+                        raise kf_ai.AIError("Invalid email address")
+                    if cur["owner"] and cur["owner"] != before.get("owner") and cur["owner"] not in load_users():
+                        raise kf_ai.AIError("Choose an existing owner")
+                    if "scope" in body:
+                        if not isinstance(body["scope"], list) or len(body["scope"]) > 12:
+                            raise kf_ai.AIError("Invalid service scope")
+                        cur["scope"] = list(dict.fromkeys(kf_ai.text(x, "Service", 30, True) for x in body["scope"]))
+                    cur["annual_fee"] = kf_billing.money(body.get("annual_fee", cur.get("annual_fee", 0)))
+                except kf_ai.AIError as exc:
+                    return self._send(400, {"error": str(exc)})
+                import uuid
+                data[slug] = dict(cur, _version=uuid.uuid4().hex)
+                kf_ai.atomic_json(CLIENTS_F, data)
+                audit(self.user, "client_save", slug, diff_summary(before, cur))
+                return self._send(200, {"ok": True, "client": cur, "version": kf_design_profiles.fingerprint(data[slug])})
 
         if path == "/api/ledger":
             slug = str(body.get("slug", "")).strip().lower()
@@ -5729,10 +5371,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(500, {'error': '恢复未完成，请核实站点；快照已保留'})
         if path == "/api/publish":
             return self._publish(body)
-        if path == "/api/media/delete":
-            return self._media_delete(body)
+        if path in ("/api/media/delete", "/api/media/update"):
+            with _file_lock:
+                return self._media_update(body) if path.endswith("update") else self._media_delete(body)
+        if path == "/api/spec/page":
+            return self._page_change(body)
         if path == "/api/spec":
             return self._spec_save(body)
+        if path == "/api/design/profiles":
+            try:
+                result = kf_design_profiles.DesignProfiles(BASE, presets()).change(body)
+                audit(self.user, "design_profile", result["id"], str(body.get("action", "save")))
+                return self._send(200, {"item": result})
+            except kf_design_profiles.DesignConflict as exc:
+                return self._send(409, {"error": str(exc)})
+            except kf_ai.AIError as exc:
+                return self._send(400, {"error": str(exc)})
         if path == "/api/design":
             return self._design_save(body)
         if path == "/api/plan/save":
@@ -5824,6 +5478,28 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             return self._send(503, {'error': 'Payment is incomplete; retry this invoice to resume safely'})
 
+    def _media_update(self, body):
+        slug = str(body.get("slug", "")).strip().lower()
+        if not SLUG_RE.fullmatch(slug) or not (SITES / slug).is_dir():
+            return self._send(400, {"error": "Site does not exist"})
+        item = next((x for x in media_list(slug) if x["name"] == body.get("name")), None)
+        if not item:
+            return self._send(404, {"error": "Image does not exist"})
+        if body.get("version") != item["version"]:
+            return self._send(409, {"error": "Image changed; refresh before editing"})
+        fields = {}
+        for key, limit in (("title", 160), ("alt", 300), ("caption", 2000)):
+            value = body.get(key, "")
+            if not isinstance(value, str) or len(value) > limit:
+                return self._send(400, {"error": "Invalid image metadata"})
+            fields[key] = value.strip()
+        path = SITES / slug / "media-metadata.json"
+        metadata = _read(path, {})
+        metadata[item["name"]] = fields
+        kf_ai.atomic_json(path, metadata)
+        audit(self.user, "media_update", slug, item["name"])
+        return self._send(200, {"item": next(x for x in media_list(slug) if x["name"] == item["name"])})
+
     def _media_delete(self, body):
         slug = str(body.get("slug", "")).strip().lower()
         name = str(body.get("name", "")).strip()
@@ -5834,12 +5510,17 @@ class Handler(BaseHTTPRequestHandler):
         p = SITES / slug / "html" / MEDIA_DIR / name
         if not p.is_file():
             return self._send(404, {"error": "文件不存在"})
-        used = [i["used_by"] for i in media_list(slug) if i["name"] == name]
+        item = next((x for x in media_list(slug) if x["name"] == name), None)
+        if not item:
+            return self._send(404, {"error": "Image does not exist"})
+        if "version" in body and body["version"] != item["version"]:
+            return self._send(409, {"error": "Image changed; refresh before deleting"})
+        used = [item["used_by"]]
         if used and used[0] and not body.get("force"):
             return self._send(409, {"error": "该图片仍在页面中使用：" + "、".join(used[0]),
                                     "used_by": used[0]})
         removed = []
-        targets = [p] + [q for q in p.parent.glob(p.stem + "-*" + p.suffix)]
+        targets = [p] + media_variants(p)
         for q in targets:
             try:
                 q.unlink()
@@ -5847,6 +5528,12 @@ class Handler(BaseHTTPRequestHandler):
             except OSError as e:
                 if q is p:
                     return self._send(500, {"error": str(e)})
+        metadata_path = SITES / slug / "media-metadata.json"
+        metadata = _read(metadata_path, {})
+        if name in metadata:
+            del metadata[name]
+            kf_ai.atomic_json(metadata_path, metadata)
+        audit(self.user, "media_delete", slug, name)
         return self._send(200, {"ok": True, "deleted": name})
 
     def _portal_get(self, path):
@@ -6365,7 +6052,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "只有管理员可以管理账号"})
         act = str(body.get("action", "add"))
         uname = re.sub(r"[^a-z0-9_.-]", "", str(body.get("user", "")).lower())[:24]
+        if uname != str(body.get("user", "")) or not uname:
+            return self._send(400, {"error": "用户名须为 1–24 位小写字母、数字或 _. -"})
         users = load_users()
+        if act in ("add", "update"):
+            if act == "update" and not all(k in body for k in ("name", "role", "active")):
+                return self._send(400, {"error": "请填写显示名、角色和账号状态"})
+            if body.get("role", "ops") not in ("admin", "finance", "ops"):
+                return self._send(400, {"error": "无效角色"})
+            if not isinstance(body.get("name", uname), str) or not 1 <= len(body.get("name", uname).strip()) <= 30:
+                return self._send(400, {"error": "显示名须为 1–30 个字符"})
         if act == "add":
             if not uname or uname in users:
                 return self._send(400, {"error": "用户名已存在或为空"})
@@ -6376,12 +6072,35 @@ class Handler(BaseHTTPRequestHandler):
                             "role": ("admin" if body.get("role") == "admin"
                                      else "finance" if body.get("role") == "finance" else "ops"),
                             "salt": salt, "hash": pin_hash(pw, salt), "active": True,
-                            "created": datetime.now(SGT).strftime("%Y-%m-%d")}
+                            "created": datetime.now(SGT).strftime("%Y-%m-%d"), "_version": _s.token_hex(16)}
             _write(USERS_F, users)
+            audit(getattr(self, "user", "-"), "user_add", uname)
             return self._send(200, {"ok": True, "user": uname, "password": pw})
         if uname not in users:
             return self._send(404, {"error": "用户不存在"})
-        if act == "disable":
+        if (act in ("update", "delete") or "version" in body) and body.get("version") != user_version(users[uname]):
+            return self._send(409, {"error": "账号已变化，请刷新后重试"})
+        removing_admin = act in ("delete", "disable") or (act == "update" and (body.get("role") != "admin" or not body.get("active", True)))
+        if removing_admin and users[uname].get("role") == "admin" and users[uname].get("active"):
+            if not any(k != uname and v.get("role") == "admin" and v.get("active") for k, v in users.items()):
+                return self._send(400, {"error": "必须保留至少一个启用的管理员"})
+        if uname == getattr(self, "user", "") and removing_admin:
+            return self._send(400, {"error": "不能删除、停用或降级当前账号"})
+        if act == "update":
+            if type(body.get("active")) is not bool:
+                return self._send(400, {"error": "无效账号状态"})
+            if users[uname].get("role") != body["role"] or not body["active"]:
+                revoke_other_sessions(uname)
+            users[uname].update(name=body["name"].strip(), role=body["role"], active=body["active"])
+        elif act == "delete":
+            if body.get("confirmed") is not True:
+                return self._send(400, {"error": "请确认删除账号"})
+            revoke_other_sessions(uname)
+            del users[uname]
+            _write(USERS_F, users)
+            audit(getattr(self, "user", "-"), "user_delete", uname)
+            return self._send(200, {"ok": True, "user": uname})
+        elif act == "disable":
             if uname == getattr(self, "user", ""):
                 return self._send(400, {"error": "不能停用自己"})
             users[uname]["active"] = False
@@ -6393,6 +6112,7 @@ class Handler(BaseHTTPRequestHandler):
             audit(getattr(self, "user", "-"), "unlock", uname)
             return self._send(200, {"ok": True, "user": uname})
         elif act == "reset_mfa":
+            users[uname]["_version"] = os.urandom(16).hex()
             users[uname].pop("mfa_secret", None)
             users[uname].pop("recovery", None)
             _write(USERS_F, users)
@@ -6403,6 +6123,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "user": uname,
                                     "message": "已重置，该账号下次用密码登录"})
         elif act == "reset":
+            users[uname]["_version"] = os.urandom(16).hex()
             import secrets as _s
             pw = _s.token_urlsafe(9)
             salt = _s.token_hex(8)
@@ -6423,7 +6144,9 @@ class Handler(BaseHTTPRequestHandler):
                                     "sessions_killed": killed})
         else:
             return self._send(400, {"error": "未知操作"})
+        users[uname]["_version"] = os.urandom(16).hex()
         _write(USERS_F, users)
+        audit(getattr(self, "user", "-"), "user_" + act, uname)
         return self._send(200, {"ok": True, "user": uname})
 
     def _dns_enable(self, body):
@@ -6525,6 +6248,105 @@ class Handler(BaseHTTPRequestHandler):
                            "error": "" if ok else "容器操作失败"})
 
     @draft_operation
+    def _page_change(self, body):
+        slug = str(body.get("slug", "")).strip().lower()
+        page = body.get("page", "")
+        if not SLUG_RE.fullmatch(slug) or not (SITES / slug / "meta.json").is_file():
+            return self._send(400, {"error": "Site does not exist"})
+        if not isinstance(page, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,79}", page):
+            return self._send(400, {"error": "Invalid page slug"})
+        draft, live = read_draft(slug), read_spec(slug)
+        target = next((p for p in draft.get("pages", []) if p["slug"] == page), None)
+        published = next((p for p in live.get("pages", []) if p["slug"] == page), None)
+        try:
+            if body.get("action") == "create":
+                if body.get("draft_version") != kf_design_profiles.fingerprint(draft):
+                    return self._send(409, {"error": "Draft changed; reload before adding a page"})
+                if target or published or page in ("wp-admin", "wp-json", "feed", "author", "category", "tag", "search"):
+                    raise kf_ai.AIError("Page slug already exists or is reserved")
+                if len(draft.get("pages", [])) >= 100:
+                    raise kf_ai.AIError("Maximum 100 pages per site")
+                item = {"slug": page, "title": kf_ai.text(body.get("title"), "Page title", 120, True), "sections": []}
+                draft.setdefault("pages", []).append(item)
+                kf_ai.atomic_json(draft_path(slug), draft)
+                audit(self.user, "page_create", slug, page)
+                return self._send(200, {"item": item, "version": kf_design_profiles.fingerprint(item), "draft_version": kf_design_profiles.fingerprint(draft)})
+            if body.get("action") == "import":
+                if body.get("draft_version") != kf_design_profiles.fingerprint(draft) or not published or body.get("version") != kf_design_profiles.fingerprint(published):
+                    return self._send(409, {"error": "Page or draft changed; reload before editing"})
+                if target or len(draft.get("pages", [])) >= 100:
+                    raise kf_ai.AIError("Page already has a draft or page limit reached")
+                draft.setdefault("pages", []).append(json.loads(json.dumps(published)))
+                kf_ai.atomic_json(draft_path(slug), draft)
+                audit(self.user, "page_import_live", slug, page)
+                return self._send(200, {"ok": True})
+            if body.get("action") != "delete":
+                raise kf_ai.AIError("Unknown page action")
+            target = target or published
+            if not target:
+                return self._send(404, {"error": "Page does not exist"})
+            if body.get("version") != kf_design_profiles.fingerprint(target):
+                return self._send(409, {"error": "Page changed; reload before deleting"})
+            if body.get("confirmed") is not True:
+                raise kf_ai.AIError("Confirm page deletion")
+            if page == "home" or len({p["slug"] for p in draft.get("pages", []) + live.get("pages", [])}) <= 1:
+                raise kf_ai.AIError("The home page and last page cannot be deleted")
+            domain = load_meta(slug).get("domain", "")
+            def linked_url(value):
+                parsed = urllib.parse.urlsplit(value)
+                return (not parsed.netloc or parsed.hostname == domain) and urllib.parse.unquote(parsed.path).strip("/") == page
+            def references(value):
+                if isinstance(value, dict):
+                    for key, child in value.items():
+                        if key in ("href", "url") and isinstance(child, str):
+                            if linked_url(child): return True
+                        if key == "html" and isinstance(child, str):
+                            from html.parser import HTMLParser
+                            class Links(HTMLParser):
+                                found = False
+                                def handle_starttag(parser, tag, attrs):
+                                    if tag == "a" and any(k == "href" and v and linked_url(v) for k, v in attrs):
+                                        parser.found = True
+                            parser = Links(); parser.feed(child)
+                            if parser.found: return True
+                        if references(child): return True
+                elif isinstance(value, list):
+                    return any(references(child) for child in value)
+                return False
+            used = sorted(set(p.get("title", p["slug"]) for p in draft.get("pages", []) + live.get("pages", []) if p["slug"] != page and references(p)))
+            if used:
+                return self._send(409, {"error": "Page is still linked from: " + ", ".join(used)})
+            if not published:
+                draft["pages"] = [p for p in draft["pages"] if p["slug"] != page]
+                kf_ai.atomic_json(draft_path(slug), draft)
+                audit(self.user, "page_delete_draft", slug, page)
+                return self._send(200, {"ok": True})
+            with kf_tool_runtime.release_guard(BASE), kf_publications.PublicationStore(BASE, slug).locked() as journal:
+                adapter = publication_adapter(slug, [page], navigation=True)
+                before = publication_snapshot(slug, adapter, True)
+                record = journal.begin(self.user, [page], before, operation="delete_page")
+                try:
+                    adapter.remove_page(before["wordpress"])
+                    live["pages"] = [p for p in live["pages"] if p["slug"] != page]
+                    draft["pages"] = [p for p in draft["pages"] if p["slug"] != page]
+                    kf_ai.atomic_json(spec_path(slug), live)
+                    kf_ai.atomic_json(draft_path(slug), draft)
+                    journal.result(record["id"], page, True)
+                    after = publication_snapshot(slug, adapter, True)
+                    journal.finish(record["id"], "published", after)
+                    audit(self.user, "page_delete", slug, page)
+                    return self._send(200, {"ok": True, "publication_id": record["id"]})
+                except Exception:
+                    journal.result(record["id"], page, False, "Page removal did not complete")
+                    after = publication_snapshot(slug, adapter, True)
+                    journal.finish(record["id"], "partial" if before != after else "failed", after, "Deletion incomplete; review recovery record")
+                    return self._send(500, {"error": "Deletion incomplete; review recovery record", "publication_id": record["id"]})
+        except kf_publications.PublicationConflict as exc:
+            return self._send(409, {"error": str(exc)})
+        except kf_ai.AIError as exc:
+            return self._send(400, {"error": str(exc)})
+
+    @draft_operation
     def _spec_save(self, body):
         slug = str(body.get("slug", "")).strip().lower()
         page = str(body.get("page", "")).strip()
@@ -6539,15 +6361,23 @@ class Handler(BaseHTTPRequestHandler):
         if not target:
             return self._send(404, {"ok": False, "error": "页面不存在"})
 
-        res = self._render_check(slug, page, target.get("title", page), sections)
+        if "version" in body and body["version"] != kf_design_profiles.fingerprint(target):
+            return self._send(409, {"error": "Page changed; reload before saving"})
+        try:
+            title = kf_ai.text(body.get("title", target.get("title", page)), "Page title", 120, True)
+        except kf_ai.AIError as exc:
+            return self._send(400, {"error": str(exc)})
+        res = self._render_check(slug, page, title, sections)
         if not res.get("ok"):
             return self._send(400, {
                 "ok": False, "error": "；".join(res.get("errors", ["校验未通过"])),
                 "stage": res.get("stage", "")})
 
         target["sections"] = sections
-        draft_path(slug).write_text(json.dumps(draft, ensure_ascii=False, indent=1))
-        return self._send(200, {"ok": True, "length": res.get("length"),
+        target["title"] = title
+        kf_ai.atomic_json(draft_path(slug), draft)
+        return self._send(200, {"ok": True, "version": kf_design_profiles.fingerprint(target),
+                                "draft_version": kf_design_profiles.fingerprint(draft), "length": res.get("length"),
                                 "dirty": is_dirty(slug), "message": "已保存到草稿"})
 
     def _render_check(self,*args,**kwargs):
@@ -6564,11 +6394,21 @@ class Handler(BaseHTTPRequestHandler):
         slug = str(body.get("slug", "")).strip().lower()
         if not SLUG_RE.match(slug) or not (SITES / slug).exists():
             return self._send(400, {"error": "站点不存在"})
+        before = site_design(slug)
+        if "expected_design" in body and body["expected_design"] != kf_design_profiles.fingerprint(before):
+            return self._send(409, {"error": "Site design changed; refresh before applying"})
         try:
-            tokens = sanitize_design(body)
+            if body.get("profile_id"):
+                if "expected_design" not in body:
+                    raise kf_design_profiles.DesignConflict("Review the current site design before applying")
+                profile = kf_design_profiles.DesignProfiles(BASE, presets()).resolve(body["profile_id"], body.get("profile_version"))
+                tokens = sanitize_design(profile["tokens"])
+            else:
+                tokens = sanitize_design(body)
+        except kf_design_profiles.DesignConflict as exc:
+            return self._send(409, {"error": str(exc)})
         except kf_ai.AIError as exc:
             return self._send(400, {"error": str(exc)})
-        before = _read(SITES / slug / "design.json", {})
         ok = apply_design(slug, tokens)
         if ok:
             # A later manual design edit supersedes an AI style snapshot.

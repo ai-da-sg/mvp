@@ -1,0 +1,26 @@
+/* Real DNS CRUD against disposable local zones; reserved-domain authority is a fixture. */
+const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
+const {spawn}=require('node:child_process'),{once}=require('node:events'),readline=require('node:readline');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');const {ConsolePage}=require('./pages/console.cjs');
+(async()=>{
+ const child=spawn(process.env.PYTHON||'python3',['tests/e2e_browser_fixture.py'],{cwd:path.resolve(__dirname,'../..'),env:{...process.env,KF_E2E_DNS:'1'},stdio:['pipe','pipe','inherit']});let browser;
+ try{
+  const cfg=JSON.parse((await once(readline.createInterface({input:child.stdout}),'line'))[0]);browser=await chromium.launch();const page=await browser.newPage({viewport:{width:1440,height:1000}}),ui=new ConsolePage(page,cfg.origin);page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const records=()=>page.evaluate(async()=> (await aiRequest('/api/automation/dns-records',{slug:'demo'})).records);
+  const execute=async()=>{await page.locator('#dnConfirmed').check();await page.locator('#dnExecute').click();await page.locator('#dnReviewFormDialog').waitFor({state:'hidden'});await page.waitForFunction(()=>!document.querySelector('#dnRefresh').disabled);};
+  await ui.login('ops-test',cfg.password);await ui.ready();await ui.navigate('DNS 解析');await page.waitForFunction(()=>!document.querySelector('#dnNew').disabled);
+  const initial=await records();for(const r of initial.filter(r=>r.type==='NS'))assert.equal(await page.locator(`[data-dns-edit="${r.id}"]`).count(),0);
+  await page.locator('#dnNew').click();await page.locator('#dnName').fill('_list-proof');await page.selectOption('#dnType','TXT');await page.locator('#dnValue').fill('version-one');
+  page.once('dialog',d=>d.dismiss());await page.keyboard.press('Escape');assert(await page.locator('#dnFormDialog').isVisible());
+  await page.locator('#dnSave').click();await page.locator('#dnReviewFormDialog').waitFor();assert(!(await records()).some(r=>r.name.startsWith('_list-proof')));await execute();
+  let item=(await records()).find(r=>r.name.startsWith('_list-proof'));assert.equal(item.content,'version-one');await page.locator('#dnSearch').fill('_list-proof');await page.locator('[data-dns-view]').click();assert.match(await page.locator('#adminDetailDialog').innerText(),/version-one/);await page.locator('#adminDetailDialog button').click();
+  await page.locator('[data-dns-edit]').click();await page.locator('#dnValue').fill('version-two');await page.locator('#dnSave').click();await page.locator('#dnReviewFormDialog').waitFor();assert.match(await page.locator('#dnReviewBody').innerText(),/version-one/);await execute();item=(await records()).find(r=>r.name.startsWith('_list-proof'));assert.equal(item.content,'version-two');
+  await page.locator('[data-dns-delete]').click();await page.locator('#dnReviewFormDialog').waitFor();await page.locator('#dnReviewCancel').click();assert((await records()).some(r=>r.id===item.id));
+  await page.locator('[data-dns-delete]').click();await page.locator('#dnReviewFormDialog').waitFor();await execute();assert(!(await records()).some(r=>r.name.startsWith('_list-proof')));
+  await page.locator('#dnSearch').fill('');const root=initial.find(r=>r.name==='example.test'&&r.type==='A');await page.locator(`[data-dns-edit="${root.id}"]`).click();await page.locator('#dnValue').fill('192.0.2.2');await page.locator('#dnSave').click();await page.locator('#dnCode').waitFor();await page.locator('#dnConfirmed').check();await page.locator('#dnCode').fill('000000');const rejected=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/automation/execute');await page.locator('#dnExecute').click();assert.equal((await rejected).status(),403);assert.equal((await records()).find(r=>r.id===root.id).content,'192.0.2.1');assert.equal(await page.locator('#dnCode').inputValue(),'');page.once('dialog',d=>d.accept());await page.locator('#dnReviewCancel').click();
+  await page.selectOption('#dnSource','local');await page.waitForFunction(()=>!document.querySelector('#dnRefresh').disabled);assert(await page.locator('#dnNew').isDisabled());assert.equal(await page.locator('[data-dns-edit],[data-dns-delete]').count(),0);
+  await page.selectOption('#dnSource','provider');await page.waitForFunction(()=>!document.querySelector('#dnNew').disabled);await page.selectOption('#uiLanguage','en');await page.locator('#dnNew').click();await page.setViewportSize({width:375,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert(!/[\u3400-\u9fff]/.test(await page.locator('#dnFormDialog').innerText()));
+  if(process.env.E2E_OUTPUT){fs.mkdirSync(process.env.E2E_OUTPUT,{recursive:true});await page.screenshot({path:path.join(process.env.E2E_OUTPUT,'dns-edit-mobile.png'),fullPage:true});}await page.locator('#dnCancel').click();
+  assert.deepEqual(errors,[]);console.log('PASS DNS list/detail and real local-zone CRUD, confirmation, cancellation, protected roots, TOTP denial, read-only references and mobile English');
+ }finally{if(browser)await browser.close();child.stdin.end('\n');await once(child,'exit');}
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -94,7 +94,7 @@ class PublicationStore:
 
     def history(self):
         fields = ('id', 'slug', 'user', 'created', 'updated', 'state', 'version',
-                  'targets', 'results', 'error', 'interrupted_operation', 'restored_by')
+                  'targets', 'results', 'error', 'interrupted_operation', 'restored_by', 'operation')
         return [{**{k: copy.deepcopy(item[k]) for k in fields if k in item},
                  'can_restore': (item['state'] in self.FINISHED and 'after_digest' in item)
                     or (item['state'] == 'restore_failed' and 'recovery_after_digest' in item)}
@@ -119,7 +119,7 @@ class PublicationStore:
         atomic_json(self._path(item['id']), item)
         return copy.deepcopy(item)
 
-    def begin(self, user, targets, before):
+    def begin(self, user, targets, before, operation=None):
         self._require_lock()
         if not isinstance(user, str) or not user.strip() or len(user) > 100:
             raise AIError('发布操作账号无效')
@@ -134,6 +134,10 @@ class PublicationStore:
         item = {'id': uuid.uuid4().hex, 'slug': self.slug, 'user': user,
                 'created': time.time(), 'state': 'publishing', 'targets': list(targets),
                 'results': [], 'before': snapshot, 'before_digest': fingerprint(snapshot)}
+        if operation is not None:
+            if operation != 'delete_page':
+                raise AIError('Unknown publication operation')
+            item['operation'] = operation
         return self._save(item, 'started')
 
     def result(self, ident, stage, ok, error='', created_id=None):

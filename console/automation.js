@@ -16,12 +16,15 @@ async function loadAutomation(){
  }finally{controls.forEach(e=>e.disabled=false);}
 }
 async function autoSources(){
+ $('#autoTool').disabled=true;$('#autoTool').innerHTML='';
+ window.autoWizardReset?.();
  $('#autoReview').classList.add('hidden');AUTO_ITEM=null;
  const slug=$('#autoSite').value;if(!slug){$('#autoFields').innerHTML='<p>请先创建站点。</p>';return;}
  const d=await aiRequest('/api/automation/available',{slug,purpose:$('#autoPurpose').value});AUTO_SERVERS=d.items||[];
  $('#autoSource').innerHTML='<option value="builtin">MVP 内置业务</option>'+AUTO_SERVERS.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');autoTools();
  const config=(AUTO_CONFIG.dns_providers||[]).find(x=>x.slug===slug);$('#autoDNSProvider').value=config?.provider||'disabled';$('#autoDNSZone').value=config?.zone_id||'';$('#autoDNSToken').value='';$('#autoDNSClear').checked=false;autoDNSAccounts(config?.account_id||'');
  $('#autoMailAccount').innerHTML='<option value="">系统默认发送配置</option>'+(AUTO_CONFIG.provider_accounts||[]).filter(a=>a.sites.includes(slug)&&a.capabilities.includes('mail')).map(a=>`<option value="${esc(a.id)}">${esc(a.name+' / '+a.provider)}</option>`).join('');$('#autoMailAccount').value=AUTO_CONFIG.mail_bindings?.[slug]?.account_id||'';
+ $('#autoTool').disabled=false;
 }
 function autoTools(){
  const source=$('#autoSource').value,purpose=$('#autoPurpose').value;
@@ -73,6 +76,7 @@ $('#autoForm').onsubmit=async e=>{
  }catch(err){aiMessage('#autoMsg',err.message,true);}finally{$('#autoPrepare').disabled=false;}
 };
 function showAutoReview(item){
+ window.autoWizardReview?.();
  AUTO_ITEM=item;const needs=['confirm','totp'].includes(item.mode);const prepared=item.state==='prepared';
  $('#autoReview').innerHTML=`<h3>${esc(item.summary)}</h3><p><span>状态：</span><span>${esc(AUTO_STATES[item.state]||item.state)}</span> · <span data-user-content>${esc(item.slug)}</span></p>${autoReadablePreview(item)}<details><summary>完整执行参数 / 修改前后</summary><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(item.arguments,null,2))}</pre></details>${item.error?`<p class="msg bad">${esc(item.error)}</p>`:''}${item.result?autoReadableResult(item.result):''}
  ${prepared?`<form id="autoConfirmForm">${needs?'<label><input id="autoConfirmed" type="checkbox" required>我已核对上述目标与具体内容，确认执行此操作</label>':''}${item.mode==='totp'?autoField('code','当前账号的 6 位 TOTP','text','',true):''}<button type="submit">${needs?'确认并执行':'执行查询 / 生成草稿'}</button><button id="autoCancel" type="button" class="ghost">取消此操作</button><div id="autoConfirmMsg" class="msg" role="status"></div></form>`:''}
@@ -89,7 +93,7 @@ function showAutoReview(item){
  if($('#autoCancel'))$('#autoCancel').onclick=async()=>{try{const d=await aiRequest('/api/automation/cancel',{id:item.id});showAutoReview(d.item);await autoHistory();}catch(e){aiMessage('#autoConfirmMsg',e.message,true);}};
  if($('#autoUseContext'))$('#autoUseContext').onclick=()=>{window.aiContextActions=[...new Set([...window.aiContextActions,item.id])].slice(-8);window.aiContextTarget=item.slug;window.aiContextLabels=window.aiContextLabels||{};window.aiContextLabels[item.id]=item.summary;navigateTo('ai');if(window.renderAIContext)renderAIContext();};
  if($('#autoMailStatus'))$('#autoMailStatus').onclick=async()=>{try{const d=await aiRequest('/api/automation/prepare',{slug:item.slug,tool:'mail.status',arguments:{send_action:item.id}});showAutoReview(d.item);}catch(err){aiMessage('#autoMsg',err.message,true);}};
- if($('#autoUseMail'))$('#autoUseMail').onclick=()=>{$('#autoPurpose').value='mail';$('#autoSource').value='builtin';autoTools();$('#autoTool').value='mail.send';autoFields();for(const key of ['to','subject','body'])$('#auto-'+key).value=item.result[key]||'';$('#autoReview').classList.add('hidden');};
+ if($('#autoUseMail'))$('#autoUseMail').onclick=()=>{$('#autoPurpose').value='mail';$('#autoSource').value='builtin';autoTools();$('#autoTool').value='mail.send';autoFields();for(const key of ['to','subject','body'])$('#auto-'+key).value=item.result[key]||'';$('#autoReview').classList.add('hidden');window.autoWizardParameters?.();};
  if($('#autoViewBuild'))$('#autoViewBuild').onclick=e=>{e.preventDefault();navigateTo('ai');};
  if($('#autoReconcile'))$('#autoReconcile').onsubmit=async e=>{e.preventDefault();try{const d=await aiRequest('/api/automation/reconcile',{id:item.id,outcome:$('#autoOutcome').value,note:$('#auto-note').value});showAutoReview(d.item);await autoHistory();}catch(err){aiMessage('#autoMsg',err.message,true);}};
 }

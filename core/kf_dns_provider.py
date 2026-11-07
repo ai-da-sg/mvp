@@ -148,6 +148,8 @@ class DNSProviders(DomainVault):
         if operation!='add':
             old=next((r for r in records if r['id']==str(args.get('record_id',''))),None)
             if not old:raise AIError('原记录不存在，请刷新')
+            if 'expected_record' in args and fingerprint(args['expected_record'])!=fingerprint(old):
+                raise ActionConflict('DNS record changed; refresh before editing')
             if old['type'] in ('SOA','NS') and old['name']==auth['zone']:raise AIError('权威区域根 NS/SOA 请在服务商后台管理，不能通过此操作修改')
         new=None if operation=='delete' else normalize_record(args.get('record',{}),context['domain'])
         if new and new['type']=='NS' and new['name']==auth['zone']:raise AIError('区域根 NS 须在服务商后台管理')

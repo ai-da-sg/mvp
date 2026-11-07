@@ -59,6 +59,8 @@ class OperationsTests(unittest.TestCase):
                 if method=='GET':return {'result':copy.deepcopy(records),'result_info':{'total_pages':1}}
                 return {'result':{'id':'b'*32}}
             with patch.object(provider,'cloudflare',side_effect=api),patch.object(provider,'authority',return_value=auth),patch.object(provider,'query',return_value={'state':'ok','values':['93.184.216.35']}):
+                with self.assertRaises(ActionConflict):
+                    store.plan({'operation':'update','record_id':'b'*32,'expected_record':{**records[0],'content':'outdated'},'record':{'name':'@','type':'A','content':'93.184.216.35'}},ctx)
                 plan=store.plan({'operation':'update','record_id':'b'*32,'record':{'name':'@','type':'A','content':'93.184.216.35'}},ctx)
                 self.assertEqual(plan['mode'],'totp');self.assertEqual(plan['arguments']['before']['content'],'93.184.216.34')
                 ticket={'arguments':plan['arguments'],'snapshot':plan['snapshot']};result=store.apply(ticket,ctx)

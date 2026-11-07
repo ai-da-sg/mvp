@@ -1,6 +1,7 @@
 /* Shared administration controls. Never persist form values or credentials. */
 const ADMIN_TEXT={close:['关闭','Close'],previous:['上一页','Previous'],next:['下一页','Next'],empty:['没有匹配记录','No matching records'],loading:['读取中…','Loading…'],discard:['有未保存的修改，放弃修改？','Discard unsaved changes?']};
 const AdminUI={
+ thumbnail(src,alt='',large=false){return `<span class="asset-preview ${large?'asset-preview-large':''}"><img src="${esc(src)}" alt="${esc(alt)}" width="${large?640:96}" height="${large?360:64}" loading="lazy" decoding="async"><span hidden>${esc(this.text('预览不可用','Preview unavailable'))}</span></span>`;},
  str(key){return this.text(...ADMIN_TEXT[key]);},
  translate(){document.querySelectorAll('[data-admin-text]').forEach(node=>node.textContent=this.str(node.dataset.adminText));},
  text(zh,en){return document.documentElement.lang.startsWith('en')?en:zh;},
@@ -66,3 +67,5 @@ const SiteContext={
   this.save({slug:sel.value});return sel.value;
  }
 };
+
+document.addEventListener('error',e=>{const img=e.target;if(img.tagName==='IMG'&&img.parentElement?.classList.contains('asset-preview')){img.hidden=true;img.nextElementSibling.hidden=false;}},true);

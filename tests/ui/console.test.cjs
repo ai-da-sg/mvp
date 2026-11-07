@@ -35,7 +35,7 @@ print(json.dumps(result))
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
   assert.equal(u.hostname,'review.invalid','Unexpected external request');
   if(p==='/'||p==='/login')return route.fulfill({contentType:'text/html',body:pages[p==='/'?'console':'login']});
-  if(['/billing.js','/leads.js','/ai-workflow.js','/operations.js','/publications.js','/admin-ui.js','/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
+  if(['/clients-ui.js','/page-ui.js','/design-ui.js','/media-ui.js','/dns-ui.js','/billing.js','/leads.js','/ai-workflow.js','/operations.js','/publications.js','/admin-ui.js','/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();
@@ -92,6 +92,7 @@ print(json.dumps(result))
   return route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
  });
  const nav=async key=>{
+  if(await page.locator('#pageEditorDialog').isVisible())await page.locator('#pageEditorClose').click();
   const toggle=page.locator('#navToggle');if(await toggle.isVisible() && await toggle.getAttribute('aria-expanded')==='false')await toggle.click();
   const group=page.locator('.nav-group').filter({has:page.locator(`[data-t="${key}"]`)});
   if(!await group.getAttribute('open')){if(!await group.evaluate(e=>e.open))await group.locator('summary').click();}
@@ -111,12 +112,12 @@ print(json.dumps(result))
  assert.equal(await page.locator('#rows button').first().evaluate(e=>document.activeElement===e),true);
  await page.locator('.nav-group summary').nth(1).focus();await page.keyboard.press('Enter');
  await page.locator('[data-t=layout]').focus();await page.keyboard.press('Enter');
- await page.waitForSelector('.section-select');assert.equal(new URL(page.url()).hash,'#layout');
+ await page.locator('[data-page-edit=home]').click();await page.waitForSelector('.section-select');assert.equal(new URL(page.url()).hash,'#layout');
  await page.locator('.section-select').first().click();await page.locator('#lForm input').fill('Edited A');
  assert.equal(await page.evaluate(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;}),true);
  await page.locator('.section-select').nth(1).click();await page.locator('.section-select').first().click();assert.equal(await page.locator('#lForm input').inputValue(),'Edited A');
  await page.selectOption('#lPage','contact');await page.locator('.section-select').first().click();await page.locator('#lForm input').fill('Edited Contact');
- await nav('sites');await nav('layout');assert.equal(await page.locator('#lForm input').inputValue(),'Edited Contact');
+ await nav('sites');await nav('layout');await page.locator('[data-page-edit=contact]').click();assert.equal(await page.locator('#lForm input').inputValue(),'Edited Contact');
  await page.locator('#lSave').click();await page.waitForFunction(()=>!document.querySelector('#lSave').disabled);
  assert.equal(spec.spec.pages[0].sections[0].title,'Edited A');assert.equal(spec.spec.pages[1].sections[0].title,'Edited Contact');
  console.log('PASS keyboard navigation and edits retained across sections, pages and navigation');
@@ -180,7 +181,7 @@ print(json.dumps(result))
  page.once('dialog',d=>d.accept());await page.locator(`[data-style-delete="${style.id}"]`).evaluate(e=>{const d=e.closest('details');if(d)d.open=true;});await page.locator(`[data-style-delete="${style.id}"]`).click();await page.waitForFunction(()=>document.querySelectorAll('[data-style-edit]').length===29);
  assert.equal(styleAPI('read').templates.length,29);
  console.log('PASS reference analysis, save, selection, edit, disable, copy and delete');
- await nav('prompts');await page.waitForSelector('#promptLibraryList .dom-row');
+ await nav('prompts');await page.waitForSelector('#promptLibraryList tbody tr');
  page.once('dialog',d=>d.accept());await page.locator('[data-toggle-prompt="company"]').click();
  await page.waitForFunction(()=>document.querySelector('#aiPromptTemplate').value==='');
  assert.equal(await page.locator('#aiBrief').getAttribute('required'),'');
@@ -195,7 +196,7 @@ print(json.dumps(result))
  await page.locator('[data-edit-prompt="ui-custom"]').click();page.once('dialog',d=>d.accept());await page.locator('[data-restore-prompt="1"]').click();await page.waitForFunction(()=>document.querySelector('#promptEditForm').classList.contains('hidden'));
  assert.equal(promptAPI('read').modules.find(m=>m.id==='ui-custom').body,'Write clear copy for {{audience}}.');
  console.log('PASS prompt composition, generation selection, versioned editing and restore');
- await nav('layout');await page.locator('.section-select').first().click();await page.locator('#lForm input').fill('不要翻译我的正文');
+ await nav('layout');await page.locator('[data-page-edit]').first().click();await page.locator('.section-select').first().click();await page.locator('#lForm input').fill('不要翻译我的正文');
  await page.selectOption('#uiLanguage','zh');assert.equal(await page.locator('#lForm input').inputValue(),'不要翻译我的正文');
  await page.selectOption('#uiLanguage','en');assert.equal(await page.locator('#lForm input').inputValue(),'不要翻译我的正文');
  await page.locator('#lSave').click();await page.waitForFunction(()=>!document.querySelector('#lSave').disabled);
@@ -218,10 +219,10 @@ print(json.dumps(result))
  if(out)await page.screenshot({path:path.join(out,'mcp-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});
  await page.locator('[data-mcp-toggle]').click();await page.waitForFunction(()=>document.querySelector('[data-mcp-test]').disabled);
  page.once('dialog',d=>d.accept());await page.locator('[data-mcp-delete]').click();await page.waitForFunction(()=>!document.querySelector('[data-mcp-edit]'));
- await nav('automation');await page.locator('#autoPrepare').click();await page.waitForSelector('#autoConfirmForm');
+ await nav('automation');await page.locator('#autoStepNext').click();await page.locator('#autoPrepare').click();await page.waitForSelector('#autoConfirmForm');
  await page.locator('#autoConfirmForm button[type=submit]').click();await page.waitForSelector('#autoUseContext');
  await page.locator('#autoUseContext').click();await page.waitForSelector('#p-ai:not(.hidden)');assert.match(await page.locator('#aiContextList').textContent(),/Fixture context/);await new ConsolePage(page).buildStep(2);if(!await page.locator('#aiContextOptions').evaluate(e=>e.open))await page.locator('#aiContextOptions > summary').click();await page.locator('[data-context-remove]').click();
- await nav('automation');await page.selectOption('#autoTool','site.publish');await page.locator('#autoPrepare').click();await page.waitForSelector('#autoConfirmed');assert.equal(await page.locator('#autoConfirmed').isChecked(),false);
+ await nav('automation');await page.locator('#autoStepNext').click();await page.selectOption('#autoTool','site.publish');await page.locator('#autoPrepare').click();await page.waitForSelector('#autoConfirmed');assert.equal(await page.locator('#autoConfirmed').isChecked(),false);
  await page.setViewportSize({width:375,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Operations assistant must fit mobile');
  if(out)await page.screenshot({path:path.join(out,'automation-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});
  console.log('PASS scoped automation preview, confirmation and AI context selection');

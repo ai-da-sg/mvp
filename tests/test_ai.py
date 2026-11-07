@@ -141,6 +141,48 @@ class ProviderTests(unittest.TestCase):
 
 
 class ConsoleTests(unittest.TestCase):
+    def test_team_crud_versions_and_session_revocation(self):
+        create = {'action': 'add', 'user': 'new-user', 'name': 'New user', 'role': 'ops'}
+        self.assertEqual(self.request('/api/users', create, user='ops-test')[0], 403)
+        self.assertEqual(self.request('/api/users', create)[0], 200)
+        def record(name):
+            return next(x for x in self.request('/api/users')[1]['items'] if x['user'] == name)
+        original = record('new-user')
+        self.assertFalse({'hash', 'salt', 'mfa_secret', 'recovery'} & set(original))
+        self.cookies['new-user'] = 'kf_sid=' + self.m.new_session('new-user')
+        update = dict(create, action='update', version=original['version'], role='finance', active=True)
+        self.assertEqual(self.request('/api/users', update)[0], 200)
+        self.assertEqual(self.request('/api/users', update)[0], 409)
+        self.assertEqual(self.request('/api/state', user='new-user')[0], 401)
+        current = record('new-user')
+        delete = dict(action='delete', user='new-user', version=current['version'])
+        self.assertEqual(self.request('/api/users', delete)[0], 400)
+        self.assertEqual(self.request('/api/users', dict(delete, confirmed=True))[0], 200)
+        self.assertNotIn('new-user', self.m.load_users())
+        self.assertEqual(self.request('/api/users', create)[0], 200)
+        self.assertEqual(self.request('/api/users', dict(delete, confirmed=True))[0], 409)
+        admin = record('admin')
+        for action in ('delete', 'disable', 'update'):
+            body = dict(action=action, user='admin', version=admin['version'], confirmed=True,
+                        name='Admin', role='ops', active=False)
+            self.assertEqual(self.request('/api/users', body)[0], 400)
+        self.assertEqual(self.request('/api/users', dict(create, user='bad user'))[0], 400)
+        self.assertEqual(self.request('/api/users', dict(create, user='another', role='invalid'))[0], 400)
+        audit_text = (self.base/'console/audit.log').read_text()
+        for action in ('user_add', 'user_update', 'user_delete'):
+            self.assertIn(action, audit_text)
+
+    def test_prompt_delete_requires_admin_and_retains_reference_guard(self):
+        body={'action':'delete','kind':'templates','id':'company','revision':1}
+        for user in ('ops-test','finance-test'):
+            self.assertEqual(self.request('/api/ai/prompts',body,user=user)[0],403)
+        code,data=self.request('/api/ai/prompts',body)
+        self.assertEqual(code,200,data)
+        self.assertNotIn('company',[x['id'] for x in data['templates']])
+        self.assertEqual(self.request('/api/ai/prompts',body)[0],409)
+        self.assertEqual(self.request('/api/ai/prompts',{'action':'delete','kind':'modules','id':'quality','revision':2})[0],400)
+        self.assertIn('delete',(self.base/'console/audit.log').read_text())
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.base = Path(self.tmp.name)
@@ -148,7 +190,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('billing.js','leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
+        for filename in ('clients-ui.js','page-ui.js','design-ui.js','media-ui.js','dns-ui.js','billing.js','leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -171,6 +213,8 @@ class ConsoleTests(unittest.TestCase):
                 adapter.slug, adapter.pages = slug, pages
             def capture(adapter):
                 return {'pages': {p['slug']: p for p in m.read_spec(adapter.slug).get('pages', []) if p['slug'] in adapter.pages}}
+            def remove_page(adapter, expected):
+                return {}  # No WordPress in this disposable HTTP fixture.
             def restore(adapter, before, expected, created_ids):
                 return before
         m.publication_adapter = FixtureSnapshot
@@ -642,6 +686,165 @@ class ConsoleTests(unittest.TestCase):
                 a,b = sorted((luminance(text),luminance(background)))
                 self.assertGreaterEqual((b+0.05)/(a+0.05),4.5,(name,text,background))
 
+    def test_client_profile_crud_versions_validation_and_retained_finance(self):
+        m=self.m
+        row=self.request('/api/clients',user='finance-test')[1]['items'][0]
+        self.assertFalse(row['registered'])
+        body=dict(action='create',slug='demo',version=row['version'],company='Customer profile',contact='A client',email='client@example.test',address='1 Test Road',notes='Long note '*40,annual_fee=1200,scope=['托管'],service_start='2026-01-01',service_end='2027-01-01')
+        self.assertEqual(self.request('/api/clients/save',body,user='finance-test')[0],200)
+        self.assertEqual(self.request('/api/clients/save',body,user='ops-test')[0],409)
+        row=self.request('/api/clients')[1]['items'][0]
+        self.assertTrue(row['registered']);self.assertEqual(row['client']['company'],'Customer profile')
+        self.assertNotIn('_version',row['client']);self.assertEqual(len(row['client']['notes']),len(body['notes'].strip()))
+        update=dict(body,action='save',version=row['version'])
+        self.assertEqual(self.request('/api/clients/save',dict(update,service_end='2025-01-01'))[0],400)
+        self.assertEqual(self.request('/api/clients/save',dict(update,agreement_date='2026-02-30'))[0],400)
+        self.assertEqual(self.request('/api/clients/save',dict(update,annual_fee='nan'))[0],400)
+        self.assertEqual(self.request('/api/clients/save',dict(update,email='invalid'))[0],400)
+        self.assertEqual(self.request('/api/clients/save',dict(update,owner='missing-user'))[0],400)
+        self.assertEqual(self.request('/api/clients/save',dict(update,contact='Changed'),user='ops-test')[0],200)
+        self.assertEqual(self.request('/api/clients/save',update)[0],409)
+        row=self.request('/api/clients')[1]['items'][0]
+        m.add_ledger('demo','topup',500,'Service','Retained financial entry','admin')
+        invoice=m.make_invoice('demo','Demo','example.test',dict(m.plans()[0],price=100))
+        before_ledger=m.ledger();before_invoices=m.invoices();before_meta=m.load_meta('demo')
+        delete=dict(action='delete',slug='demo',version=row['version'],confirmed=True)
+        self.assertEqual(self.request('/api/clients/save',dict(delete,confirmed=False))[0],409)
+        self.assertEqual(self.request('/api/clients/save',delete,user='finance-test')[0],200)
+        self.assertFalse(self.request('/api/clients')[1]['items'][0]['registered'])
+        self.assertEqual(m.ledger(),before_ledger);self.assertEqual(m.invoices(),before_invoices);self.assertEqual(m.load_meta('demo'),before_meta)
+        empty=self.request('/api/clients')[1]['items'][0]
+        self.assertEqual(self.request('/api/clients/save',dict(body,version=empty['version']))[0],200)
+        self.assertEqual(self.request('/api/clients/save',delete)[0],409)
+
+    def test_page_crud_versions_delete_guards_and_recovery(self):
+        m = self.m
+        endpoint = '/api/spec/page'
+        data = self.request('/api/spec/demo')[1]
+        body = dict(action='create',slug='demo',page='guide',title='Guide',draft_version=data['draft_version'])
+        self.assertEqual(self.request(endpoint,body,user='finance-test')[0],403)
+        status, created = self.request(endpoint,body,user='ops-test')
+        self.assertEqual(status,200)
+        self.assertEqual(self.request(endpoint,body)[0],409)
+        self.assertNotIn('guide',[p['slug'] for p in m.read_spec('demo')['pages']])
+        sections = copy.deepcopy(self.original['pages'][0]['sections'])
+        update = dict(slug='demo',page='guide',title='New guide',sections=sections,version=created['version'])
+        with patch.object(m.Handler,'_render_check',return_value={'ok':True,'length':1000}):
+            self.assertEqual(self.request('/api/spec',update,user='ops-test')[0],200)
+            self.assertEqual(self.request('/api/spec',update,user='ops-test')[0],409)
+        data = self.request('/api/spec/demo')[1]
+        deletion = dict(action='delete',slug='demo',page='guide',version=data['versions']['guide'],confirmed=True)
+        self.assertEqual(self.request(endpoint,dict(deletion,confirmed=False))[0],400)
+        self.assertEqual(self.request(endpoint,dict(deletion,page='home',version=data['versions']['home']))[0],400)
+        linked = m.read_draft('demo');linked['pages'][0]['sections'].append({'type':'cta','cta':{'href':'/guide/','label':'Guide'}})
+        m.kf_ai.atomic_json(m.draft_path('demo'),linked)
+        self.assertEqual(self.request(endpoint,deletion)[0],409)
+        linked['pages'][0]['sections'].pop();m.kf_ai.atomic_json(m.draft_path('demo'),linked)
+        self.assertEqual(self.request(endpoint,deletion,user='ops-test')[0],200)
+        self.assertNotIn('guide',[p['slug'] for p in m.read_draft('demo')['pages']])
+        # A published-page deletion snapshots both live and draft files. Recovery
+        # refuses intervening draft edits and restores the exact previous files.
+        live=m.read_spec('demo');live['pages'].append({'slug':'guide','title':'Live guide','sections':sections})
+        m.kf_ai.atomic_json(m.spec_path('demo'),live);m.kf_ai.atomic_json(m.draft_path('demo'),live)
+        deletion['version']=m.kf_design_profiles.fingerprint(live['pages'][-1])
+        status,result=self.request(endpoint,deletion,user='ops-test');self.assertEqual(status,200)
+        history=self.request('/api/publications/demo')[1]['items'][0]
+        self.assertEqual(history['operation'],'delete_page')
+        self.assertNotIn('guide',[p['slug'] for p in m.read_spec('demo')['pages']])
+        after=m.read_draft('demo');changed=copy.deepcopy(after);changed['pages'][0]['title']='Later edit'
+        m.kf_ai.atomic_json(m.draft_path('demo'),changed)
+        restore=dict(slug='demo',id=result['publication_id'],version=history['version'],confirmed=True)
+        self.assertEqual(self.request('/api/publish/restore',restore)[0],409)
+        m.kf_ai.atomic_json(m.draft_path('demo'),after)
+        self.assertEqual(self.request('/api/publish/restore',restore)[0],200)
+        self.assertEqual(m.read_draft('demo'),live)
+        self.assertEqual(m.read_spec('demo'),live)
+        draft=copy.deepcopy(live);draft['pages']=[p for p in draft['pages'] if p['slug']!='guide']
+        m.kf_ai.atomic_json(m.draft_path('demo'),draft)
+        current=self.request('/api/spec/demo')[1]
+        self.assertIn('guide',current['versions'])
+        imported=dict(action='import',slug='demo',page='guide',version=current['versions']['guide'],draft_version=current['draft_version'])
+        self.assertEqual(self.request(endpoint,dict(imported,version='stale'))[0],409)
+        self.assertEqual(self.request(endpoint,imported,user='ops-test')[0],200)
+        self.assertEqual(m.read_draft('demo'),live)
+
+    def test_design_profile_crud_conflicts_and_application(self):
+        m = self.m
+        endpoint = '/api/design/profiles'
+        builtin = self.request(endpoint,user='ops-test')[1]['items'][0]
+        body = dict(name='Test design',description='<script>plain text</script>',tokens=builtin['tokens'])
+        self.assertEqual(self.request(endpoint,body,user='finance-test')[0],403)
+        self.assertEqual(self.request(endpoint,dict(body,id=builtin['id'],version=0))[0],400)
+        status, result = self.request(endpoint,body,user='ops-test')
+        self.assertEqual(status,200)
+        item = result['item']
+        self.assertEqual(item['version'],1)
+        self.assertFalse((self.base/'sites/demo/design.json').exists())
+        status, data = self.request(endpoint,dict(body,id=item['id'],version=1,name='Updated'),user='ops-test')
+        self.assertEqual(status,200)
+        self.assertEqual(data['item']['version'],2)
+        self.assertEqual(self.request(endpoint,dict(body,id=item['id'],version=1))[0],409)
+        bad = copy.deepcopy(body); bad['tokens']['palette']['ink'] = bad['tokens']['palette']['bg']
+        self.assertEqual(self.request(endpoint,bad)[0],400)
+        self.assertEqual(self.request(endpoint,dict(body,tokens=[]))[0],400)
+        current = self.request('/api/design/demo',user='ops-test')[1]
+        apply = dict(slug='demo',profile_id=item['id'],profile_version=1,expected_design=current['version'])
+        with patch.object(m.subprocess,'run') as run:
+            self.assertEqual(self.request('/api/design',apply,user='ops-test')[0],409)
+            self.assertFalse(run.called)
+            apply['profile_version']=2
+            run.return_value.returncode=1
+            self.assertEqual(self.request('/api/design',apply,user='ops-test')[0],500)
+            self.assertFalse((self.base/'sites/demo/design.json').exists())
+            run.return_value.returncode=0
+            self.assertEqual(self.request('/api/design',apply,user='ops-test')[0],200)
+            self.assertTrue((self.base/'sites/demo/design.json').exists())
+            run.reset_mock()
+            self.assertEqual(self.request('/api/design',apply,user='ops-test')[0],409)
+            self.assertFalse(run.called)
+        applied = m.site_design('demo')
+        self.assertEqual(self.request(endpoint,dict(action='delete',id=item['id'],version=1))[0],409)
+        self.assertEqual(self.request(endpoint,dict(action='delete',id=item['id'],version=2),user='ops-test')[0],200)
+        self.assertEqual(m.site_design('demo'),applied)
+        self.assertNotIn(item['id'],[x['id'] for x in self.request(endpoint)[1]['items']])
+        self.assertEqual(self.request('/api/design',dict(apply,expected_design=m.kf_design_profiles.fingerprint(applied)))[0],409)
+
+    def test_media_metadata_versions_references_and_scope(self):
+        m = self.m
+        directory = self.base/'sites/demo/html/wp-content/uploads/kampong'
+        directory.mkdir(parents=True)
+        (directory/'photo.png').write_bytes(b'\x89PNG\r\n\x1a\nfixture')
+        item = self.request('/api/media/demo',user='ops-test')[1]['items'][0]
+        self.assertEqual(item['preview_url'], '/pa/demo/uploads/kampong/photo.png')
+        body = dict(slug='demo',name='photo.png',version=item['version'],title='New title',alt='Descriptive alternative',caption='<script>text only</script>')
+        self.assertEqual(self.request('/api/media/update',body,user='finance-test')[0],403)
+        status, result = self.request('/api/media/update',body,user='ops-test')
+        self.assertEqual(status,200)
+        self.assertNotEqual(result['item']['version'],item['version'])
+        self.assertEqual(result['item']['url'],item['url'])
+        self.assertEqual(self.request('/api/media/update',body,user='ops-test')[0],409)
+        self.assertEqual(self.request('/api/media/delete',body,user='ops-test')[0],409)
+        self.assertEqual(m.media_list('demo')[0]['title'],'New title')
+        draft = copy.deepcopy(self.original)
+        (directory/'photo-400.png').write_bytes(b'variant')
+        (directory/'photo-other.png').write_bytes(b'other image')
+        draft['pages'][0]['sections'] = [{'type':'band','src':item['url'].replace('.png','-400.png'),'alt':'Photo'}]
+        m.kf_ai.atomic_json(m.draft_path('demo'),draft)
+        current = next(x for x in m.media_list('demo') if x['name']=='photo.png')
+        self.assertTrue(current['used_by'])
+        self.assertTrue(current['thumbnail_url'].endswith('/photo-400.png'))
+        deletion = dict(slug='demo',name='photo.png',version=current['version'])
+        self.assertEqual(self.request('/api/media/delete',deletion,user='ops-test')[0],409)
+        m.kf_ai.atomic_json(m.draft_path('demo'),self.original)
+        (directory/'escape.png').symlink_to(self.base/'console/admin.pass')
+        self.assertNotIn('escape.png',[x['name'] for x in m.media_list('demo')])
+        self.assertEqual(self.request('/api/media/update',dict(body,name='../escape.png'))[0],404)
+        self.assertEqual(self.request('/api/media/delete',deletion,user='ops-test')[0],200)
+        self.assertFalse((directory/'photo.png').exists())
+        self.assertFalse((directory/'photo-400.png').exists())
+        self.assertTrue((directory/'photo-other.png').exists())
+        self.assertEqual(json.loads((self.base/'sites/demo/media-metadata.json').read_text()),{})
+
     def test_upload_unique_names_and_permission_error(self):
         import io
         from PIL import Image
@@ -705,6 +908,25 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(m.load_users()['admin']['recovery'], [])
         with opener.open(urllib.request.Request(url, data=data), timeout=10) as response:
             self.assertIn('两步验证码不正确', response.read().decode())
+
+    def test_writing_assistance_permissions_context_and_limits(self):
+        cfg = dict(id='writing', name='Writing', protocol='openai_chat', model='test', base_url='https://example.test/v1', api_key='private-key')
+        self.assertEqual(self.request('/api/ai/config', cfg)[0], 200)
+        body = dict(scope='build', profile_id='writing', text='Existing', context={'company':'Demo','language':'en'}, limit=100)
+        with patch.object(self.m.kf_ai, 'complete', return_value='Suggested text') as complete:
+            status, data = self.request('/api/ai/assist', body, user='ops-test')
+            self.assertEqual((status, data['text']), (200, 'Suggested text'))
+            self.assertFalse(complete.call_args.args[0]['json_mode'])
+            self.assertIn('Demo', complete.call_args.args[3])
+            self.assertNotIn('private-key', complete.call_args.args[3])
+            self.assertEqual(self.request('/api/ai/assist', body, user='finance-test')[0], 403)
+            self.assertEqual(self.request('/api/ai/assist', dict(body,scope='prompts'), user='ops-test')[0], 403)
+            self.assertEqual(self.request('/api/ai/assist', dict(body,scope='prompts'))[0], 200)
+            self.assertEqual(self.request('/api/ai/assist', dict(body,context={'password':'secret'}))[0], 400)
+            self.assertEqual(self.request('/api/ai/assist', dict(body,limit=0))[0], 400)
+            self.assertEqual(self.request('/api/ai/assist', dict(body,profile_id='mock'))[0], 400)
+            complete.return_value = 'x'*101
+            self.assertEqual(self.request('/api/ai/assist', body)[0], 400)
 
     def test_permissions_and_secret_redaction(self):
         self.assertEqual(self.request('/api/ai/config', user=None)[0], 401)

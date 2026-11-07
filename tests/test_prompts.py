@@ -58,3 +58,21 @@ class PromptTests(unittest.TestCase):
         self.assertIn('without scripts, styles, embeds or events',system)
         self.assertEqual(json.loads(prompt)['design_guidance'],'Keep copy concise')
         self.assertEqual(json.loads(prompt)['brief'],'Real business data')
+
+    def test_delete_protects_all_references_and_preserves_composed_snapshots(self):
+        self.store.change({'kind':'modules','revision':1,'id':'custom','name':'Custom','category':'copy','body':'Facts: {{services}}'})
+        self.store.change({'kind':'templates','revision':2,'id':'custom-site','name':'Custom site','category':'custom','body':'Create a site','module_ids':['custom']})
+        snapshot=self.store.compose({'revision':3,'template_id':'custom-site','variables':{'services':'Verified services','audience':'Customers','goal':'Enquiries','tone':'Professional'}})
+        with self.assertRaises(ai.AIError):
+            self.store.change({'action':'delete','kind':'modules','id':'custom','revision':3})
+        self.store.change({'action':'toggle','kind':'templates','id':'custom-site','revision':3})
+        with self.assertRaises(ai.AIError):
+            self.store.change({'action':'delete','kind':'modules','id':'custom','revision':4})
+        self.store.change({'action':'delete','kind':'templates','id':'custom-site','revision':4})
+        with self.assertRaises(prompts.PromptConflict):
+            self.store.change({'action':'delete','kind':'modules','id':'custom','revision':4})
+        self.store.change({'action':'delete','kind':'modules','id':'custom','revision':5})
+        restarted=prompts.PromptStore(self.tmp.name).read()
+        self.assertNotIn('custom',[x['id'] for x in restarted['modules']])
+        self.assertIn('Verified services',snapshot['preview'])
+        self.assertEqual(snapshot['template']['id'],'custom-site')

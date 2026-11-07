@@ -127,6 +127,15 @@ class PromptStore:
             if not re.fullmatch('[a-z][a-z0-9_-]{1,39}',item_id):raise AIError('ID 为 2–40 位小写字母、数字、短横线或下划线，字母开头')
             old=next((x for x in data[kind] if x['id']==item_id),None)
             action=body.get('action','save')
+            if action=='delete':
+                if not old:raise AIError('条目不存在')
+                if kind=='modules':
+                    refs=[t['name'] for t in data['templates'] if item_id in t['module_ids']]
+                    if refs:raise AIError('模块仍被模板引用，请先调整或删除模板：'+'、'.join(refs))
+                data[kind].remove(old)
+                data['revision']+=1
+                atomic_json(self.path,data)
+                return {'id':item_id,'version':old['version'],'deleted':True}
             if action=='restore':
                 if not old:raise AIError('条目不存在')
                 prior=next((x for x in old['history'] if x['version']==body.get('version')),None)

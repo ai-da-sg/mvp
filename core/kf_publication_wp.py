@@ -171,3 +171,50 @@ class WordPressSnapshot:
 
     def restore(self, before, expected, created_ids):
         return self._run(PHP_RESTORE, {'before': before, 'expected': expected, 'created_ids': created_ids})
+
+    def remove_page(self, expected):
+        """Unpublish one managed page, retaining its identity for snapshot recovery."""
+        if len(self.scope['pages']) != 1 or not self.scope['navigation']:
+            raise AIError('Page deletion requires a single page and navigation snapshot')
+        return self._run(r'''
+$current=kf_pub_capture($scope);
+if($current!=$payload['expected']) throw new Exception('Site changed before deletion');
+$slug=$scope['pages'][0];$post=get_page_by_path($slug,OBJECT,['page']);
+if(!$post) throw new Exception('Page no longer exists');
+$id=(int)$post->ID;
+if($id===(int)get_option('page_on_front') || $id===(int)get_option('page_for_posts'))
+    throw new Exception('The front page and posts page are protected');
+if(get_posts(['post_type'=>'page','post_parent'=>$id,'post_status'=>'any','numberposts'=>1]))
+    throw new Exception('Page has child pages');
+$locations=get_theme_mod('nav_menu_locations',[]);
+$managed=array_unique(array_filter([(int)($locations['primary']??0),(int)($locations['footer']??0)]));
+$url=wp_parse_url(get_permalink($id));$remove=[];
+foreach(wp_get_nav_menus() as $menu) {
+    $items=wp_get_nav_menu_items($menu->term_id,['post_status'=>'any']);
+    foreach((array)$items as $item) {
+        $link=wp_parse_url($item->url);
+        $same_url=untrailingslashit(rawurldecode($link['path']??''))===untrailingslashit(rawurldecode($url['path']??''))
+            && (empty($link['host']) || strtolower($link['host'])===strtolower($url['host']??''));
+        $matches=($item->type==='post_type' && $item->object==='page' && (int)$item->object_id===$id)
+            || ($item->type==='custom' && $same_url);
+        if(!$matches) continue;
+        if(!in_array((int)$menu->term_id,$managed,true)) throw new Exception('Page is linked from an unmanaged menu');
+        $remove[]=$item;
+    }
+}
+$updated=wp_update_post(['ID'=>$id,'post_status'=>'draft'],true);
+if(is_wp_error($updated)||!$updated) throw new Exception('Could not unpublish page');
+$parents=[];foreach($remove as $item) $parents[(int)$item->ID]=(int)$item->menu_item_parent;
+foreach($managed as $menu) foreach((array)wp_get_nav_menu_items($menu,['post_status'=>'any']) as $child) {
+    $parent=(int)$child->menu_item_parent;$seen=[];
+    while(isset($parents[$parent])) {
+        if(isset($seen[$parent])) throw new Exception('Navigation contains a cycle');
+        $seen[$parent]=true;$parent=$parents[$parent];
+    }
+    if($parent!==(int)$child->menu_item_parent) update_post_meta($child->ID,'_menu_item_menu_item_parent',$parent);
+}
+foreach($remove as $item) if(!wp_delete_post($item->ID,true)) throw new Exception('Could not remove navigation link');
+$after=kf_pub_capture($scope);
+if(($after['pages'][$slug]['status']??'')!=='draft') throw new Exception('Deletion verification failed');
+echo wp_json_encode($after);
+''', {'expected': expected})

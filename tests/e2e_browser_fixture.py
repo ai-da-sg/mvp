@@ -8,8 +8,29 @@ from test_ai import ConsoleTests
 fixture = ConsoleTests()
 fixture.setUp()
 m = fixture.m
+writing_server = None
 try:
+    if os.environ.get('KF_E2E_WRITING') == '1':
+        # A local model protocol fixture: real HTTP through the application and
+        # model adapter, deterministic text rather than a paid upstream model.
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+        class WritingHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_POST(self):
+                request = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                context = json.loads(request['messages'][1]['content'])
+                result = 'Suggested '+context['context']['field']+' for '+context['context'].get('company', 'Demo')
+                payload = json.dumps({'choices':[{'finish_reason':'stop','message':{'content':result}}]}).encode()
+                self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(payload))); self.end_headers(); self.wfile.write(payload)
+        writing_server = ThreadingHTTPServer(('127.0.0.1',0), WritingHandler)
+        threading.Thread(target=writing_server.serve_forever,daemon=True).start()
+        m.ai_store().configure(dict(id='writing',name='Local protocol fixture',protocol='openai_chat',model='test',base_url='http://127.0.0.1:'+str(writing_server.server_port)+'/v1'))
     (m.CONSOLE / 'providers.js').symlink_to(Path(__file__).resolve().parents[1] / 'console/providers.js')
+    if os.environ.get('KF_E2E_PAGES') == '1':
+        draft=json.loads(json.dumps(fixture.original))
+        draft['pages']=[p for p in draft['pages'] if p['slug']=='home']
+        m.kf_ai.atomic_json(m.draft_path('demo'),draft)
     if os.environ.get('KF_E2E_DOMAIN') == '1':
         # Register a domain for UI coverage; no upstream service is contacted.
         meta_path = fixture.base / 'sites/demo/meta.json'
@@ -19,6 +40,14 @@ try:
     users = m.load_users()
     users['mfa-test'] = dict(users['ops-test'], mfa_secret='JBSWY3DPEHPK3PXP')
     m._write(m.USERS_F, users)
+    if os.environ.get('KF_E2E_DNS') == '1':
+        # Real local zone storage and execution; only external authority/observation
+        # are fixed for the reserved .test domain. No public DNS is modified.
+        local = m.dnsmod()
+        local.update_zones(lambda zones: zones.update(demo=local.new_zone('example.test','192.0.2.1')))
+        m.kf_dns_provider.DNSProviders(m.BASE,local).configure({'provider':'local'},m.automation_context('demo'))
+        m.kf_dns_provider.authority = lambda domain: {'state':'ok','zone':domain,'nameservers':sorted([local.NS1,local.NS2]),'provider':'local'}
+        m.kf_dns_provider.query = lambda *args: {'state':'unknown','values':[]}
     if os.environ.get('KF_E2E_BILLING') == '1':
         from datetime import timedelta
         import kf_ai
@@ -73,4 +102,6 @@ try:
                       'password': 'Test-Password-123'}), flush=True)
     sys.stdin.readline()
 finally:
+    if writing_server:
+        writing_server.shutdown(); writing_server.server_close()
     fixture.tearDown()

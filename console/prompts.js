@@ -74,15 +74,23 @@ $('#aiPromptPreviewBtn').onclick=async()=>{
  const b=$('#aiPromptPreviewBtn');b.disabled=true;
  try{await previewPrompt();}catch(e){aiMessage('#aiPromptMsg',e.message,true);}finally{b.disabled=false;}
 };
+const PROMPT_UI={name:['名称','Name'],category:['分类','Category'],version:['版本','Version'],status:['状态','Status'],actions:['操作','Actions'],enabled:['启用','Enabled'],disabled:['停用','Disabled'],view:['查看','View'],edit:['编辑','Edit'],copy:['复制','Copy'],remove:['删除','Delete'],use:['用于建站','Use in builder'],enable:['启用','Enable'],disable:['停用','Disable'],body:['提示词内容','Prompt content'],modules:['引用模块','Referenced modules'],description:['用途说明','Description'],deleteConfirm:['删除此条目及其库内历史版本？已创建任务保存的提示词不会改变。','Delete this item and its library history? Prompt snapshots in existing jobs stay unchanged.'],deleted:['条目已删除','Item deleted']};
+function promptText(key){return AdminUI.text(...PROMPT_UI[key]);}
+const PROMPT_DIALOG=AdminUI.form('promptEditForm','',()=>{});
 function renderPromptLibrary(){
+ if(!PROMPTS)return;
  const kind=$('#promptLibraryKind').value,q=$('#promptLibrarySearch').value.toLowerCase(),admin=PROMPTS.can_manage;
  const items=PROMPTS[kind].filter(t=>(t.name+' '+t.category+' '+t.description).toLowerCase().includes(q));
  $('#promptLibraryNew').hidden=!admin;
- $('#promptLibraryList').innerHTML=items.map(t=>`<div class="dom-row"><div class="h"><b>${esc(t.name)}</b><span class="pill">${esc(PROMPTS.categories[t.category]||t.category)}</span><span class="hint">v${t.version} · ${t.enabled?'启用':'停用'}</span></div><p class="hint">${esc(t.description)}</p>${kind==='templates'?`<p class="hint">${t.module_ids.length} 个模块</p><button type="button" class="ghost" data-use-prompt="${esc(t.id)}" ${t.enabled?'':'disabled'}>用于建站</button>`:''}${admin?` <button type="button" class="ghost" data-edit-prompt="${esc(t.id)}">编辑与历史</button> <button type="button" class="ghost" data-copy-prompt="${esc(t.id)}">复制为新条目</button> <button type="button" class="ghost" data-toggle-prompt="${esc(t.id)}">${t.enabled?'停用':'启用'}</button>`:''}<details><summary>查看提示词内容</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(t.body)}</pre></details></div>`).join('')||'<p class="hint">没有符合条件的条目。</p>';
+ AdminUI.table('promptLibraryList',items,['name','category','version','status','actions'].map(promptText),t=>`<tr><td data-user-content><b>${esc(t.name)}</b></td><td>${esc(PROMPTS.categories[t.category]||t.category)}</td><td>v${t.version}</td><td>${promptText(t.enabled?'enabled':'disabled')}</td><td><div class="domain-row-actions"><button type="button" class="ghost" data-view-prompt="${esc(t.id)}">${promptText('view')}</button>${kind==='templates'?`<button type="button" class="ghost" data-use-prompt="${esc(t.id)}" ${t.enabled?'':'disabled'}>${promptText('use')}</button>`:''}${admin?`<button type="button" class="ghost" data-edit-prompt="${esc(t.id)}">${promptText('edit')}</button><button type="button" class="ghost" data-copy-prompt="${esc(t.id)}">${promptText('copy')}</button><button type="button" class="ghost" data-toggle-prompt="${esc(t.id)}">${promptText(t.enabled?'disable':'enable')}</button><button type="button" class="ghost danger" data-delete-prompt="${esc(t.id)}">${promptText('remove')}</button>`:''}</div></td></tr>`);
  $('#promptSources').innerHTML=PROMPTS.sources.map(s=>`<p><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a></p>`).join('');
 }
+function viewPrompt(item){
+ AdminUI.detail(item.name,`<dl class="domain-meta"><dt>ID</dt><dd data-user-content>${esc(item.id)}</dd><dt>${promptText('version')}</dt><dd>v${item.version}</dd><dt>${promptText('description')}</dt><dd data-user-content>${esc(item.description||'—')}</dd>${item.module_ids?`<dt>${promptText('modules')}</dt><dd data-user-content>${item.module_ids.map(id=>esc(PROMPTS.modules.find(m=>m.id===id)?.name||id)).join(', ')}</dd>`:''}</dl><h4>${promptText('body')}</h4><pre data-user-content style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(item.body)}</pre>`);
+}
+new MutationObserver(renderPromptLibrary).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
 async function initPrompts(){await loadPromptLibrary();renderPromptLibrary();}
-$('#promptLibraryKind').onchange=renderPromptLibrary;$('#promptLibrarySearch').oninput=renderPromptLibrary;
+$('#promptLibraryKind').onchange=$('#promptLibrarySearch').oninput=()=>{AdminUI.pages.set('promptLibraryList',0);renderPromptLibrary();};
 $('#promptLibraryRefresh').onclick=async()=>{try{await initPrompts();aiMessage('#promptLibraryMsg','提示词库已刷新');}catch(e){aiMessage('#promptLibraryMsg',e.message,true);}};
 function editPrompt(item=null,copy=false){
  PROMPT_EDIT_KIND=$('#promptLibraryKind').value;
@@ -99,13 +107,15 @@ function editPrompt(item=null,copy=false){
  $('#promptEditDefaults').value=JSON.stringify(item?.defaults||{},null,2);
  $('#promptEditTitle').textContent=(item&&!copy?'编辑':'新建')+(PROMPT_EDIT_KIND==='templates'?'场景模板':'可复用模块');
  $('#promptEditHistory').innerHTML=copy?'':(item?.history||[]).slice().reverse().map(h=>`<div class="share-row"><span>v${h.version} · ${esc(h.name)}</span><button type="button" class="ghost" data-restore-prompt="${h.version}">恢复为新版本</button></div>`).join('');
- $('#promptEditForm').scrollIntoView({block:'start'});$('#promptEditName').focus();
+ PROMPT_DIALOG.open();
 }
-$('#promptLibraryNew').onclick=()=>editPrompt();$('#promptEditCancel').onclick=()=>$('#promptEditForm').classList.add('hidden');
+$('#promptLibraryNew').onclick=()=>editPrompt();$('#promptEditCancel').onclick=()=>PROMPT_DIALOG.close();
 $('#promptLibraryList').onclick=async e=>{
  const b=e.target.closest('button');if(!b)return;
- const id=b.dataset.editPrompt||b.dataset.copyPrompt||b.dataset.togglePrompt||b.dataset.usePrompt;
+ const id=b.dataset.viewPrompt||b.dataset.deletePrompt||b.dataset.editPrompt||b.dataset.copyPrompt||b.dataset.togglePrompt||b.dataset.usePrompt;
  const item=PROMPTS[$('#promptLibraryKind').value].find(t=>t.id===id);if(!item)return;
+ if(b.dataset.viewPrompt){viewPrompt(item);return;}
+ if(b.dataset.deletePrompt){if(!confirm(promptText('deleteConfirm')+'\n'+item.name))return;b.disabled=true;try{PROMPTS=await aiRequest('/api/ai/prompts',{kind:$('#promptLibraryKind').value,id,action:'delete',revision:PROMPTS.revision});renderPromptLibrary();promptRenderOptions();AdminUI.message('#promptLibraryMsg',PROMPT_UI.deleted);}catch(err){aiMessage('#promptLibraryMsg',err.message,true);}finally{b.disabled=false;}return;}
  if(b.dataset.usePrompt){navigateTo('ai');$('#aiPromptCategory').value='';promptRenderOptions();$('#aiPromptTemplate').value=id;promptChoose();return;}
  if(b.dataset.editPrompt||b.dataset.copyPrompt){editPrompt(item,!!b.dataset.copyPrompt);return;}
  if(!confirm((item.enabled?'停用':'启用')+'「'+item.name+'」？已创建任务保留原版本。'))return;
@@ -118,12 +128,12 @@ $('#promptEditForm').onsubmit=async e=>{
  try{
   const body={action:'save',kind:PROMPT_EDIT_KIND,revision:Number($('#promptEditForm').dataset.revision),id:$('#promptEditId').value,name:$('#promptEditName').value,category:$('#promptEditCategory').value,description:$('#promptEditDescription').value,body:$('#promptEditBody').value,enabled:$('#promptEditEnabled').checked};
   if(PROMPT_EDIT_KIND==='templates'){body.module_ids=PROMPT_EDIT_MODULES;body.defaults=JSON.parse($('#promptEditDefaults').value||'{}');}
-  PROMPTS=await aiRequest('/api/ai/prompts',body);renderPromptLibrary();promptRenderOptions();$('#promptEditForm').classList.add('hidden');aiMessage('#promptLibraryMsg','新版本已保存；已创建任务的提示词不受影响。');
+  PROMPTS=await aiRequest('/api/ai/prompts',body);if(!$('#promptEditId').readOnly){$('#promptLibrarySearch').value='';AdminUI.pages.set('promptLibraryList',Math.floor(PROMPTS[PROMPT_EDIT_KIND].findIndex(t=>t.id===body.id)/20));}renderPromptLibrary();promptRenderOptions();PROMPT_DIALOG.close(true);aiMessage('#promptLibraryMsg','新版本已保存；已创建任务的提示词不受影响。');
  }catch(err){aiMessage('#promptEditMsg',err.message,true);}finally{button.disabled=false;}
 };
 $('#promptEditHistory').onclick=async e=>{
  const b=e.target.closest('[data-restore-prompt]');if(!b||!confirm('以此历史内容创建新版本？'))return;b.disabled=true;
- try{PROMPTS=await aiRequest('/api/ai/prompts',{action:'restore',kind:PROMPT_EDIT_KIND,id:$('#promptEditId').value,version:Number(b.dataset.restorePrompt),revision:Number($('#promptEditForm').dataset.revision)});renderPromptLibrary();promptRenderOptions();$('#promptEditForm').classList.add('hidden');aiMessage('#promptLibraryMsg','历史内容已恢复为新版本。');}
+ try{PROMPTS=await aiRequest('/api/ai/prompts',{action:'restore',kind:PROMPT_EDIT_KIND,id:$('#promptEditId').value,version:Number(b.dataset.restorePrompt),revision:Number($('#promptEditForm').dataset.revision)});renderPromptLibrary();promptRenderOptions();PROMPT_DIALOG.close(true);aiMessage('#promptLibraryMsg','历史内容已恢复为新版本。');}
  catch(err){aiMessage('#promptEditMsg',err.message,true);}finally{b.disabled=false;}
 };
 $('#promptLibraryExport').onclick=()=>{

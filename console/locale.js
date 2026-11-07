@@ -1,5 +1,18 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+搜索账号|Search accounts
+账号|Account
+账号安全|Account security
+权限与操作日志|Permissions and audit log
+用户名须为 1–24 位小写字母、数字或 _. -|Use 1–24 lowercase letters, digits, underscores, dots or hyphens for the username.
+请填写显示名、角色和账号状态|Provide the display name, role and account status.
+无效角色|Invalid role
+显示名须为 1–30 个字符|Display name must contain 1–30 characters.
+账号已变化，请刷新后重试|Account changed. Refresh and try again.
+必须保留至少一个启用的管理员|At least one active administrator is required.
+不能删除、停用或降级当前账号|You cannot delete, disable or demote your current account.
+无效账号状态|Invalid account status
+请确认删除账号|Confirm account deletion.
 站点标识无效|Invalid site identifier
 站点已有发布或恢复任务，请稍后重试|A publication or recovery is already running for this site. Try again later.
 发布记录目录无效|Invalid publication record directory
