@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 
-from kf_ai import AIError, atomic_json
+from kf_ai import AIError, atomic_json, managed_site_directory
 from kf_tool_runtime import fingerprint
 
 
@@ -29,12 +29,7 @@ class PublicationStore:
     MAX_SNAPSHOT_BYTES = 10 * 1024 * 1024
 
     def __init__(self, base, slug):
-        if not isinstance(slug, str) or not re.fullmatch(r'[a-z][a-z0-9-]{1,39}', slug):
-            raise AIError('站点标识无效')
-        sites = Path(base).resolve() / 'sites'
-        site = sites / slug
-        if site.is_symlink() or not (site / 'meta.json').is_file():
-            raise AIError('站点不存在')
+        site = managed_site_directory(base, slug)
         self.slug = slug
         self.root = site / '.publications'
         if self.root.is_symlink():

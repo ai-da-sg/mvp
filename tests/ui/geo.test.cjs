@@ -8,7 +8,7 @@ class GeoPage extends ConsolePage {
  async save(form,endpoint){const response=this.page.waitForResponse(r=>r.url().endsWith('/api/geo/'+endpoint)&&r.request().method()==='POST');await this.page.locator(form).locator('button[type=submit]').click();assert.equal((await response).status(),200);await this.page.waitForFunction(()=>!GEO.busy);}
 }
 (async()=>{
- const child=spawn(process.env.PYTHON||'python3',['tests/e2e_browser_fixture.py'],{cwd:path.resolve(__dirname,'../..'),env:process.env,stdio:['pipe','pipe','inherit']});let browser;
+ const child=spawn(process.env.PYTHON||'python3',['tests/e2e_browser_fixture.py'],{cwd:path.resolve(__dirname,'../..'),env:{...process.env,KF_E2E_GEO_ALIAS:'1'},stdio:['pipe','pipe','inherit']});let browser;
  try{
   const cfg=JSON.parse(await Promise.race([once(readline.createInterface({input:child.stdout}),'line').then(([line])=>line),once(child,'exit').then(([code])=>{throw Error('Fixture exited before readiness: '+code);})]));browser=await chromium.launch();
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),ui=new GeoPage(page,cfg.origin);page.setDefaultTimeout(15000);
@@ -28,6 +28,6 @@ class GeoPage extends ConsolePage {
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:'/tmp/mvp-geo-mobile.png',fullPage:true});
   await page.reload();await page.locator('#geoRoot #geoProfileForm').waitFor();assert.equal(await page.locator('#geoBrand').inputValue(),'Demo workshop');
-  assert.deepEqual(errors,[]);console.log('GEO real HTTP browser flow passed: facts, questions, observations, metrics, export, English, mobile, persistence.');
+  assert.deepEqual(errors,[]);console.log('GEO real HTTP browser flow passed: facts, questions, observations, metrics, export, English, mobile, persistence and registered site aliases.');
  }finally{if(browser)await browser.close();child.stdin.end();if(child.exitCode===null)await once(child,'exit');}
 })().catch(e=>{console.error(e);process.exitCode=1;});

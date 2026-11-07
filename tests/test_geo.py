@@ -51,6 +51,18 @@ class GeoTests(unittest.TestCase):
         with self.assertRaises(AIError): geo.GeoStore(self.base, 'link')
         self.assertEqual(self.store.path.stat().st_mode & 0o777, 0o600)
 
+    def test_registered_same_slug_alias_reuses_workspace_and_publication_history(self):
+        from kf_publications import PublicationStore
+        other_base=self.base/'shared-install'
+        (other_base/'sites').mkdir(parents=True)
+        (other_base/'sites/demo').symlink_to(self.base/'sites/demo',target_is_directory=True)
+        self.fact()
+        shared=geo.GeoStore(other_base,'demo')
+        self.assertEqual(shared.read(),self.store.read())
+        self.assertEqual(PublicationStore(other_base,'demo').root,PublicationStore(self.base,'demo').root)
+        (other_base/'sites/other').symlink_to(self.base/'sites/demo',target_is_directory=True)
+        with self.assertRaises(AIError):geo.GeoStore(other_base,'other')
+
     def test_observations_keep_question_versions_and_exclude_failures(self):
         q=self.question()
         success=self.observation(q)

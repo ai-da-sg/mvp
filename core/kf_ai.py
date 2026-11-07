@@ -54,6 +54,24 @@ def atomic_json(path, data):
             os.unlink(name)
 
 
+def managed_site_directory(base, slug):
+    """Resolve registered cross-installation aliases without changing site identity.
+
+    Site aliases are provisioned on disk by the operator, never supplied as paths
+    through the API. A link may only name the same slug in another sites directory.
+    """
+    if not isinstance(slug, str) or not re.fullmatch(r'[a-z][a-z0-9-]{1,39}', slug):
+        raise AIError('Invalid site')
+    site = Path(base).resolve() / 'sites' / slug
+    try:
+        resolved = site.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise AIError('Site does not exist') from None
+    if (site.is_symlink() and (resolved.name != slug or resolved.parent.name != 'sites')) or not (resolved / 'meta.json').is_file():
+        raise AIError('Site does not exist')
+    return resolved
+
+
 def text(value, label, limit=2000, required=False):
     if not isinstance(value, str) or len(value) > limit or (required and not value.strip()):
         raise AIError("%s 必须是%s不超过 %d 字的文本" % (label, "非空、" if required else "", limit))

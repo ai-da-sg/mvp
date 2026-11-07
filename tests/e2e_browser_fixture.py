@@ -10,6 +10,13 @@ fixture.setUp()
 m = fixture.m
 writing_server = None
 try:
+    if os.environ.get('KF_E2E_GEO_ALIAS') == '1':
+        # The main installation registers clone-lab sites as same-slug aliases.
+        # Exercise the real filesystem layout rather than only plain directories.
+        shared = fixture.base / 'shared-install' / 'sites'
+        shared.mkdir(parents=True)
+        (fixture.base / 'sites/demo').rename(shared / 'demo')
+        (fixture.base / 'sites/demo').symlink_to(shared / 'demo', target_is_directory=True)
     if os.environ.get('KF_E2E_REAL_AI_BASE'):
         # Explicit opt-in only: use the existing configured upstream in a disposable app.
         source = Path(os.environ['KF_E2E_REAL_AI_BASE']).resolve() / 'console'

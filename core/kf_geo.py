@@ -21,7 +21,7 @@ from urllib.parse import urlsplit, urljoin
 from urllib.robotparser import RobotFileParser
 import uuid
 
-from kf_ai import AIError, atomic_json, complete
+from kf_ai import AIError, atomic_json, complete, managed_site_directory
 from kf_styles import public_url, public_addresses
 
 AI_SLOTS = threading.BoundedSemaphore(2)
@@ -83,11 +83,7 @@ class GeoStore:
     COLLECTIONS = ('facts', 'questions', 'observations', 'audits', 'proposals')
 
     def __init__(self, base, slug):
-        if not isinstance(slug, str) or not re.fullmatch(r'[a-z][a-z0-9-]{1,39}', slug):
-            raise AIError('Invalid site')
-        site = Path(base).resolve() / 'sites' / slug
-        if site.is_symlink() or not (site / 'meta.json').is_file():
-            raise AIError('Site does not exist')
+        site = managed_site_directory(base, slug)
         self.slug = slug
         self.root = site / '.geo'
         if self.root.is_symlink():
