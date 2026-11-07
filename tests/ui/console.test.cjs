@@ -213,7 +213,7 @@ print(json.dumps(result))
  await page.locator('#mcpNew').click();await page.locator('#mcpId').fill('fixture');await page.locator('#mcpName').fill('Fixture service');await page.locator('#mcpUrl').fill('https://example.com/mcp');await page.locator('#mcpToken').fill('fixture-bearer-token');
  await page.locator('#mcpForm button[type=submit]').click();await page.waitForSelector('[data-mcp-edit]');assert.equal(await page.locator('#mcpToken').inputValue(),'');assert.ok(!(await page.locator('#mcpList').textContent()).includes('fixture-bearer-token'));
  await page.locator('[data-mcp-edit]').click();assert.equal(await page.locator('#mcpToken').inputValue(),'');await page.locator('#mcpCancel').click();
- await page.locator('#mcpSearch').fill('missing');assert.equal(await page.locator('[data-mcp-edit]').count(),0);await page.locator('#mcpSearch').fill('');
+ await page.locator('#mcpSearch').fill('missing');await page.waitForFunction(()=>document.querySelector('#mcpSearch').value==='missing'&&!document.querySelector('[data-mcp-edit]'));await page.locator('#mcpSearch').fill('');await page.locator('[data-mcp-edit]').waitFor();
  await page.locator('[data-mcp-test]').click();await page.waitForSelector('#mcpResult:not(.hidden)');assert.match(await page.locator('#mcpResult').textContent(),/search/);
  await page.setViewportSize({width:375,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  if(out)await page.screenshot({path:path.join(out,'mcp-mobile.png'),fullPage:true});await page.setViewportSize({width:1440,height:1000});
