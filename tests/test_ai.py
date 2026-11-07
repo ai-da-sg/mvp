@@ -215,7 +215,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('geo.js','clients-ui.js','page-ui.js','design-ui.js','media-ui.js','dns-ui.js','billing.js','leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
+        for filename in ('geo-analysis.js','geo-collection.js','geo.js','clients-ui.js','page-ui.js','design-ui.js','media-ui.js','dns-ui.js','billing.js','leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()

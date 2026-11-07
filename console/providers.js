@@ -1,6 +1,6 @@
 /* Account credentials are write-only and cleared when the page is hidden. */
 let PROVIDERS={catalog:{},items:[]},PROVIDER_EDIT=null;
-const PROVIDER_CAPS={dns:'DNS 解析',cloud:'资源与域名清单（只读）',mail:'邮件发送',mcp:'官方 MCP 认证'};
+const PROVIDER_CAPS={geo:'GEO 联网搜索',dns:'DNS 解析',cloud:'资源与域名清单（只读）',mail:'邮件发送',mcp:'官方 MCP 认证'};
 async function loadProviders(){return AdminUI.load('#providerList','#providerRefresh','#providerMsg',async()=>{PROVIDERS=await aiRequest('/api/automation/providers');renderProviders();});}
 function renderProviders(){
  const q=$('#providerSearch').value.trim().toLowerCase();

@@ -40,8 +40,8 @@
   "implementation": {
     "route": "/#geo?site=<slug>",
     "storage": "sites/<slug>/.geo/workspace.json",
-    "prompt_management": "Existing prompt library, GEO category; three modules per language with versions and snapshots",
-    "observation_acquisition": "Operator entry or JSON batch import; real search, grounded API and simulation remain separate",
+    "prompt_management": "Existing prompt library, GEO category; six modules per language, additive seed migration preserves custom text and history.",
+    "observation_acquisition": "Manual evidence import and official OpenAI/Gemini grounded API collection; verified connections, durable plans and quota-bound jobs.",
     "diagnostics": "Pinned public IP HTTP fetch, HTML, robots, sitemap and response indexing headers; WAF/verified bots and index inclusion require external verification",
     "publishing": "Reviewed proposal appends a sanitized section to existing page draft; existing preview, publication journal and restore remain authoritative"
   },
@@ -49,6 +49,97 @@
     "python -m unittest discover -s tests -v",
     "python tools/kf_check.py",
     "npm test --prefix tests/ui",
-    "KF_E2E_REAL_AI_BASE=<configured-base> KF_E2E_REAL_AI_PROFILE=<real-profile> npm run test:geo:live --prefix tests/ui"
-  ]
+    "KF_E2E_REAL_AI_BASE=<configured-base> KF_E2E_REAL_AI_PROFILE=<real-profile> npm run test:geo:live --prefix tests/ui",
+    "npm run test:geo:collection --prefix tests/ui",
+    "KF_E2E_GEO_COLLECTION=live KF_E2E_REAL_AI_BASE=<configured-base> KF_E2E_REAL_AI_PROFILE=<real-profile> node tests/ui/geo-collection.test.cjs"
+  ],
+  "research_update": {
+    "date": "2026-11-07",
+    "source": "https://www.geohui.com/docs/geo-global.html",
+    "access": "Full text retrieved through r.jina.ai after direct origin timed out. White paper is research input, not an API specification.",
+    "official_cross_checks": [
+      "https://developers.google.com/search/docs/appearance/ai-features",
+      "https://developers.openai.com/api/docs/bots",
+      "https://docs.perplexity.ai/docs/resources/perplexity-crawlers",
+      "https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler",
+      "https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers",
+      "https://ai.google.dev/gemini-api/docs/interactions-overview",
+      "https://ai.google.dev/gemini-api/docs/thought-signatures"
+    ],
+    "implemented_in_working_tree": [
+      "Separate metric groups by question identity and immutable version as well as platform, model, channel, environment, language, market, brand and batch.",
+      "Display sample denominators, failed/unsupported/no-search counts and successful answers without citations.",
+      "Add per-question 95% Wilson reference intervals with explicit independent-sample assumption; repeated samples may be correlated. Do not infer causal uplift.",
+      "Export sample dates and cited-domain answer counts; do not count retrieved-but-uncited sources as answer citations."
+    ],
+    "next_delivery": [
+      {
+        "priority": "P0",
+        "area": "automatic_collection",
+        "requirement": "Finish existing official OpenAI/Gemini adapters, encrypted connection management, quotas, scheduling and real-interface validation. API observations remain distinct from consumer product observations. No-search answers remain available as evidence, with denominator policy visible."
+      },
+      {
+        "priority": "P0",
+        "area": "sampling",
+        "requirement": "Allow operator-controlled repeat counts and multiple date windows with total request estimate and quota checks. Never automatically increase paid sampling to match a white-paper recommendation. Add stable question-set and collection-protocol versions before cross-batch comparison."
+      },
+      {
+        "priority": "P1",
+        "area": "brand_entities",
+        "requirement": "Version brand aliases, owned domains and explicitly selected competitors; separately review mention, recommendation and factual accuracy. Brand-name detection alone is not a recommendation. Define share-of-voice denominator before reporting it."
+      },
+      {
+        "priority": "P1",
+        "area": "content_and_prompts",
+        "requirement": "Reuse bilingual modular prompt library for neutral question variants, funnel coverage, direct factual answers, conditions, prices/dates when evidenced, citations and source freshness. Preserve operator customizations and prompt history; never generate unsupported awards, reviews or ranking promises."
+      },
+      {
+        "priority": "P1",
+        "area": "source_opportunities",
+        "requirement": "Classify frequently cited sources as owned, independent, community, marketplace or unknown with operator review. Reuse existing task workflow for evidence-backed outreach/content tasks; no automatic third-party posting."
+      },
+      {
+        "priority": "P1",
+        "area": "technical_access",
+        "requirement": "Separate search, training and user-triggered crawler policies; verify each provider against current official documentation. robots.txt and a successful HTTP response do not prove verified crawler access or index inclusion. No mandatory llms.txt or invented GEO schema."
+      },
+      {
+        "priority": "P2",
+        "area": "experiments_and_attribution",
+        "requirement": "Link publication history to baseline/retest windows and control questions. Require comparable question/protocol versions. Add cluster-aware intervals for aggregates; do not interpret non-overlapping intervals alone as causal evidence. Keep referral analytics, self-reported acquisition and visibility distinct; missing attribution remains unknown."
+      }
+    ],
+    "interface": "Preserve six-step GEO workflow, shared AdminUI tables/forms, SiteContext, bilingual text and progressive disclosure. Connection credentials belong in system settings; per-site plans belong in audit/observations; evidence and uncertainty belong in reports.",
+    "not_adopted_as_facts": [
+      "White-paper traffic, platform-adoption and uplift percentages without validating their original studies.",
+      "A universal minimum sample count or confidence guarantee.",
+      "Gemini API results as Google AI Overviews/AI Mode visibility.",
+      "Automatic crawler-policy changes or claims that a special schema guarantees citations."
+    ],
+    "release_status": "Source implementation verified. Release acceptance additionally requires the exact packaged browser suite, successful CI and matching runtime manifests on both installations.",
+    "implementation_status": {
+      "sampling": "Implemented manual/6h/12h/daily/weekly schedules, repeats 1–40, request estimates/caps, immutable question and protocol snapshots; comparison rejects differing conditions and mixed question versions.",
+      "brand_entities": "Implemented aliases, owned domains and up to ten competitors, versioned snapshots, literal-match evidence, separate human mention/recommendation/accuracy reviews and explicit selected-brand share-of-voice denominator.",
+      "content_and_prompts": "Added six bilingual modules without overwriting customized modules; content context includes observed source evidence and operator source reviews, while factual claims still require approved facts.",
+      "source_opportunities": "Evidence-linked source-domain classification and reviewed opportunity notes; handoff reuses existing GEO proposal, page draft and publication workflow. No third-party posting.",
+      "technical_access": "Read-only purpose-specific robots rules for search, training, Google-Extended and user-triggered fetchers, with current official source links and explicit unverified actual access.",
+      "experiments_and_attribution": "Immutable publication-linked baseline/retest snapshots with observed time windows, optional controls, descriptive differences and paired whole-question bootstrap intervals. Separate manually evidenced referral/self-reported/unknown attribution; missing counts remain null and overlapping periods are not pooled."
+    }
+  },
+  "automatic_collection": {
+    "status": "implemented",
+    "connections": "Admin-only GEO search connections reuse the encrypted ProviderStore; official OpenAI profile import never returns credentials to the browser. Connections require a version-matched search probe.",
+    "plans": "Site-scoped question and account snapshots, 1–40 repetitions, manual/6h/12h/daily/weekly schedules, at most 120 requests per round, UTC daily quota reserved before network I/O.",
+    "runs": "Existing ActionStore journal; exclusive admission per plan, idempotent requests, explicit retries, pause between requests, no automatic replay after restart.",
+    "evidence": "Original answer, answer citations, distinct retrieved sources, actual search calls, model, usage and raw response. Google suggestions are displayed in an opaque script-free iframe. No-search and incomplete results remain inspectable.",
+    "verification": {
+      "unit_and_http": "9 collection tests passed, including credential redaction, permissions, archive scope, quota corruption, duplicate submission and restart behavior.",
+      "baseline_python": "198 Python tests passed, including collection, analysis, experiment, attribution and HTTP authorization coverage.",
+      "live_openai": "Official configured gpt-6-astra web search succeeded; full disposable browser connection-import/probe/plan/run/evidence workflow passed.",
+      "gemini": "Adapter follows retrieved official Interactions search schema; no configured Gemini credential, live verification pending.",
+      "browser": "Full project browser regression passed. Expanded GEO flow covers entities, source review, comparison, publication-linked experiments, unknown attribution, bilingual UI, mobile layout and delayed collection progress.",
+      "live_content": "Configured real LLM passed separate English/Chinese question and proposal generation with evidence snapshots and reviewed draft transfer."
+    },
+    "deployment": "Acceptance is verified against the exact release archive, CI results and installed release.json manifests; runtime data and credentials are excluded from releases."
+  }
 }

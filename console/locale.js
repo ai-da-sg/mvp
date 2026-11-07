@@ -1,5 +1,11 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+模型|Model
+GEO 采集连接|GEO search connections
+GEO 联网搜索|GEO web search
+每日请求上限|Daily request cap
+最大输出 Token|Maximum output tokens
+GEO 官方联网 API；搜索能力需在 GEO 采集连接中验证。|Official GEO search API; verify search capability in GEO search connections.
 行业分类|Industry
 Invalid writing field for module|Invalid writing field for module
 提示词语言|Prompt language

@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 import kf_ai
 import kf_prompts
 import kf_geo
+import kf_geo_collector
 import kf_design_profiles
 import kf_styles
 import kf_sso
@@ -266,7 +267,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/geo.js", "/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/geo-analysis.js", "/geo-collection.js", "/geo.js", "/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -2609,7 +2610,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <details class="nav-group" data-group="0" open><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>站点运营</summary><div class="submenu"><button type="button" class="tab" data-t="automation" aria-controls="p-automation">运营助手</button><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
 <details class="nav-group" data-group="1"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-1 5 5-1L21 7l-6-6L4 16ZM13 3l6 6"/></svg>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="geo" aria-controls="p-geo">GEO</button><button type="button" class="tab" data-t="styles" aria-controls="p-styles">风格模板</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
 <details class="nav-group" data-group="2"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4v2"/></svg>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
-<details class="nav-group" data-group="3"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details><details class="nav-group" data-group="4"><summary>个人设置</summary><div class="submenu"><button type="button" class="tab" data-t="account" aria-controls="p-account">我的账号</button></div></details></nav></aside>
+<details class="nav-group" data-group="3"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="geo-settings" aria-controls="p-geo-settings">GEO 采集连接</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details><details class="nav-group" data-group="4"><summary>个人设置</summary><div class="submenu"><button type="button" class="tab" data-t="account" aria-controls="p-account">我的账号</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
 <div class="page-heading"><div><div class="breadcrumb" id="breadcrumb">站点运营 / 站点总览</div><h2 id="pageTitle" tabindex="-1">站点总览</h2></div><span id="editorGlobalState" role="status"></span></div>
 <div id="siteWorkspace" class="formrow" hidden><div class="field"><label for="workspaceSite">当前站点</label><select id="workspaceSite"></select></div><button type="button" class="ghost" id="workspaceOverview">所有站点</button></div>
@@ -2995,7 +2996,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <form id="dApplyForm" class="hidden"><h3 data-design-text="apply"></h3><p id="dApplyTarget" data-user-content></p><div id="dApplyPreview"></div><p class="hint" data-design-text="applyHint"></p><label><input id="dApplyConfirmed" type="checkbox" required><span data-design-text="confirm"></span></label><div class="domain-form-actions"><button id="dApplyExecute" type="submit" data-design-text="apply"></button><button id="dApplyCancel" type="button" class="ghost" data-design-text="cancel"></button></div><div id="dApplyMsg" class="msg" role="status"></div></form>
 </div>
 
-<style>#geoRoot .field{min-width:0;flex:1}#geoRoot textarea,#geoRoot input:not([type=checkbox]),#geoRoot select{width:100%;box-sizing:border-box}#geoRoot pre{white-space:pre-wrap;overflow-wrap:anywhere}#geoRoot form{margin-block:16px}#geoRoot .domain-form-actions{flex-wrap:wrap}#geoRoot [aria-current=step]{border:2px solid currentColor;font-weight:700}#geoRoot button{min-height:44px}#geoRoot td{overflow-wrap:anywhere}#geoRoot details{margin-block:12px}</style><div id="p-geo" class="hidden"><div id="geoRoot"></div></div>
+<style>:is(#geoRoot,#geoSettingsRoot) .field{min-width:0;flex:1}:is(#geoRoot,#geoSettingsRoot) textarea,:is(#geoRoot,#geoSettingsRoot) input:not([type=checkbox]),:is(#geoRoot,#geoSettingsRoot) select{width:100%;box-sizing:border-box}:is(#geoRoot,#geoSettingsRoot) pre{white-space:pre-wrap;overflow-wrap:anywhere}:is(#geoRoot,#geoSettingsRoot) form{margin-block:16px}:is(#geoRoot,#geoSettingsRoot) .domain-form-actions{flex-wrap:wrap}:is(#geoRoot,#geoSettingsRoot) [aria-current=step]{border:2px solid currentColor;font-weight:700}:is(#geoRoot,#geoSettingsRoot) button{min-height:44px}:is(#geoRoot,#geoSettingsRoot) td{overflow-wrap:anywhere}:is(#geoRoot,#geoSettingsRoot) details{margin-block:12px}</style><div id="p-geo-settings" class="hidden"><div id="geoSettingsRoot"></div></div><div id="p-geo" class="hidden"><div id="geoRoot"></div></div>
 <footer id="foot"></footer>
 </main></div></div>
 <script>
@@ -3006,8 +3007,8 @@ let STATE={sites:[],invoices:[],plans:[]};
 let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
-    ? ['geo','automation','ai','styles','prompts','layout','design','media','share','dns','maint','team','llm','mcp','providers']
-    : (ROLE==='admin' ? [] : ['team','llm','mcp','providers','maint']);
+    ? ['geo-settings','geo','automation','ai','styles','prompts','layout','design','media','share','dns','maint','team','llm','mcp','providers']
+    : (ROLE==='admin' ? [] : ['geo-settings','team','llm','mcp','providers','maint']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
   });
@@ -3021,6 +3022,7 @@ function navigateTo(key, updateHistory=true, site=null){
  if(!t || t.style.display==='none') return false;
  if(site!==null&&typeof Workspace!=='undefined'&&!Workspace.canSelect(site))return false;
  if(key!==CURRENT_TAB&&typeof AdminUI!=='undefined'&&!AdminUI.canLeave())return false;
+ if(CURRENT_TAB==='geo-settings'&&typeof gcCanLeave==='function'&&!gcCanLeave())return false;
  if(CURRENT_TAB==='geo'&&typeof geoCanLeave==='function'&&!geoCanLeave())return false;
  if(CURRENT_TAB==='styles'&&key!=='styles'&&typeof styleCanLeave==='function'&&!styleCanLeave())return false;
  if(typeof ACCOUNT_BUSY!=='undefined'&&ACCOUNT_BUSY){showGlobalError('正在更新账号安全设置，请稍候。');return false;}
@@ -3041,7 +3043,7 @@ function navigateTo(key, updateHistory=true, site=null){
  if(updateHistory&&location.hash!==route)history.pushState(null,'',route);
  if(typeof Workspace!=='undefined')Workspace.render();
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
- const initializers={geo:()=>initGEO(),account:()=>initAccount(),styles:()=>styleLoad(),providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
+ const initializers={'geo-settings':()=>initGEOSettings(),geo:()=>initGEO(),account:()=>initAccount(),styles:()=>styleLoad(),providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
  if(updateHistory){$('#pageTitle').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
  return true;
@@ -3851,7 +3853,7 @@ let REFRESH_RUNNING=false;
 async function refreshConsole(force=false){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;$('#siteHealthRefresh').disabled=true;try{await load(force);}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;$('#siteHealthRefresh').disabled=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/admin-ui.js"></script><script src="/clients-ui.js"></script><script src="/page-ui.js"></script><script src="/design-ui.js"></script><script src="/media-ui.js"></script><script src="/dns-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/billing.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script><script src="/geo.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/clients-ui.js"></script><script src="/page-ui.js"></script><script src="/design-ui.js"></script><script src="/media-ui.js"></script><script src="/dns-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/billing.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script><script src="/geo.js"></script><script src="/geo-collection.js"></script><script src="/geo-analysis.js"></script></body></html>"""
 
 
 _AI = None
@@ -4237,6 +4239,25 @@ def _publish_site(body, render, step=lambda *args: None):
 _AUTOMATION = None
 _WORKFLOWS = None
 _AUTOMATION_LOCK = threading.RLock()
+
+
+_GEO_COLLECTOR = None
+_GEO_COLLECTOR_LOCK = threading.Lock()
+
+
+def geo_collect_access(user,slug):
+    entry=load_users().get(user) or {}
+    if not entry.get('active') or entry.get('role') not in ('admin','ops') or not can_write(entry['role'],'/api/geo/'):
+        raise kf_ai.AIError('GEO collection permission is unavailable')
+    automation_context(slug)
+    if site_archive(slug)['archived']:raise kf_ai.AIError('Restore the archived site before collecting')
+
+
+def geo_collector():
+    global _GEO_COLLECTOR
+    with _GEO_COLLECTOR_LOCK:
+        if _GEO_COLLECTOR is None:_GEO_COLLECTOR=kf_geo_collector.Collector(BASE,geo_collect_access)
+    return _GEO_COLLECTOR
 
 
 def automation_context(slug):
@@ -4711,7 +4732,50 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(code,data)
 
 
+    def _geo_collection(self, path, body=None):
+        if self.user_role not in ('admin','ops'):
+            return self._send(403,{'error':'GEO requires an operations account'})
+        try:
+            if body is not None and not isinstance(body,dict):raise kf_ai.AIError('Collection request must be an object')
+            collector=geo_collector()
+            if body is None:
+                slug=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('slug',[''])[0]
+                if slug:geo_collect_access(self.user,slug)
+                elif self.user_role!='admin':return self._send(403,{'error':'Administrator access required'})
+                if path!='/api/geo/collection/config':return self._send(404,{'error':'Unknown collection endpoint'})
+                return self._send(200,collector.config(slug or None))
+            action=path.removeprefix('/api/geo/collection/')
+            if action in ('connection','test','import-llm'):
+                if self.user_role!='admin':return self._send(403,{'error':'Administrator access required'})
+                if action=='test':return self._send(200,{'verification':collector.probe(body.get('id'),body.get('version'),self.user)})
+                if action=='import-llm':
+                    if not isinstance(body.get('values',{}),dict):raise kf_ai.AIError('Connection values must be an object')
+                    profile,key=ai_store().resolve(body.get('profile_id'))
+                    if profile['protocol']!='openai_responses' or profile['base_url'].rstrip('/')!='https://api.openai.com/v1' or not key:
+                        raise kf_ai.AIError('Select an existing official OpenAI Responses configuration')
+                    body={**body,'provider':'openai_search','capabilities':['geo'],'enabled':True,
+                          'values':{'api_key':key,'model':profile['model'],'daily_limit':body.get('values',{}).get('daily_limit','40'),'max_tokens':body.get('values',{}).get('max_tokens','4096')}}
+                if body.get('action')!='delete':
+                    if body.get('provider') not in kf_geo_collector.PROVIDERS:raise kf_ai.AIError('Unsupported GEO provider')
+                    if not isinstance(body.get('sites'),list) or not body['sites'] or len(body['sites'])>100 or any(not isinstance(slug,str) for slug in body['sites']):raise kf_ai.AIError('Select authorized sites')
+                    for slug in body.get('sites',[]):geo_collect_access(self.user,slug)
+                else:
+                    old=next((a for a in collector.providers.public() if a['id']==body.get('id')),None)
+                    if not old or old['provider'] not in kf_geo_collector.PROVIDERS:raise kf_ai.AIError('Search connection not found')
+                return self._send(200,{'account':collector.providers.save(body,self.user)})
+            if action=='plan':return self._send(200,{'plan':collector.save_plan(body,self.user)})
+            if action=='plan-action':return self._send(200,{'plan':collector.change_plan(body,self.user)})
+            if action=='run':
+                item=collector.start(body.get('id'),self.user,body.get('version'),body.get('request_key'),retry=body.get('retry_run_id'))
+                return self._send(202,{'run_id':item['id'],'state':item['state']})
+            return self._send(404,{'error':'Unknown collection endpoint'})
+        except (kf_tool_runtime.ActionConflict,kf_domain_vault.VaultConflict) as exc:return self._send(409,{'error':str(exc)})
+        except kf_ai.AIError as exc:return self._send(400,{'error':str(exc)})
+        except OSError:return self._send(503,{'error':'Collection storage unavailable; reload before retrying'})
+
     def _geo(self, path, body=None):
+        if path.startswith('/api/geo/collection/'):
+            return self._geo_collection(path,body)
         if self.user_role not in ('admin', 'ops'):
             return self._send(403, {'error': 'GEO requires an operations account'})
         try:
@@ -4723,12 +4787,18 @@ class Handler(BaseHTTPRequestHandler):
             store = kf_geo.GeoStore(BASE, slug)
             data = store.read()
             if body is None:
+                import kf_geo_analysis
+                if path=='/api/geo/comparison':
+                    return self._send(200,kf_geo_analysis.comparison(data,query.get('baseline',[''])[0],query.get('retest',[''])[0]))
+                if path=='/api/geo/response':
+                    return self._send(200,{'response':store.response(query.get('id',[''])[0])})
                 if path not in ('/api/geo/workspace', '/api/geo/export'):
                     return self._send(404, {'error': 'Unknown GEO endpoint'})
                 from kf_style_catalog_v2 import SECTORS
                 draft = read_draft(slug)
                 return self._send(200, {'workspace': data, 'site': context, 'sectors': SECTORS,
-                    'metrics': kf_geo.metrics(data, context['domain']), 'prompts': kf_prompts.PromptStore(BASE).geo_modules(),
+                    'metrics': kf_geo.metrics(data, context['domain']), 'analysis':kf_geo_analysis.overview(data,context['domain']),
+                    'publications':kf_publications.PublicationStore(BASE,slug).history(), 'prompts': kf_prompts.PromptStore(BASE).geo_modules(),
                     'pages': [{'slug': p['slug'], 'title': p.get('title', p['slug']),
                                'version': kf_design_profiles.fingerprint(p)} for p in draft.get('pages', [])]})
             if type(body.get('revision')) is not int or body.get('revision') != data['revision']:
@@ -4736,6 +4806,15 @@ class Handler(BaseHTTPRequestHandler):
             action = path.removeprefix('/api/geo/')
             if action == 'profile':
                 result = store.save_profile(body, self.user)
+            elif action=='review':
+                result=store.review_observation(body,self.user)
+            elif action=='source-review':
+                result=store.review_source(body,self.user)
+            elif action=='experiment':
+                publication=kf_publications.PublicationStore(BASE,slug).get(body.get('publication_id'))
+                result=store.save_experiment(body,self.user,publication)
+            elif action=='attribution':
+                result=store.save_attribution(body,self.user)
             elif action in ('facts', 'questions'):
                 result = store.save_item(action, body, self.user)
             elif action == 'delete':
@@ -4819,7 +4898,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = data
             else:
                 return self._send(404, {'error': 'Unknown GEO endpoint'})
-            return self._send(200, {'workspace': result, 'metrics': kf_geo.metrics(result, context['domain'])})
+            import kf_geo_analysis
+            return self._send(200, {'workspace': result, 'metrics': kf_geo.metrics(result, context['domain']),'analysis':kf_geo_analysis.overview(result,context['domain'])})
         except kf_geo.GeoConflict as exc:
             return self._send(409, {'error': str(exc)})
         except kf_ai.AIError as exc:
@@ -4859,7 +4939,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/geo.js", "/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/geo-analysis.js", "/geo-collection.js", "/geo.js", "/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if path.startswith("/api/geo/"):
             return self._geo(path)
@@ -6640,6 +6720,7 @@ if __name__ == "__main__":
         print("users init failed:", e, flush=True)
     automation_store()
     workflow_store()
+    geo_collector().start_scheduler()
     srv = ThreadingHTTPServer((BIND, PORT), Handler)
     print(f"KampongFlow console v2 on {BIND}:{PORT}", flush=True)
     srv.serve_forever()

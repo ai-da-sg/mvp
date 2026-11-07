@@ -171,6 +171,25 @@ class PromptStore:
                 data['geo_seed_version'] = 1
                 data['revision'] += 1
                 atomic_json(self.path, data)
+            if data.get('geo_seed_version',0)<2:
+                seeds=[
+                    ('questions-variants','GEO 中立问题变体','GEO neutral question variants',
+                     '按认知、考虑、决策阶段组织实际需求，为同一需求提供不同自然问法。分别生成中文或英文，不把翻译当作独立市场证据。以不含品牌名的品类和场景问题为主，将品牌问题单独标注。不要诱导推荐本站或贬低竞品。',
+                     'Cover awareness, consideration and decision needs with natural variants of each need. Generate Chinese and English independently; translations are not independent market evidence. Favor unbranded category and scenario questions, labeling brand questions separately. Never lead answers toward the target brand or disparage competitors.'),
+                    ('evidence-freshness','GEO 来源时效与可追溯性','GEO source freshness and traceability',
+                     '每项业务陈述对应已批准事实及其来源。涉及价格、日期、资质、地域适用范围时明确有效期和限制。观测到的模型回答与第三方引用仅用于发现待核验问题，不能替代事实核验。缺少证据时省略陈述并建议补证，不捏造引语、研究或统计。',
+                     'Map each business claim to an approved fact and its source. Specify validity and limitations for prices, dates, qualifications and geographic scope. Observed model answers and third-party citations identify research questions but do not replace fact verification. Omit unsupported claims and request evidence; never fabricate quotes, studies or statistics.'),
+                    ('content-answer-quality','GEO 可引用内容与公平比较','GEO citable answers and fair comparisons',
+                     '先给直接、完整的答案，再给适用条件、步骤和有证据支持的比较维度。每节主语明确，重要信息保留可见文本；作者、更新时间和出处仅在有真实依据时添加。避免隐藏指令、关键词堆砌、虚假评价以及为爬虫和用户显示不同内容。优化后需按同一问题和条件复测，不承诺排名或增长。',
+                     'Lead with a direct complete answer, then applicability, steps and evidenced comparison criteria. Use explicit subjects and visible text for important information. Include authorship, update dates and sources only when substantiated. Avoid hidden instructions, keyword stuffing, fabricated reviews and cloaking. Retest with the same questions and conditions; never promise rankings or growth.')]
+                existing={m['id'] for m in data['modules']};additions=[]
+                for key,zh,en,zh_body,en_body in seeds:
+                    for lang,name,body in [('zh',zh,zh_body),('en',en,en_body)]:
+                        ident='geo-'+key+'-'+lang
+                        if ident not in existing:additions.append(dict(id=ident,name=name,category='geo',description=name,language=lang,sector='general',body=body,enabled=True,version=1,updated_at=int(time.time()),history=[]))
+                if len(data['modules'])+len(additions)>100:raise AIError('提示词库空间不足，无法添加 GEO 模块')
+                data['modules'].extend(additions);data['geo_seed_version']=2;data['revision']+=1
+                atomic_json(self.path,data)
             return {'revision': data['revision'], 'modules': [
                 {k:v for k,v in m.items() if k != 'history'} for m in data['modules']
                 if m['category'] == 'geo' and m['enabled']]}

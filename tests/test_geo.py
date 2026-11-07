@@ -93,6 +93,55 @@ class GeoTests(unittest.TestCase):
         with self.assertRaises(AIError):self.store.observe({'revision':2,'items':[failed]},'ops')
         self.assertEqual(self.store.read()['revision'],2)
 
+    def test_metrics_separate_questions_versions_and_preserve_empty_outcomes(self):
+        q = self.question()
+        data = self.store.observe({'revision': 1, 'items': [self.observation(q)]}, 'ops')
+        original = data['observations'][0]
+        changed = copy.deepcopy(original)
+        changed['question']['version'] = 2
+        changed['brand_mentioned'] = False
+        changed['citations'] = []
+        other = copy.deepcopy(original)
+        other['question']['id'] = 'f' * 32
+        no_search = dict(original, status='no_search', brand_mentioned=None, citations=[])
+        data['observations'] = [original, changed, other, no_search]
+        groups = geo.metrics(data, 'example.com')
+        self.assertEqual(len(groups), 3)
+        self.assertEqual((groups[0]['success'], groups[0]['total'], groups[0]['no_search']), (1, 2, 1))
+        self.assertEqual(groups[0]['mention_rate'], 1)
+        self.assertEqual(groups[0]['source_domains'], [('example.com', 1)])
+        self.assertEqual(groups[1]['uncited_answers'], 1)
+        self.assertEqual(groups[1]['citation_rate'], 0)
+        self.assertEqual(groups[0]['sample_dates'], [original['observed_at'][:10]])
+
+    def test_wilson_intervals_and_source_counts(self):
+        self.assertIsNone(geo.rate_interval(0, 0))
+        self.assertAlmostEqual(geo.rate_interval(0, 1)[1], 0.79345, places=4)
+        self.assertAlmostEqual(geo.rate_interval(1, 1)[0], 0.20655, places=4)
+        lo, hi = geo.rate_interval(50, 100)
+        self.assertAlmostEqual(lo, 0.40383, places=4)
+        self.assertAlmostEqual(hi, 0.59617, places=4)
+        q = self.question()
+        item = dict(self.observation(q), citations=['https://example.com/a', 'https://example.com/b', 'https://example.com.evil.org/'])
+        data = self.store.observe({'revision': 1, 'items': [item]}, 'ops')
+        group = geo.metrics(data, 'example.com')[0]
+        self.assertEqual(group['source_domains'], [('example.com', 1), ('example.com.evil.org', 1)])
+        self.assertEqual(geo.metrics(data, 'evil.org')[0]['citations'], 0)
+
+    def test_official_report_source_and_no_search_denominator(self):
+        q=self.question()
+        report=dict(self.observation(q),channel='official_report')
+        with self.assertRaises(AIError):self.store.observe({'revision':1,'items':[report]},'ops')
+        report['evidence_url']='https://example.com/report'
+        no_search=dict(self.observation(q),status='no_search',citations=[])
+        data=self.store.observe({'revision':1,'items':[report,no_search]},'ops')
+        groups=geo.metrics(data,'example.com')
+        self.assertEqual(len(groups),2)
+        self.assertEqual(groups[0]['channel'],'official_report')
+        self.assertEqual(groups[1]['no_search'],1)
+        self.assertIsNone(groups[1]['mention_rate'])
+        self.assertTrue(data['observations'][1]['answer'])
+
     def test_content_requires_current_approved_language_fact_and_real_model(self):
         f=self.fact();data=self.store.read();profile={'protocol':'openai_chat','id':'real','model':'model'}
         response=json.dumps(dict(title='Workshops',text='Offers workshops',fact_ids=[f['id']],rationale='Answers the question'))
@@ -187,7 +236,7 @@ class GeoHTTPTests(unittest.TestCase):
         store=self.fixture.m.kf_prompts.PromptStore(self.fixture.base)
         original=store.read()
         seeded=store.geo_modules()
-        self.assertEqual(len(seeded['modules']),6)
+        self.assertEqual(len(seeded['modules']),12)
         self.assertEqual(store.geo_modules()['revision'],seeded['revision'])
         current=store.read()
         self.assertEqual(current['modules'][:len(original['modules'])],original['modules'])

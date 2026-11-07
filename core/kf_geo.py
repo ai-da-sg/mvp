@@ -11,6 +11,7 @@ import http.client
 import hashlib
 from html.parser import HTMLParser
 import json
+import math
 from pathlib import Path
 import re
 import socket
@@ -137,7 +138,82 @@ class GeoStore:
                  'brand': string(profile.get('brand', ''), 'brand', 200, True)}
         if clean['sector'] not in SECTORS:
             raise AIError('Invalid industry')
-        return self.mutate(body.get('revision'), user, lambda d: d.update(profile=clean))
+        from kf_geo_analysis import clean_entities
+        clean.update(clean_entities({**profile,'brand':clean['brand']}))
+        def change(data):
+            clean['version']=data['profile'].get('version',0)+1
+            data['profile']=clean
+        return self.mutate(body.get('revision'), user, change)
+
+    def review_observation(self,body,user):
+        def change(data):
+            record=next((o for o in data['observations'] if o['id']==body.get('id')),None)
+            if not record or record['status']!='success':raise AIError('Select a successful observation to review')
+            review={'observation_id':record['id'],'note':string(body.get('note',''),'review note',2000,True),'by':user,'at':time.time()}
+            for field in ('mentioned','recommended','accurate'):
+                value=body.get(field)
+                if field=='mentioned' and type(value) is not bool:raise AIError('Confirm whether the target brand was mentioned')
+                if value is not None and type(value) is not bool:raise AIError('Invalid review decision')
+                review[field]=value
+            data.setdefault('reviews',[]).append(review)
+        return self.mutate(body.get('revision'),user,change)
+
+    def review_source(self,body,user):
+        from kf_geo_analysis import domains
+        host=domains([body.get('domain')])[0]
+        def change(data):
+            if not any(urlsplit(c).hostname.removeprefix('www.')==host for o in data['observations'] for c in o['citations']):raise AIError('Source domain has no citation evidence')
+            data.setdefault('source_reviews',[]).append({'domain':host,
+                'category':choice(body.get('category'),('owned','independent','community','marketplace','unknown'),'source category'),
+                'note':string(body.get('note',''),'source review',2000,True),'by':user,'at':time.time()})
+        return self.mutate(body.get('revision'),user,change)
+
+    def save_experiment(self,body,user,publication):
+        from kf_geo_analysis import comparison
+        def change(data):
+            baseline=string(body.get('baseline',''),'baseline',100,True);retest=string(body.get('retest',''),'retest',100,True)
+            report=comparison(data,baseline,retest)
+            if not report['comparable']:raise AIError('Experiment batches are not comparable')
+            controls=body.get('control_questions',[])
+            questions={r['question_id'] for r in report['rows']}
+            if not isinstance(controls,list) or any(not isinstance(q,str) or q not in questions for q in controls) or len(set(controls))!=len(controls):raise AIError('Invalid control questions')
+            if controls and not questions-set(controls):raise AIError('Select at least one treatment question')
+            if publication.get('state')!='published':raise AIError('Select a successful publication record')
+            times={batch:[datetime.fromisoformat(o['observed_at']).timestamp() for o in data['observations'] if o['batch']==batch] for batch in (baseline,retest)}
+            pub={k:copy.deepcopy(publication[k]) for k in ('id','state','created','updated','targets') if k in publication}
+            record={'id':uuid.uuid4().hex,'name':string(body.get('name',''),'experiment name',100,True),'baseline':baseline,'retest':retest,
+                    'publication':pub,'control_questions':controls,'report':report,'note':string(body.get('note',''),'experiment note',2000,True),
+                    'publication_between_windows':max(times[baseline])<=publication['updated']<=min(times[retest]),'created':time.time(),'by':user,
+                    'windows':{batch:{'start':min(values),'end':max(values)} for batch,values in times.items()}}
+            record['control_comparisons']=[]
+            for summary in report['summaries']:
+                rows=[r for r in report['rows'] if r['stratum']==summary['stratum']]
+                left=[r['mention_delta'] for r in rows if r['question_id'] in controls]
+                right=[r['mention_delta'] for r in rows if r['question_id'] not in controls]
+                valid=bool(left and right) and all(v is not None for v in left+right)
+                record['control_comparisons'].append({'stratum':summary['stratum'],'control_questions':len(left),'treatment_questions':len(right),
+                    'difference_in_changes':sum(right)/len(right)-sum(left)/len(left) if valid else None,'interpretation':'descriptive; control assignment is operator-supplied; not causal proof'})
+            rows=data.setdefault('experiments',[])
+            if len(rows)>=200:raise AIError('Experiment limit reached')
+            rows.append(record)
+        return self.mutate(body.get('revision'),user,change)
+
+    def save_attribution(self,body,user):
+        record={'channel':choice(body.get('channel'),('referral','self_reported','unknown'),'attribution channel'),
+                'platform':string(body.get('platform',''),'platform',100,True),'start':day(body.get('start',''),True),'end':day(body.get('end',''),True),
+                'evidence_url':url(body.get('evidence_url',''),False),'note':string(body.get('note',''),'attribution evidence',2000,True)}
+        if record['start']>record['end'] or record['end']>date.today().isoformat():raise AIError('Invalid attribution reporting period')
+        for key in ('visits','conversions'):
+            value=body.get(key)
+            if value is not None and (type(value) is not int or not 0<=value<=1000000000):raise AIError('Invalid attribution count')
+            record[key]=value
+        key=hashlib.sha256(json.dumps(record,sort_keys=True).encode()).hexdigest()
+        def change(data):
+            rows=data.setdefault('attribution',[])
+            if len(rows)>=200:raise AIError('Attribution record limit reached')
+            if any(r.get('import_key')==key for r in rows):raise AIError('Attribution evidence already recorded')
+            rows.append(dict(record,id=uuid.uuid4().hex,import_key=key,created=time.time(),by=user,provenance='operator_import'))
+        return self.mutate(body.get('revision'),user,change)
 
     def save_item(self, kind, body, user):
         if kind not in ('facts', 'questions'):
@@ -200,14 +276,14 @@ class GeoStore:
                 question = next((q for q in data['questions'] if q['id'] == item.get('question_id')), None)
                 if question is None:
                     raise AIError('Select an existing question')
-                state = choice(item.get('status'), ('success', 'failed', 'unsupported'), 'status')
-                channel = choice(item.get('channel'), ('manual_search', 'grounded_api', 'simulation'), 'channel')
+                state = choice(item.get('status'), ('success', 'failed', 'unsupported', 'no_search'), 'status')
+                channel = choice(item.get('channel'), ('manual_search', 'grounded_api', 'official_report', 'simulation'), 'channel')
                 citations = item.get('citations', [])
                 if not isinstance(citations, list) or len(citations) > 40:
                     raise AIError('Invalid citations')
                 citations = list(dict.fromkeys(url(c) for c in citations))
-                answer = string(item.get('answer', ''), 'answer', 24000, state == 'success')
-                if state != 'success' and (answer or citations):
+                answer = string(item.get('answer', ''), 'answer', 24000, state in ('success','no_search'))
+                if state in ('failed','unsupported') and (answer or citations):
                     raise AIError('Failed observations cannot contain answers or citations')
                 mentioned = item.get('brand_mentioned')
                 accurate = item.get('facts_accurate')
@@ -223,10 +299,10 @@ class GeoStore:
                           'status': state, 'channel': channel, 'answer': answer, 'citations': citations,
                           'brand_mentioned': mentioned if state == 'success' else None,
                           'facts_accurate': accurate if state == 'success' else None,
-                          'error': string(item.get('error', ''), 'error', 1000, state != 'success'),
-                          'evidence_url': url(item.get('evidence_url', ''), False),
+                          'error': string(item.get('error', ''), 'error', 1000, state in ('failed','unsupported')),
+                          'evidence_url': url(item.get('evidence_url', ''), channel=='official_report'),
                           'created': time.time(), 'created_by': user, 'provenance': 'operator_import',
-                          'brand': data['profile']['brand']}
+                          'brand': data['profile']['brand'],'entity_profile':copy.deepcopy(data['profile'])}
                 identity = {k:v for k,v in record.items() if k not in ('id', 'created', 'created_by')}
                 record['import_key'] = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
                 if any(old.get('import_key') == record['import_key'] for old in data['observations']):
@@ -243,31 +319,94 @@ class GeoStore:
             data[kind].append(dict(record, id=uuid.uuid4().hex, created=time.time(), created_by=user))
         return self.mutate(revision, user, change)
 
+    def record_sample(self, ident, question, result, raw, meta, user):
+        if not re.fullmatch('[a-f0-9]{32}',ident):raise AIError('Invalid observation ID')
+        with self.locked():
+            data=self.read()
+            if any(o['id']==ident for o in data['observations']):return ident
+            if len(data['observations'])>=2000:raise AIError('Observation limit reached')
+            brand=meta['brand']
+            if data['profile']['brand']!=brand:raise GeoConflict('Brand changed during collection')
+            answer=result.get('answer','')
+            normalized=answer.casefold()
+            mentioned=bool(re.search(r'(?<!\w)'+re.escape(brand.casefold())+r'(?!\w)',normalized)) if brand.isascii() else brand.casefold() in normalized
+            item=dict(result,id=ident,question=copy.deepcopy(question),brand=brand,
+                brand_mentioned=mentioned if result['status']=='success' else None,facts_accurate=None,
+                channel='grounded_api',provenance='official_api',mention_method='literal_match_v1',
+                created=time.time(),created_by=user,observed_at=datetime.now(timezone.utc).isoformat(),**{k:v for k,v in meta.items() if k!='brand'})
+            from kf_geo_analysis import mentioned
+            item['entity_profile']=copy.deepcopy(meta.get('entity_profile',data['profile']))
+            if result['status']=='success':item['brand_mentioned']=mentioned(answer,[brand]+item['entity_profile'].get('aliases',[]))
+            data['observations'].append(item)
+            if len(json.dumps(data).encode())>16*1024*1024:raise AIError('GEO workspace capacity reached')
+            responses=self.root/'responses'
+            if responses.is_symlink():raise AIError('Invalid evidence directory')
+            responses.mkdir(mode=0o700,exist_ok=True)
+            path=responses/(ident+'.json')
+            if path.is_symlink():raise AIError('Invalid evidence file')
+            atomic_json(path,raw)
+            data.update(revision=data['revision']+1,updated=time.time(),updated_by=user)
+            atomic_json(self.path,data)
+            return ident
+
+    def response(self,ident):
+        if not isinstance(ident,str) or not re.fullmatch('[a-f0-9]{32}',ident):raise AIError('Invalid observation ID')
+        data=self.read()
+        if not any(o['id']==ident and o.get('provenance')=='official_api' for o in data['observations']):raise AIError('No API evidence for this observation')
+        path=self.root/'responses'/(ident+'.json')
+        if path.is_symlink() or path.parent.is_symlink():raise AIError('Invalid evidence file')
+        try:return json.loads(path.read_text())
+        except (OSError,ValueError):raise AIError('API evidence unavailable') from None
+
+
+def rate_interval(numerator, denominator):
+    """95% Wilson interval, conditional on independent Bernoulli samples."""
+    if not denominator:
+        return None
+    z = 1.959963984540054
+    p = numerator / denominator
+    scale = 1 + z * z / denominator
+    center = (p + z * z / (2 * denominator)) / scale
+    margin = z * math.sqrt(p * (1 - p) / denominator + z * z / (4 * denominator ** 2)) / scale
+    return [max(0, center - margin), min(1, center + margin)]
+
 
 def metrics(data, domain):
     """Never pool channels/platforms/question versions into a misleading rate."""
+    from kf_geo_analysis import identity
     groups = {}
     host = urlsplit('https://' + domain).hostname
     for item in data['observations']:
         q = item['question']
-        key = (item['batch'], item['platform'], item['channel'], item['mode'], item['model'], item['environment'], q['market'], q['language'], item['brand'])
+        key = (item['batch'], item['platform'], item['channel'], item['mode'], item['model'], item['environment'], q['market'], q['language'], item['brand'], q['id'], q['version'],identity(item.get('entity_profile',{'brand':item['brand']})),item.get('protocol_version','operator_record_v1'))
         group = groups.setdefault(key, dict(batch=key[0], platform=key[1], channel=key[2], mode=key[3], model=key[4], environment=key[5],
-            market=key[6], language=key[7], brand=key[8], total=0, success=0, failed=0, unsupported=0, mentions=0, citations=0, reviewed=0, accurate=0, question_versions=set()))
+            market=key[6], language=key[7], brand=key[8], question_id=q['id'], question_version=q['version'], question_text=q['text'], intent=q.get('intent', ''),
+            total=0, success=0, failed=0, unsupported=0, no_search=0, mentions=0, citations=0, reviewed=0, accurate=0, uncited_answers=0,
+            question_versions=set(), sample_dates=set(), source_domains={}))
         group['total'] += 1
         group[item['status']] += 1
         group['question_versions'].add((q['id'], q['version']))
+        group['sample_dates'].add(item['observed_at'][:10])
         if item['status'] != 'success':
             continue
         group['mentions'] += int(item['brand_mentioned'])
         group['citations'] += int(any(urlsplit(c).hostname in (host, 'www.' + host) for c in item['citations']))
+        group['uncited_answers'] += int(not item['citations'])
+        for cited_host in {urlsplit(c).hostname for c in item['citations']} - {None}:
+            group['source_domains'][cited_host] = group['source_domains'].get(cited_host, 0) + 1
         if item['facts_accurate'] is not None:
             group['reviewed'] += 1
             group['accurate'] += int(item['facts_accurate'])
     for group in groups.values():
         group['question_versions'] = sorted(group['question_versions'])
+        group['sample_dates'] = sorted(group['sample_dates'])
+        group['source_domains'] = sorted(group['source_domains'].items(), key=lambda pair: (-pair[1], pair[0]))
         group['mention_rate'] = group['mentions'] / group['success'] if group['success'] else None
         group['citation_rate'] = group['citations'] / group['success'] if group['success'] else None
         group['accuracy_rate'] = group['accurate'] / group['reviewed'] if group['reviewed'] else None
+        group['mention_interval'] = rate_interval(group['mentions'], group['success'])
+        group['citation_interval'] = rate_interval(group['citations'], group['success'])
+        group['interval_method'] = 'wilson_95_independent_samples'
     return list(groups.values())
 
 
@@ -375,8 +514,19 @@ def diagnose(target, domain, fetch=fetch_document):
         same_site = urlsplit(robots_final).hostname in (expected, 'www.' + expected)
         if robots_status == 200 and same_site and 'text/plain' in robots_headers.get('content-type', ''):
             parser = RobotFileParser(); parser.parse(robots.splitlines())
-            agents = {agent: parser.can_fetch(agent, final) for agent in ('Googlebot', 'Bingbot', 'OAI-SearchBot')}
-            checks.append(dict(code='robots_txt', status='pass' if all(agents.values()) else 'warning', agents=agents))
+            policies={
+                'search':('Googlebot','Bingbot','OAI-SearchBot','PerplexityBot','Claude-SearchBot'),
+                'training':('GPTBot','ClaudeBot'),
+                'training_and_grounding':('Google-Extended',),
+                'user_triggered':('ChatGPT-User','Perplexity-User','Claude-User')}
+            rules={purpose:{agent:parser.can_fetch(agent,final) for agent in names} for purpose,names in policies.items()}
+            agents=rules['search']
+            checks.append(dict(code='robots_txt', status='pass' if all(agents.values()) else 'warning', agents=agents,
+                policies=rules,policy_reviewed_on='2026-11-07',actual_access='not_verified',
+                note='Rules only. User-triggered fetchers may not follow robots.txt. Training preferences are not search failures. Google-Extended covers training and some grounding uses.',
+                policy_sources=['https://developers.openai.com/api/docs/bots','https://docs.perplexity.ai/docs/resources/perplexity-crawlers',
+                    'https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler',
+                    'https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers']))
             for candidate in parser.site_maps() or []:
                 if urlsplit(candidate).hostname in (expected, 'www.' + expected):
                     sitemap_target = candidate
@@ -414,6 +564,8 @@ def assist(data, task, lang, instructions, profile, key, page=None, modules=None
         raise AIError('Approve at least one current fact in the selected language')
     context = {'profile': data['profile'], 'language': lang, 'approved_facts': facts,
                'questions': [q for q in data['questions'] if q['active'] and q['language'] == lang],
+               'observed_sources': [{'question':o['question']['text'],'platform':o['platform'],'citations':[c for c in o['citations'] if len(c)<=500][:3]} for o in data['observations'][-8:] if o['status']=='success' and o['question']['language']==lang],
+               'source_reviews':data.get('source_reviews',[])[-5:],
                'page': page, 'instructions': string(instructions, 'instructions', 2000), 'prompt_modules': modules or []}
     payload = json.dumps(context, ensure_ascii=False)
     if len(payload) > 60000:

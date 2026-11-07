@@ -31,6 +31,13 @@ CATALOG['readyspace']={'name':'ReadySpace Singapore','capabilities':['cloud'],'f
 
 for ident in ('webnic','cpanel','vodien','readyspace'):CATALOG[ident]['can_test']=True
 
+for ident, name, model in [('openai_search', 'OpenAI GEO', 'gpt-6-astra'), ('gemini_search', 'Gemini GEO', 'gemini-3.8-flash')]:
+    CATALOG[ident] = {'name': name, 'capabilities': ['geo'], 'fields': [field('api_key', 'API Key', True),
+        field('model', '模型', default=model), field('daily_limit', '每日请求上限', default='40'),
+        field('max_tokens', '最大输出 Token', default='4096')],
+        'note': 'GEO 官方联网 API；搜索能力需在 GEO 采集连接中验证。'}
+
+
 class ProviderStore(DomainVault):
     def __init__(self,base):
         super().__init__(base);self.path=self.root/'providers.json';self.key_path=self.root/'providers.key'
@@ -98,6 +105,11 @@ class ProviderStore(DomainVault):
         return [i for i in self.public() if i['enabled'] and slug in i['sites'] and capability in i['capabilities']]
 
 def validate(provider,c):
+    if provider in ('openai_search', 'gemini_search'):
+        if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,99}', c['model']):raise AIError('Invalid GEO model')
+        for key, low, high in [('daily_limit',1,2000),('max_tokens',256,16000)]:
+            if not c[key].isdigit() or not low <= int(c[key]) <= high:raise AIError('Invalid GEO limit: '+key)
+        if not re.fullmatch(r'[!-~]{1,4096}',c['api_key']):raise AIError('Invalid API key')
     if provider=='webnic' and c['environment'] not in ('production','ote'):raise AIError('WebNIC 环境仅支持 production / ote')
     if provider=='vodien':
         if c['environment'] not in ('production','test'):raise AIError('Vodien 环境仅支持 production / test')

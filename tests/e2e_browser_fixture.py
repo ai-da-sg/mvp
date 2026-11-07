@@ -17,6 +17,13 @@ try:
         shared.mkdir(parents=True)
         (fixture.base / 'sites/demo').rename(shared / 'demo')
         (fixture.base / 'sites/demo').symlink_to(shared / 'demo', target_is_directory=True)
+        # Seed a publication journal entry for report-linking tests. This fixture
+        # does not claim a live WordPress publication or a business improvement.
+        journal=m.kf_publications.PublicationStore(fixture.base,'demo')
+        with journal.locked():
+            publication=journal.begin('ops-test',['home'],{'pages':{}})
+            journal.result(publication['id'],'home',True)
+            journal.finish(publication['id'],'published',{'pages':{}})
     if os.environ.get('KF_E2E_REAL_AI_BASE'):
         # Explicit opt-in only: use the existing configured upstream in a disposable app.
         source = Path(os.environ['KF_E2E_REAL_AI_BASE']).resolve() / 'console'
@@ -28,6 +35,15 @@ try:
             raise RuntimeError('Select an existing real profile for the live test')
         m.ai_store().configure(dict(profile, api_key=secrets.get(profile_id, '')))
         m.ai_store().configure(dict(action='default', id=profile_id))
+    if os.environ.get('KF_E2E_GEO_COLLECTION') == 'fixture':
+        # Deterministic provider response; real HTTP handlers, vault and journal.
+        # Live upstream verification uses KF_E2E_GEO_COLLECTION=live instead.
+        from test_geo_collection import response
+        def geo_fixture_response(provider,config,question):
+            import time
+            time.sleep(1)
+            return response(provider)
+        m.geo_collector().transport=geo_fixture_response
     if os.environ.get('KF_E2E_WRITING') == '1':
         # A local model protocol fixture: real HTTP through the application and
         # model adapter, deterministic text rather than a paid upstream model.
