@@ -88,7 +88,9 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(updated['sector'],'healthcare')
         context=self.store.writing_request({'prompt':{'kind':'templates','revision':2,'module_ids':template['module_ids'],'sector':'healthcare'},'context':{'defaults':'{}'}})['context']
         self.assertIn('Healthcare',context['industry'])
-        with self.assertRaises(ai.AIError):self.store.change(dict(updated,kind='templates',revision=2,sector='invalid'))
+        for invalid in ('invalid',[],{},None):
+            with self.subTest(sector=invalid),self.assertRaises(ai.AIError):self.store.change(dict(updated,kind='templates',revision=2,sector=invalid))
+            with self.assertRaises(ai.AIError):self.store.writing_request({'prompt':{'kind':'modules','revision':2,'sector':invalid},'context':{}})
         restored=self.store.change({'kind':'templates','id':template['id'],'action':'restore','revision':2,'version':1})
         self.assertEqual(restored['sector'],'education')
         self.assertEqual(prompts.prompt_sector({'id':'tcm-showcase-en'}),'healthcare')

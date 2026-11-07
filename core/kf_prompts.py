@@ -166,7 +166,7 @@ class PromptStore:
             raise AIError('默认变量不合法')
         values = {k: text(v, VARIABLES[k], 1500) for k, v in values.items()}
         sector=meta.get('sector','general')
-        if sector not in SECTORS:raise AIError('模板行业分类无效')
+        if not isinstance(sector,str) or sector not in SECTORS:raise AIError('模板行业分类无效')
         context.update(industry=json.dumps(dict(id=sector,label=SECTORS[sector][0],label_en=SECTORS[sector][1]),ensure_ascii=False),prompt_kind=kind, defaults=json.dumps(values, ensure_ascii=False),
                        variables=json.dumps(VARIABLES, ensure_ascii=False),
                        modules=json.dumps([{k: modules[mid][k] for k in
@@ -210,7 +210,7 @@ class PromptStore:
                       'language':body.get('language', prompt_language(old or {})),
                       'sector':body.get('sector',prompt_sector(old or {'id':item_id})),
                       'body':validate_body(body.get('body','')), 'enabled':body.get('enabled',True) is True}
-                if item['sector'] not in SECTORS:raise AIError('模板行业分类无效')
+                if not isinstance(item['sector'],str) or item['sector'] not in SECTORS:raise AIError('模板行业分类无效')
                 if item['language'] not in ('zh', 'en'):raise AIError('提示词语言必须是中文或英文')
                 if kind=='templates':
                     item['module_ids']=checked_ids(body.get('module_ids',[]),'模块')
