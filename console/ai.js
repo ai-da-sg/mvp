@@ -95,6 +95,7 @@ async function aiJobs() {
   finally { AI_LOADING=false; }
 }
 async function initAI() {
+  $('#aiMode').disabled=true;
   try {
     await aiLoadConfig();
     await initPromptComposer();
