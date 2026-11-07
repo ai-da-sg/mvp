@@ -66,6 +66,19 @@ class PromptTests(unittest.TestCase):
         restored=self.store.change({'kind':'modules','id':module['id'],'action':'restore','version':1,'revision':4})
         self.assertEqual(restored['language'],'en')
 
+    def test_complete_english_scene_fits_and_variable_expansion_is_bounded(self):
+        ids=[]
+        for i in range(10):
+            item=self.store.change({'kind':'modules','revision':self.store.read()['revision'],'id':'english-'+str(i),'name':'English module '+str(i),'category':'copy','language':'en','body':('Use verified evidence. '*100)+'{{facts}}'})
+            ids.append(item['id'])
+        t=self.store.change({'kind':'templates','revision':self.store.read()['revision'],'id':'english-scene','name':'Full English scene','category':'Business','language':'en','body':'Support {{goal}}.','module_ids':ids})
+        selection={'revision':self.store.read()['revision'],'template_id':t['id'],'variables':{'audience':'Teams','services':'Consulting','goal':'Enquiries','facts':'Verified'}}
+        self.assertGreater(len(self.store.compose(selection)['instructions']),20000)
+        m=self.store.read()['modules'][-1]
+        self.store.change(dict(m,kind='modules',revision=selection['revision'],body=('{{facts}} '*200)))
+        selection['revision']=self.store.read()['revision'];selection['variables']['facts']='x'*1500
+        with self.assertRaises(ai.AIError):self.store.compose(selection)
+
     def test_guidance_reaches_provider_with_output_constraints(self):
         from unittest.mock import patch
         pages=[{'slug':'home','title':'Home'}]

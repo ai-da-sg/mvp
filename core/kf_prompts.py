@@ -251,7 +251,8 @@ class PromptStore:
             if any(not values.get(k) for k in needed):raise AIError('请填写模块需要的变量')
             return PLACEHOLDER.sub(lambda m:values[m.group(1)],item['body'])
         instructions='\n\n'.join('【'+item['name']+'】\n'+render(item) for item in parts)
-        if len(instructions)>20000:raise AIError('组合后的提示词过长，请减少模块或业务资料')
+        # English uses more characters for equivalent instructions; keep a bounded language-specific budget.
+        if len(instructions)>(40000 if english else 20000):raise AIError('组合后的提示词过长，请减少模块或业务资料')
         context='\n'.join(labels[k]+': '+v for k,v in values.items())
         if brief:context+=('\nAdditional requirements: ' if english else '\n补充要求：')+text(brief,'补充要求',6000)
         return {'revision':data['revision'],'template':{'id':template['id'],'name':template['name'],'version':template['version']},
