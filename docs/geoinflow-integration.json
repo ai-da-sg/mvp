@@ -1,0 +1,39 @@
+{
+  "upstream": "https://github.com/yaojingang/GEOInflow",
+  "revision": "13c32ecc6eb76b9e6d68a0a92d973ea859e8700b",
+  "license": "MIT; preserve upstream copyright and bundled notices",
+  "architecture": "Independent PostgreSQL/Redis/workers; native MVP secondary site page with backend API credentials, no shared session or database",
+  "routes": {
+    "site": "/#inflow?site=<slug>",
+    "settings": "Existing GEO connection settings",
+    "tracking": "/inflow/script.js and /inflow/api/send"
+  },
+  "scope": [
+    "Website creation/binding with stable UUID retry",
+    "Encrypted connection and administrator management",
+    "Native referral, visitor, crawler, content coverage and conversion reports",
+    "WordPress MU plugin installation and disable, excludes logged-in/preview traffic",
+    "Success-only enquiry events without form contents",
+    "Manual scoped content/log import; archive excludes public collection",
+    "No crawler policy writes, consumer-answer claims or generated analytics"
+  ],
+  "deployment": {
+    "tool": "tools/kf_inflow_deploy.py",
+    "image": "mvp-geoinflow:13c32ec",
+    "binding": "127.0.0.1:3002",
+    "build": "Pinned unchanged upstream Dockerfile on GitHub Actions; checksum-verified Docker image loaded on host",
+    "initial_data": "MVP deployment omits optional demonstration seed; bundled dataset remains in image",
+    "geography": "No geographic database configured; missing geographic evidence remains unknown"
+  },
+  "limits": [
+    "Advanced session-only crawler controls and GEO weight are not exposed",
+    "MCP is disabled; native reports use scoped backend APIs",
+    "Automatic server/CDN collectors require separately verified source configuration",
+    "Public collection uses trusted proxy IP and site Origin; Origin alone is not proof of a human visitor"
+  ],
+  "tests": [
+    "test_inflow.py",
+    "ConsoleTests.test_inflow_http_permissions_and_site_context",
+    "tests/ui/inflow.test.cjs"
+  ]
+}

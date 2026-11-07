@@ -81,7 +81,7 @@ document.addEventListener('error',e=>{const img=e.target;if(img.tagName==='IMG'&
 
 /* Account pages keep their broad scope; site tools share an explicit, linkable workspace. */
 const Workspace={
- pages:new Set(['geo','automation','ai','layout','design','media','share','dns']),
+ pages:new Set(['inflow','geo','automation','ai','layout','design','media','share','dns']),
  parse(){const [key,query='']=location.hash.slice(1).split('?');return {key,site:new URLSearchParams(query).get('site')};},
  isSite(key){return this.pages.has(key)&&(key!=='ai'||$('#aiMode').value!=='new');},
  route(key){const slug=SiteContext.read().slug;return '#'+key+(this.isSite(key)&&slug?'?site='+encodeURIComponent(slug):'');},

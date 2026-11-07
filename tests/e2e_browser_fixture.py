@@ -10,6 +10,23 @@ fixture.setUp()
 m = fixture.m
 writing_server = None
 try:
+    if os.environ.get('KF_E2E_INFLOW') == '1':
+        remote={}
+        def inflow_transport(url,key,method,path,body=None,headers=None):
+            result={}
+            if path.startswith('/api/websites?'):result={'data':list(remote.values())}
+            elif path=='/api/websites' and method=='POST':remote[body['id']]=body;result=body
+            elif path.startswith('/api/websites/'):
+                result=remote.get(path.split('/')[-1])
+                if not result:raise m.kf_ai.AIError('GEOInflow returned HTTP 404; not found')
+            elif '/page-report?' in path:
+                import time
+                end=int(time.time()*1000)
+                result={'contractVersion':2,'website':{'id':path.split('/')[4]},'range':{'startAt':end-604800000,'endAt':end,'timezone':'Asia/Singapore'},
+                    'states':{'human':'empty','logs':'not_connected','catalog':'not_connected','goals':'not_connected'},
+                    'cards':[{'label':'AI 搜索引荐','value':None,'state':'empty'}],'charts':{},'tables':{},'meta':{'demo':False}}
+            return 200,json.dumps(result).encode(),'application/json'
+        m.kf_inflow.request=inflow_transport
     if os.environ.get('KF_E2E_GEO_ALIAS') == '1':
         # The main installation registers clone-lab sites as same-slug aliases.
         # Exercise the real filesystem layout rather than only plain directories.

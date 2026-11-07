@@ -88,7 +88,7 @@ async function aiJobs() {
       <span class="hint">${esc(new Date(j.created*1000).toLocaleString())}</span></div>
       <p style="margin:8px 0">${esc(j.message)}</p>${j.style?`<p>参考风格：${esc(j.style.name)}${j.style.version?` · v${Number(j.style.version)}`:""}（随草稿发布）</p>`:""}${j.prompt?`<details><summary>提示词：${esc(j.prompt.template.name)} · v${j.prompt.template.version}</summary><ol>${j.prompt.modules.map(m=>`<li data-user-content>${esc(m.name)} · v${Number(m.version)}</li>`).join('')}</ol><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(j.prompt.preview)}</pre></details>`:''}
       ${j.status==='completed'?`<a href="/preview/${encodeURIComponent(j.slug)}/home" target="_blank" rel="noopener">预览草稿</a>
-      <button type="button" data-ai-editor="${esc(j.slug)}">编辑页面</button>
+      <button type="button" data-inflow-site="${esc(j.slug)}">流量与抓取分析</button><button type="button" data-ai-editor="${esc(j.slug)}">编辑页面</button>
       <button type="button" data-ai-publish="${esc(j.slug)}">发布当前草稿</button>
       <span class="hint">${Number(j.pages)} 个页面 · 预览和发布均使用该站点当前草稿</span>`:''}</div>`).join(''):'<div class="callout">暂无任务。填写需求后生成草稿。</div>';
     setStableHtml($('#aiJobs'),html);focusOperationTarget('generation','#aiJobs [data-operation-reference]');

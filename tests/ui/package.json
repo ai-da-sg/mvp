@@ -2,7 +2,7 @@
   "name": "kampongflow-ui-regression",
   "private": true,
   "scripts": {
-    "test": "node console.test.cjs && node security.test.cjs && node real-api.test.cjs && node english.test.cjs && node readability.test.cjs && node styles.test.cjs && node catalog.test.cjs && node template-experience.test.cjs && node domains-list.test.cjs && node admin-experience.test.cjs && node publications.test.cjs && node operations.test.cjs && node builder-workflow.test.cjs && node leads.test.cjs && node billing.test.cjs && node prompts-list.test.cjs && node dns-list.test.cjs && node writing-assist.test.cjs && node media-list.test.cjs && node design-list.test.cjs && node pages-list.test.cjs && node clients-list.test.cjs && node team-list.test.cjs && node account-security.test.cjs && node shares.test.cjs && node workspace.test.cjs && node table-controls.test.cjs && node geo.test.cjs && node geo-collection.test.cjs",
+    "test": "node console.test.cjs && node security.test.cjs && node real-api.test.cjs && node english.test.cjs && node readability.test.cjs && node styles.test.cjs && node catalog.test.cjs && node template-experience.test.cjs && node domains-list.test.cjs && node admin-experience.test.cjs && node publications.test.cjs && node operations.test.cjs && node builder-workflow.test.cjs && node leads.test.cjs && node billing.test.cjs && node prompts-list.test.cjs && node dns-list.test.cjs && node writing-assist.test.cjs && node media-list.test.cjs && node design-list.test.cjs && node pages-list.test.cjs && node clients-list.test.cjs && node team-list.test.cjs && node account-security.test.cjs && node shares.test.cjs && node workspace.test.cjs && node table-controls.test.cjs && node geo.test.cjs && node geo-collection.test.cjs && node inflow.test.cjs",
     "test:real": "node real-api.test.cjs",
     "test:live-mcp": "E2E_REMOTE_MCP=1 node real-api.test.cjs",
     "test:showcases": "node showcases.test.cjs",
@@ -11,7 +11,8 @@
     "test:module-writing-live": "node module-writing-live.test.cjs",
     "test:geo": "node geo.test.cjs",
     "test:geo:live": "node geo-live.test.cjs",
-    "test:geo:collection": "node geo-collection.test.cjs"
+    "test:geo:collection": "node geo-collection.test.cjs",
+    "test:inflow": "node inflow.test.cjs"
   },
   "devDependencies": {
     "playwright": "1.64.1"

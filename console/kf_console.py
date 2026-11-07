@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 import kf_ai
 import kf_prompts
 import kf_geo
+import kf_inflow
 import kf_geo_collector
 import kf_design_profiles
 import kf_styles
@@ -267,7 +268,7 @@ def can_read(role, path):
     return (path in ("/", "/api/state", "/api/mfa", "/api/roles", "/api/clients", "/api/renewals",
                      "/api/domains", "/api/wordpress/sites", "/export/invoices.csv")
             or path.startswith(("/api/ledger/", "/api/invoice/"))
-            or path in ("/geo-analysis.js", "/geo-collection.js", "/geo.js", "/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
+            or path in ("/inflow.js", "/geo-analysis.js", "/geo-collection.js", "/geo.js", "/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"))
 
 
 FAILS = {}
@@ -2608,7 +2609,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="nav-search"><label for="featureSearch">搜索功能</label><input type="search" id="featureSearch" autocomplete="off" aria-controls="featureResults"><div id="featureResults" hidden></div></div>
 <nav id="navGroups" class="nav-groups" aria-label="主导航与二级菜单">
 <details class="nav-group" data-group="0" open><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>站点运营</summary><div class="submenu"><button type="button" class="tab" data-t="automation" aria-controls="p-automation">运营助手</button><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
-<details class="nav-group" data-group="1"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-1 5 5-1L21 7l-6-6L4 16ZM13 3l6 6"/></svg>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="geo" aria-controls="p-geo">GEO</button><button type="button" class="tab" data-t="styles" aria-controls="p-styles">风格模板</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
+<details class="nav-group" data-group="1"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-1 5 5-1L21 7l-6-6L4 16ZM13 3l6 6"/></svg>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="inflow" aria-controls="p-inflow">流量与抓取分析</button><button type="button" class="tab" data-t="geo" aria-controls="p-geo">GEO</button><button type="button" class="tab" data-t="styles" aria-controls="p-styles">风格模板</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
 <details class="nav-group" data-group="2"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4v2"/></svg>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
 <details class="nav-group" data-group="3"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="geo-settings" aria-controls="p-geo-settings">GEO 采集连接</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details><details class="nav-group" data-group="4"><summary>个人设置</summary><div class="submenu"><button type="button" class="tab" data-t="account" aria-controls="p-account">我的账号</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
@@ -2996,7 +2997,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <form id="dApplyForm" class="hidden"><h3 data-design-text="apply"></h3><p id="dApplyTarget" data-user-content></p><div id="dApplyPreview"></div><p class="hint" data-design-text="applyHint"></p><label><input id="dApplyConfirmed" type="checkbox" required><span data-design-text="confirm"></span></label><div class="domain-form-actions"><button id="dApplyExecute" type="submit" data-design-text="apply"></button><button id="dApplyCancel" type="button" class="ghost" data-design-text="cancel"></button></div><div id="dApplyMsg" class="msg" role="status"></div></form>
 </div>
 
-<style>:is(#geoRoot,#geoSettingsRoot) .field{min-width:0;flex:1}:is(#geoRoot,#geoSettingsRoot) textarea,:is(#geoRoot,#geoSettingsRoot) input:not([type=checkbox]),:is(#geoRoot,#geoSettingsRoot) select{width:100%;box-sizing:border-box}:is(#geoRoot,#geoSettingsRoot) pre{white-space:pre-wrap;overflow-wrap:anywhere}:is(#geoRoot,#geoSettingsRoot) form{margin-block:16px}:is(#geoRoot,#geoSettingsRoot) .domain-form-actions{flex-wrap:wrap}:is(#geoRoot,#geoSettingsRoot) [aria-current=step]{border:2px solid currentColor;font-weight:700}:is(#geoRoot,#geoSettingsRoot) button{min-height:44px}:is(#geoRoot,#geoSettingsRoot) td{overflow-wrap:anywhere}:is(#geoRoot,#geoSettingsRoot) details{margin-block:12px}</style><div id="p-geo-settings" class="hidden"><div id="geoSettingsRoot"></div></div><div id="p-geo" class="hidden"><div id="geoRoot"></div></div>
+<style>:is(#geoRoot,#geoSettingsRoot,#inflowRoot) .field{min-width:0;flex:1}:is(#geoRoot,#geoSettingsRoot,#inflowRoot) textarea,:is(#geoRoot,#geoSettingsRoot,#inflowRoot) input:not([type=checkbox]),:is(#geoRoot,#geoSettingsRoot,#inflowRoot) select{width:100%;box-sizing:border-box}:is(#geoRoot,#geoSettingsRoot,#inflowRoot) pre{white-space:pre-wrap;overflow-wrap:anywhere}:is(#geoRoot,#geoSettingsRoot,#inflowRoot) form{margin-block:16px}:is(#geoRoot,#geoSettingsRoot,#inflowRoot) .domain-form-actions{flex-wrap:wrap}:is(#geoRoot,#geoSettingsRoot,#inflowRoot) [aria-current=step]{border:2px solid currentColor;font-weight:700}:is(#geoRoot,#geoSettingsRoot,#inflowRoot) button{min-height:44px}:is(#geoRoot,#geoSettingsRoot,#inflowRoot) td{overflow-wrap:anywhere}:is(#geoRoot,#geoSettingsRoot,#inflowRoot) details{margin-block:12px}</style><div id="p-inflow" class="hidden"><div id="inflowRoot"></div></div><div id="p-geo-settings" class="hidden"><div id="geoSettingsRoot"></div></div><div id="p-geo" class="hidden"><div id="geoRoot"></div></div>
 <footer id="foot"></footer>
 </main></div></div>
 <script>
@@ -3007,7 +3008,7 @@ let STATE={sites:[],invoices:[],plans:[]};
 let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
-    ? ['geo-settings','geo','automation','ai','styles','prompts','layout','design','media','share','dns','maint','team','llm','mcp','providers']
+    ? ['inflow','geo-settings','geo','automation','ai','styles','prompts','layout','design','media','share','dns','maint','team','llm','mcp','providers']
     : (ROLE==='admin' ? [] : ['geo-settings','team','llm','mcp','providers','maint']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
@@ -3022,6 +3023,7 @@ function navigateTo(key, updateHistory=true, site=null){
  if(!t || t.style.display==='none') return false;
  if(site!==null&&typeof Workspace!=='undefined'&&!Workspace.canSelect(site))return false;
  if(key!==CURRENT_TAB&&typeof AdminUI!=='undefined'&&!AdminUI.canLeave())return false;
+ if(CURRENT_TAB==='inflow'&&typeof inflowCanLeave==='function'&&!inflowCanLeave())return false;
  if(CURRENT_TAB==='geo-settings'&&typeof gcCanLeave==='function'&&!gcCanLeave())return false;
  if(CURRENT_TAB==='geo'&&typeof geoCanLeave==='function'&&!geoCanLeave())return false;
  if(CURRENT_TAB==='styles'&&key!=='styles'&&typeof styleCanLeave==='function'&&!styleCanLeave())return false;
@@ -3043,7 +3045,7 @@ function navigateTo(key, updateHistory=true, site=null){
  if(updateHistory&&location.hash!==route)history.pushState(null,'',route);
  if(typeof Workspace!=='undefined')Workspace.render();
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
- const initializers={'geo-settings':()=>initGEOSettings(),geo:()=>initGEO(),account:()=>initAccount(),styles:()=>styleLoad(),providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
+ const initializers={inflow:()=>initInflow(),'geo-settings':()=>initGEOSettings(),geo:()=>initGEO(),account:()=>initAccount(),styles:()=>styleLoad(),providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
  if(updateHistory){$('#pageTitle').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
  return true;
@@ -3853,7 +3855,7 @@ let REFRESH_RUNNING=false;
 async function refreshConsole(force=false){if(REFRESH_RUNNING||document.hidden)return;REFRESH_RUNNING=true;$('#siteHealthRefresh').disabled=true;try{await load(force);}catch(e){showGlobalError('数据刷新失败：'+e.message+'。请检查网络，稍后会自动重试。');}finally{REFRESH_RUNNING=false;$('#siteHealthRefresh').disabled=false;}}
 window.addEventListener('DOMContentLoaded',()=>{refreshConsole();setInterval(refreshConsole,5000);});
 </script>
-<script src="/admin-ui.js"></script><script src="/clients-ui.js"></script><script src="/page-ui.js"></script><script src="/design-ui.js"></script><script src="/media-ui.js"></script><script src="/dns-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/billing.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script><script src="/geo.js"></script><script src="/geo-collection.js"></script><script src="/geo-analysis.js"></script></body></html>"""
+<script src="/admin-ui.js"></script><script src="/clients-ui.js"></script><script src="/page-ui.js"></script><script src="/design-ui.js"></script><script src="/media-ui.js"></script><script src="/dns-ui.js"></script><script src="/publications.js"></script><script src="/operations.js"></script><script src="/ai.js"></script><script src="/ai-workflow.js"></script><script src="/leads.js"></script><script src="/billing.js"></script><script src="/style-browser.js"></script><script src="/prompts.js"></script><script src="/domains.js"></script><script src="/mcp.js"></script><script src="/automation.js"></script><script src="/providers.js"></script><script src="/geo.js"></script><script src="/geo-collection.js"></script><script src="/geo-analysis.js"></script><script src="/inflow.js"></script></body></html>"""
 
 
 _AI = None
@@ -4732,6 +4734,76 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(code,data)
 
 
+    def _inflow_sites(self):
+        return {p.name: load_meta(p.name).get('domain','').lower() for p in SITES.iterdir()
+                if (p/'meta.json').is_file() and SLUG_RE.fullmatch(p.name) and not site_archive(p.name).get('archived')}
+
+    def do_OPTIONS(self):
+        if self.path != '/inflow/api/send': return self._send(404, {})
+        store=kf_inflow.InflowStore(BASE); source=self.headers.get('Origin','')
+        try:
+            if not store.allowed_origin(source,self._inflow_sites()): return self._send(403, {})
+        except (kf_ai.AIError,ValueError,TypeError,OSError):
+            return self._send(503, {})
+        return self._send(204,b'',extra={'Access-Control-Allow-Origin':source,'Vary':'Origin',
+            'Access-Control-Allow-Methods':'POST, OPTIONS',
+            'Access-Control-Allow-Headers':'content-type, x-umami-website-id, x-umami-hostname, x-umami-cache',
+            'Access-Control-Max-Age':'600'})
+
+    def _inflow_public(self):
+        store=kf_inflow.InflowStore(BASE)
+        if not kf_inflow.public_admission(client_ip(self)): return self._send(429,{},extra={'Retry-After':'60'})
+        try:
+            if self.command=='GET':
+                url,_,_=store.credentials()
+                status,raw,_=store.transport(url,'','GET','/script.js')
+                return self._send(status,raw,'application/javascript; charset=utf-8')
+            if self.headers.get_content_type()!='application/json': return self._send(415,{})
+            source=self.headers.get('Origin','')
+            body=self._body()
+            if not isinstance(body,dict): return self._send(400,{})
+            status,raw=store.collect(body,source,self._inflow_sites(),client_ip(self),self.headers.get('User-Agent',''),self.headers.get('x-umami-cache',''))
+            return self._send(status,raw,extra={'Access-Control-Allow-Origin':source,'Vary':'Origin'})
+        except (kf_ai.AIError,ValueError,TypeError,OSError):
+            return self._send(400,{'error':'Analytics collection unavailable'})
+        finally: kf_inflow._PUBLIC_SLOTS.release()
+
+    def _inflow(self,path,body=None):
+        if self.user_role not in ('admin','ops'): return self._send(403,{'error':'Operations access required'})
+        store=kf_inflow.InflowStore(BASE)
+        try:
+            action=path.removeprefix('/api/inflow/')
+            if body is None:
+                q=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                if action=='config':
+                    if self.user_role!='admin': return self._send(403,{'error':'Administrator access required'})
+                    return self._send(200,store.public())
+                slug=q.get('slug',[''])[0]; site=automation_context(slug)
+                if site_archive(slug).get('archived'): raise kf_ai.AIError('Restore this archived site first')
+                if action=='workspace':
+                    config=store.public()
+                    return self._send(200,{'site':site,'revision':config['revision'],
+                        'connection':{k:config['connection'].get(k) for k in ('enabled','verified')},
+                        'binding':store.binding(slug,site['domain'],False)})
+                if action=='report':
+                    return self._send(200,store.report(slug,site['domain'],q.get('resource',['human/sources'])[0],int(q.get('days',['30'])[0]),int(q.get('page',['1'])[0])))
+                raise kf_ai.AIError('Unknown analytics endpoint')
+            if self.user_role!='admin': return self._send(403,{'error':'Administrator access required'})
+            if action=='connection': return self._send(200,store.save(body,self.user))
+            if action=='test': return self._send(200,store.test(body.get('revision')))
+            slug=body.get('slug'); site=automation_context(slug)
+            if site_archive(slug).get('archived'): raise kf_ai.AIError('Restore this archived site first')
+            with kf_tool_runtime.release_guard(BASE):
+                if action=='bind': result=store.bind(slug,site['domain'],site['company'],body,self.user)
+                elif action=='tracking': result=store.tracking(slug,site['domain'],kf_ai.managed_site_directory(BASE,slug),body.get('public_origin'),body.get('revision'),body.get('enabled') is True)
+                elif action=='disconnect': store.disconnect(slug,body.get('revision')); result={}
+                elif action in ('catalog','logs'): result=store.import_data(slug,site['domain'],action,body)
+                else: raise kf_ai.AIError('Unknown analytics action')
+            return self._send(200,{'result':result,'revision':store.public()['revision']})
+        except kf_domain_vault.VaultConflict as e: return self._send(409,{'error':str(e)})
+        except (kf_ai.AIError,ValueError,TypeError) as e: return self._send(400,{'error':str(e) if isinstance(e,kf_ai.AIError) else 'Invalid analytics request'})
+        except OSError: return self._send(503,{'error':'Analytics storage unavailable'})
+
     def _geo_collection(self, path, body=None):
         if self.user_role not in ('admin','ops'):
             return self._send(403,{'error':'GEO requires an operations account'})
@@ -4911,6 +4983,8 @@ class Handler(BaseHTTPRequestHandler):
         if self._maybe_site():
             return
         raw = self.path.split("?")[0]
+        if raw == "/inflow/script.js":
+            return self._inflow_public()
         if raw in ("/appearance.js", "/locale.js"):
             return self._send(200, (CONSOLE / raw.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
         if raw == "/login":
@@ -4939,8 +5013,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"error": "当前角色无权读取此信息"})
         if path == "/":
             return self._send(200, PAGE.replace("__KF_CSRF__", csrf_token(self.headers.get("Cookie"))), "text/html; charset=utf-8")
-        if path in ("/geo-analysis.js", "/geo-collection.js", "/geo.js", "/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
+        if path in ("/inflow.js", "/geo-analysis.js", "/geo-collection.js", "/geo.js", "/clients-ui.js", "/page-ui.js", "/design-ui.js", "/media-ui.js", "/dns-ui.js", "/billing.js", "/leads.js", "/ai-workflow.js", "/operations.js", "/publications.js", "/admin-ui.js", "/ai.js", "/style-browser.js", "/prompts.js", "/domains.js", "/mcp.js", "/automation.js", "/providers.js"):
             return self._send(200, (CONSOLE / path.lstrip("/")).read_text(), "application/javascript; charset=utf-8")
+        if path.startswith("/api/inflow/"):
+            return self._inflow(path)
         if path.startswith("/api/geo/"):
             return self._geo(path)
         if path == "/api/mcp/servers":
@@ -5288,6 +5364,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         raw_path = self.path.split("?")[0]
         limit = (MAX_UPLOAD + 65536 if raw_path in ("/api/upload", "/api/media/upload") else
+                 300000 if raw_path in ("/api/inflow/catalog", "/api/inflow/logs") else
+                 16384 if raw_path == "/inflow/api/send" else
                  8192 if raw_path in ("/login", "/api/wordpress/callback") else
                  1024 * 1024 if raw_path == "/api/spec" else 65536)
         try:
@@ -5297,6 +5375,8 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self.close_connection = True
             return self._send(413, {"error": "请求长度无效或超过限制"})
+        if raw_path == "/inflow/api/send":
+            return self._inflow_public()
         if raw_path != "/api/wordpress/callback" and not self._origin_ok():
             return self._send(403, {"error": "请求来源不匹配，请从管理后台操作"})
         if self.path.split("?")[0] == "/api/wordpress/callback":
@@ -5342,6 +5422,8 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError):
             return self._send(400, {"error": "请求必须是 JSON 对象"})
 
+        if path.startswith("/api/inflow/"):
+            return self._inflow(path, body)
         if path.startswith("/api/geo/"):
             return self._geo(path, body)
         if path.startswith("/api/automation/"):

@@ -35,7 +35,7 @@ print(json.dumps(result))
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
   assert.equal(u.hostname,'review.invalid','Unexpected external request');
   if(p==='/'||p==='/login')return route.fulfill({contentType:'text/html',body:pages[p==='/'?'console':'login']});
-  if(['/geo-analysis.js','/geo-collection.js','/geo.js','/clients-ui.js','/page-ui.js','/design-ui.js','/media-ui.js','/dns-ui.js','/billing.js','/leads.js','/ai-workflow.js','/operations.js','/publications.js','/admin-ui.js','/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
+  if(['/inflow.js','/geo-analysis.js','/geo-collection.js','/geo.js','/clients-ui.js','/page-ui.js','/design-ui.js','/media-ui.js','/dns-ui.js','/billing.js','/leads.js','/ai-workflow.js','/operations.js','/publications.js','/admin-ui.js','/ai.js','/style-browser.js','/prompts.js','/locale.js','/appearance.js','/domains.js','/mcp.js','/automation.js','/providers.js'].includes(p))return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(root,'console',p.slice(1)),'utf8')});
   if(p.startsWith('/preview/')){calls.push({path:p});return route.fulfill({contentType:'text/html',body:'<h1>Preview</h1>'});}
   let data={items:[]},status=200;
   if(p==='/api/state')data=state();

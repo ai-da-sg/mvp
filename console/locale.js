@@ -1,5 +1,38 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+流量与抓取分析|Traffic & crawl analytics
+正在处理分析配置，请稍候。|Processing analytics settings. Please wait.
+请先创建或恢复站点。|Create or restore a site first.
+建站后查看真实访问、AI 引荐与抓取证据。|Review real visits, AI referrals and crawl evidence after building your site.
+尚未连接分析服务。管理员可在连接设置中完成配置。|Analytics is not connected. An administrator can configure the connection.
+数据接入|Data connection
+浏览器追踪、服务器日志和内容目录独立接入；缺少数据不会显示为零。|Browser tracking, server logs and content inventories are independent inputs; missing data is not zero.
+近 7 天|Last 7 days
+近 30 天|Last 30 days
+近 90 天|Last 90 days
+爬虫访问、AI 回答引用与真实转化分别统计。|Crawl activity, answer citations and conversions are measured separately.
+读取报告中…|Loading report…
+报告正在计算，请稍后刷新。|Report is being calculated. Refresh shortly.
+示例数据|Demonstration data
+当前范围没有明细。|No details for this range.
+数据范围|Data scope
+数据截止|Data through
+GEOInflow 连接|GEOInflow connection
+本机托管|Managed locally
+外部 HTTPS 服务|External HTTPS service
+保存时验证连接。API Key 不会返回浏览器。|The connection is verified on save. API keys are never returned to the browser.
+连接已验证。关闭窗口后刷新站点。|Connection verified. Close this window and refresh the site.
+连接站点|Connect site
+仅导入当前站点的真实记录。重复日志由分析服务校验。|Import real records for this site only. The analytics service checks duplicate logs.
+请选择不超过 250 KB 的文件。|Select a file up to 250 KB.
+外部服务地址|External service origin
+API Key（留空保留）|API key (leave blank to keep)
+已有网站 UUID（留空自动创建）|Existing website UUID (blank to create)
+文件（最多 250 KB）|File (up to 250 KB)
+报告|Report
+时间范围|Date range
+部署方式|Deployment
+文件格式|File format
 模型|Model
 GEO 采集连接|GEO search connections
 GEO 联网搜索|GEO web search

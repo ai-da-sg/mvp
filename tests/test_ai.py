@@ -215,7 +215,7 @@ class ConsoleTests(unittest.TestCase):
         (self.base/'core').symlink_to(ROOT/'core', target_is_directory=True)
         (self.base/'theme').symlink_to(ROOT/'theme', target_is_directory=True)
         (self.base/'console'/'admin.pass').write_text('Test-Password-123')
-        for filename in ('geo-analysis.js','geo-collection.js','geo.js','clients-ui.js','page-ui.js','design-ui.js','media-ui.js','dns-ui.js','billing.js','leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
+        for filename in ('inflow.js','geo-analysis.js','geo-collection.js','geo.js','clients-ui.js','page-ui.js','design-ui.js','media-ui.js','dns-ui.js','billing.js','leads.js','ai-workflow.js','operations.js','publications.js','admin-ui.js','ai.js','style-browser.js','prompts.js','appearance.js','locale.js','domains.js','mcp.js','automation.js'):
             (self.base/'console'/filename).symlink_to(ROOT/'console'/filename)
         self.env = patch.dict(os.environ, {'KF_BASE': str(self.base)})
         self.env.start()
@@ -264,6 +264,19 @@ class ConsoleTests(unittest.TestCase):
         try: body = json.loads(raw)
         except ValueError: body = raw.decode()
         return r.status, body
+
+    def test_inflow_http_permissions_and_site_context(self):
+        self.assertEqual(self.request('/api/inflow/config',user='ops-test')[0],403)
+        self.assertEqual(self.request('/api/inflow/workspace?slug=demo',user='finance-test')[0],403)
+        status,data=self.request('/api/inflow/workspace?slug=demo',user='ops-test')
+        self.assertEqual(status,200);self.assertEqual(data['site']['slug'],'demo')
+        self.assertFalse(data['connection']['enabled']);self.assertIsNone(data['binding'])
+        self.assertEqual(self.request('/api/inflow/connection',{'revision':0,'url':'http://127.0.0.1:3002','token':'umami_fixture','enabled':True},user='ops-test')[0],403)
+        status,data=self.request('/api/inflow/connection',{'revision':0,'url':'http://127.0.0.1:3002','token':'umami_fixture','enabled':True})
+        self.assertEqual(status,200);self.assertNotIn('umami_fixture',json.dumps(data))
+        self.assertEqual(self.request('/api/inflow/report?slug=missing')[0],400)
+        self.assertEqual(self.request('/api/inflow/bind',{'slug':'demo','revision':1})[0],400)
+        self.assertEqual(self.request('/inflow/api/send',{'type':'event','payload':{}},user=None)[0],400)
 
     def test_payment_interruption_is_visible_and_resumes_through_http(self):
         item = self.m.make_invoice('demo', 'Demo', 'example.test', dict(self.m.plans()[0], price=100))
