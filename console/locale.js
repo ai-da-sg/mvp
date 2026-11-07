@@ -1,5 +1,20 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+搜索功能|Search features
+当前站点|Current site
+所有站点|All sites
+站点不可用或已归档，请从站点总览选择。|Site unavailable or archived. Select an active site from the overview.
+页面编辑有未保存内容，请先保存后再切换站点。|Save your page edits before switching sites.
+检查失败|Check failed
+维护记录存在失败项，请检查站点状态。|Maintenance records contain failures. Check site health.
+维护任务未完成，请检查站点运行状态后重试。|Maintenance did not complete. Check site health before retrying.
+维护任务执行失败，请检查服务状态后重试。|Maintenance failed. Check service health before retrying.
+维护任务无法启动，请重试。|Maintenance could not start. Please retry.
+个人设置|Personal settings
+我的账号|My account
+当前角色可查看套餐；修改需要套餐管理权限。|Your role can view plans. Editing requires plan management permission.
+正在更新账号安全设置，请稍候。|Updating account security. Please wait.
+尚未检查|Not checked yet
 搜索账号|Search accounts
 账号|Account
 账号安全|Account security

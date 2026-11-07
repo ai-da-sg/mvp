@@ -52,7 +52,7 @@ function totp(){const key=Buffer.from('48656c6c6f21deadbeef','hex'),b=Buffer.all
   });
   await scenario('draft-save-reload-preview',async({page,context,ui})=>{
    await ui.login('admin',cfg.password);await ui.ready();await ui.navigate('页面编辑');
-   await page.locator('#lSlug').selectOption('demo');await page.locator('[data-page-edit=home]').click();await page.locator('.section-select').first().click();
+   await page.locator('#workspaceSite').selectOption('demo');await page.locator('[data-page-edit=home]').click();await page.locator('.section-select').first().click();
    const field=page.locator('#lForm input').first();await field.fill('E2E real persistence');
    const saved=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/spec'&&r.request().method()==='POST');await page.locator('#lSave').click();assert.equal((await saved).status(),200);
    await page.reload();await page.locator('[data-page-edit=home]').click();await page.locator('.section-select').first().click();assert.equal(await page.locator('#lForm input').first().inputValue(),'E2E real persistence');

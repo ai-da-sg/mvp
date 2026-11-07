@@ -44,3 +44,5 @@ $('#dnLocalCheck').onclick=()=>checkDns('/api/dns/check');$('#dnPublicCheck').on
 $('#dnSource').onchange=()=>{AdminUI.pages.set('dnBody',0);loadDns($('#dnSlug').value);};$('#dnSearch').oninput=()=>{AdminUI.pages.set('dnBody',0);renderDns();};$('#dnRefresh').onclick=()=>loadDns($('#dnSlug').value);
 function initDns(){SiteContext.fill($('#dnSlug'));$('#dnSlug').onchange=()=>loadDns($('#dnSlug').value);loadDns($('#dnSlug').value);}
 new MutationObserver(dnsTranslate).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});dnsTranslate();
+
+AdminUI.sorters.set('dnBody',[x=>x.name,x=>x.type,x=>x.content,x=>Number(x.ttl)]);

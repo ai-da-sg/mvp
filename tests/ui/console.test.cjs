@@ -112,7 +112,7 @@ print(json.dumps(result))
  assert.equal(await page.locator('#rows button').first().evaluate(e=>document.activeElement===e),true);
  await page.locator('.nav-group summary').nth(1).focus();await page.keyboard.press('Enter');
  await page.locator('[data-t=layout]').focus();await page.keyboard.press('Enter');
- await page.locator('[data-page-edit=home]').click();await page.waitForSelector('.section-select');assert.equal(new URL(page.url()).hash,'#layout');
+ await page.locator('[data-page-edit=home]').click();await page.waitForSelector('.section-select');assert.equal(new URL(page.url()).hash,'#layout?site=demo');
  await page.locator('.section-select').first().click();await page.locator('#lForm input').fill('Edited A');
  assert.equal(await page.evaluate(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;}),true);
  await page.locator('.section-select').nth(1).click();await page.locator('.section-select').first().click();assert.equal(await page.locator('#lForm input').inputValue(),'Edited A');
@@ -268,7 +268,9 @@ print(json.dumps(result))
  await page.locator('#domainDetailClose').click();
  console.log('PASS domain account create, search, edit, TOTP reveal, mobile layout, automatic hiding and delete');
  await nav('sites');role='finance';await page.reload();await page.waitForSelector('#rows');await page.waitForFunction(()=>document.querySelector('[data-t=layout]').style.display==='none');
- assert.equal(await page.locator('.nav-group').last().isVisible(),false);
+ assert.equal(await page.locator('.nav-group[data-group="3"]').isVisible(),false);
+ assert.notEqual(await page.locator('[data-t=account]').evaluate(e=>e.style.display),'none');
+ assert.equal(await page.locator('.nav-group[data-group="4"]').isVisible(),true);
  assert.equal(await page.locator('#f').count(),0);
  assert.deepEqual(errors,[]);
  console.log('PASS responsive menus, saved navigation, role filtering and no JavaScript errors');

@@ -141,6 +141,31 @@ class ProviderTests(unittest.TestCase):
 
 
 class ConsoleTests(unittest.TestCase):
+    def test_maintenance_reports_worker_failures_without_false_success(self):
+        m = self.m
+        for mode, result, report in [
+            ('check', m.subprocess.CompletedProcess([], 1, '', 'private diagnostic'), {}),
+            ('apply', m.subprocess.CompletedProcess([], 0, '{"ok":false}', ''), {}),
+            ('check', m.subprocess.CompletedProcess([], 0, '{"ok":true}', ''), {'images':[{'ok':False}]}),
+            ('apply', m.subprocess.CompletedProcess([], 0, '{"ok":true}', ''), {'apply_results':[{'ok':True,'http':503}]}),
+        ]:
+            m._write(m.UPDATES_F, report)
+            with patch.object(m.subprocess, 'run', return_value=result):
+                m.run_update(mode)
+            status, data = self.request('/api/updates')
+            self.assertEqual(status, 200)
+            self.assertFalse(data['running'])
+            self.assertTrue(data['error'])
+            self.assertNotIn('private diagnostic', json.dumps(data))
+        with patch.object(m.subprocess, 'run', side_effect=TimeoutError('private diagnostic')):
+            m.run_update('check')
+        self.assertTrue(self.request('/api/updates')[1]['error'])
+        m._write(m.UPDATES_F, {'checked_at':'2026-11-07 00:00','images':[{'ok':True}]})
+        with patch.object(m.subprocess, 'run', return_value=m.subprocess.CompletedProcess([], 0, '{"ok":true}', '')):
+            m.run_update('check')
+        self.assertEqual(self.request('/api/updates')[1]['error'], '')
+        self.assertEqual(self.request('/api/updates',user='ops-test')[0], 403)
+
     def test_team_crud_versions_and_session_revocation(self):
         create = {'action': 'add', 'user': 'new-user', 'name': 'New user', 'role': 'ops'}
         self.assertEqual(self.request('/api/users', create, user='ops-test')[0], 403)

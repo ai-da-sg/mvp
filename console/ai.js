@@ -31,6 +31,7 @@ function aiMode() {
   for (const id of ['aiCompany','aiDomain','aiSlug','aiPlan']) $('#'+id).required = isNew;
   $('#aiSite').required = !isNew;
   $('#aiGenerate').textContent = isNew ? '创建站点并生成草稿' : '生成整站草稿';
+  if(typeof Workspace!=='undefined'&&CURRENT_TAB==='ai')Workspace.sync();
 }
 function aiNotice() {
   const p = (AI_CONFIG?.profiles || []).find(p => p.id === $('#aiProfile').value);

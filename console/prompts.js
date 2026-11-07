@@ -128,7 +128,7 @@ $('#promptEditForm').onsubmit=async e=>{
  try{
   const body={action:'save',kind:PROMPT_EDIT_KIND,revision:Number($('#promptEditForm').dataset.revision),id:$('#promptEditId').value,name:$('#promptEditName').value,category:$('#promptEditCategory').value,description:$('#promptEditDescription').value,body:$('#promptEditBody').value,enabled:$('#promptEditEnabled').checked};
   if(PROMPT_EDIT_KIND==='templates'){body.module_ids=PROMPT_EDIT_MODULES;body.defaults=JSON.parse($('#promptEditDefaults').value||'{}');}
-  PROMPTS=await aiRequest('/api/ai/prompts',body);if(!$('#promptEditId').readOnly){$('#promptLibrarySearch').value='';AdminUI.pages.set('promptLibraryList',Math.floor(PROMPTS[PROMPT_EDIT_KIND].findIndex(t=>t.id===body.id)/20));}renderPromptLibrary();promptRenderOptions();PROMPT_DIALOG.close(true);aiMessage('#promptLibraryMsg','新版本已保存；已创建任务的提示词不受影响。');
+  PROMPTS=await aiRequest('/api/ai/prompts',body);if(!$('#promptEditId').readOnly){$('#promptLibrarySearch').value='';AdminUI.reveal('promptLibraryList',PROMPTS[PROMPT_EDIT_KIND],t=>t.id===body.id);}renderPromptLibrary();promptRenderOptions();PROMPT_DIALOG.close(true);aiMessage('#promptLibraryMsg','新版本已保存；已创建任务的提示词不受影响。');
  }catch(err){aiMessage('#promptEditMsg',err.message,true);}finally{button.disabled=false;}
 };
 $('#promptEditHistory').onclick=async e=>{
@@ -141,3 +141,5 @@ $('#promptLibraryExport').onclick=()=>{
  const blob=new Blob([JSON.stringify({schema_version:1,revision:PROMPTS.revision,templates:PROMPTS.templates,modules:PROMPTS.modules},null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='prompt-library-v'+PROMPTS.revision+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
+
+AdminUI.sorters.set('promptLibraryList',[x=>x.name,x=>x.category,x=>Number(x.version),x=>x.enabled]);

@@ -1519,7 +1519,8 @@ def render_page(slug, page):
 
 
 UPDATES_F = CONSOLE / "updates.json"
-_update_state = {"running": False, "mode": ""}
+_update_state = {"running": False, "mode": "", "error": ""}
+_update_lock = threading.Lock()
 
 
 def read_updates():
@@ -1527,16 +1528,23 @@ def read_updates():
 
 
 def run_update(mode):
-    _update_state["running"] = True
-    _update_state["mode"] = mode
+    with _update_lock:
+        _update_state.update(running=True, mode=mode, error="")
     try:
-        subprocess.run([sys.executable, str(BASE / "tools" / "kf_update.py"),
+        result = subprocess.run([sys.executable, str(BASE / "tools" / "kf_update.py"),
                         "--" + mode], capture_output=True, text=True, timeout=3600)
+        outcome = json.loads(result.stdout or '{}') if result.returncode == 0 else {}
+        report = read_updates()
+        failed = (outcome.get('ok') is not True or
+                  (mode == 'check' and any(x.get('ok') is False for x in report.get('images', []))) or
+                  (mode == 'apply' and any(not x.get('ok') or x.get('http') != 200 for x in report.get('apply_results', []))))
+        if failed:
+            _update_state["error"] = "维护任务未完成，请检查站点运行状态后重试。"
     except Exception:
-        pass
+        _update_state["error"] = "维护任务执行失败，请检查服务状态后重试。"
     finally:
-        _update_state["running"] = False
-        _update_state["mode"] = ""
+        with _update_lock:
+            _update_state["running"] = False
 
 
 _LEADS_CACHE = HealthCache(ttl=60, workers=3, limit=128)
@@ -2550,7 +2558,7 @@ input[type=color]{height:38px;padding:2px;cursor:pointer}
 .tab{display:block;text-align:left;width:100%;border:0;border-radius:7px;min-height:42px;padding:10px 14px;background:transparent;color:var(--dim);font:inherit;font-size:14px}
 .tab:hover{background:var(--surface,#21262d);color:var(--fg)}.tab.on{background:#1c2d42;color:#9acbff;box-shadow:inset 3px 0 var(--acc)}
 .workspace{min-width:0}.page-heading{display:flex;justify-content:space-between;gap:12px;margin-bottom:20px;align-items:center}
-.breadcrumb{font-size:12px;color:var(--dim);margin-bottom:4px}.page-heading h2{font-size:24px;margin:0}
+.field[hidden]{display:none!important}.nav-search{padding:10px 12px}.nav-search input{width:100%;box-sizing:border-box;min-width:0}.nav-search label{display:block;margin-bottom:6px}#featureResults{display:grid;gap:6px;margin-top:8px}#featureResults[hidden]{display:none}#featureResults button{text-align:left;white-space:normal}#siteWorkspace[hidden]{display:none}#siteWorkspace{margin-bottom:20px;align-items:end}#siteWorkspace .field{max-width:520px;min-width:0}#workspaceSite{width:100%;min-width:0}.table-mobile-sort{display:none}@media(max-width:760px){.table-mobile-sort{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}.table-mobile-sort select{min-width:0;max-width:100%;flex:1}.table-mobile-sort button{flex:0 0 auto}}.table-sort{font:inherit;color:inherit;padding:4px 6px!important;min-height:32px;white-space:nowrap}.domain-pagination{flex-wrap:wrap}.domain-pagination select{width:auto;min-width:70px}#p-team details>summary{min-height:44px;padding:12px 8px;box-sizing:border-box;cursor:pointer}.breadcrumb{font-size:12px;color:var(--dim);margin-bottom:4px}.page-heading h2{font-size:24px;margin:0}
 .nav-toggle{display:none}.skip-link{position:fixed;left:12px;top:-80px;z-index:100;background:var(--card);padding:12px}.skip-link:focus{top:12px}
 :where(a,button,input,select,textarea,summary,[tabindex]):focus-visible{outline:2px solid var(--acc);outline-offset:3px}
 input[type=checkbox],input[type=radio]{width:18px;height:18px;flex:0 0 18px;padding:0;vertical-align:middle;accent-color:var(--acc)}
@@ -2595,13 +2603,15 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="console-shell">
 <aside class="sidebar" aria-label="控制台导航">
 <button type="button" id="navToggle" class="ghost nav-toggle" aria-expanded="false" aria-controls="navGroups">导航菜单 · 站点总览</button>
+<div class="nav-search"><label for="featureSearch">搜索功能</label><input type="search" id="featureSearch" autocomplete="off" aria-controls="featureResults"><div id="featureResults" hidden></div></div>
 <nav id="navGroups" class="nav-groups" aria-label="主导航与二级菜单">
 <details class="nav-group" data-group="0" open><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>站点运营</summary><div class="submenu"><button type="button" class="tab" data-t="automation" aria-controls="p-automation">运营助手</button><button type="button" class="tab on" data-t="sites" aria-controls="p-sites">站点总览</button><button type="button" class="tab" data-t="domain" aria-controls="p-domain">域名管理</button><button type="button" class="tab" data-t="dns" aria-controls="p-dns">DNS 解析</button><button type="button" class="tab" data-t="maint" aria-controls="p-maint">运行维护</button></div></details>
 <details class="nav-group" data-group="1"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-1 5 5-1L21 7l-6-6L4 16ZM13 3l6 6"/></svg>内容建站</summary><div class="submenu"><button type="button" class="tab" data-t="ai" aria-controls="p-ai">AI 建站</button><button type="button" class="tab" data-t="styles" aria-controls="p-styles">风格模板</button><button type="button" class="tab" data-t="prompts" aria-controls="p-prompts">提示词库</button><button type="button" class="tab" data-t="layout" aria-controls="p-layout">页面编辑</button><button type="button" class="tab" data-t="design" aria-controls="p-design">视觉设计</button><button type="button" class="tab" data-t="media" aria-controls="p-media">媒体素材</button><button type="button" class="tab" data-t="share" aria-controls="p-share">预览分享</button></div></details>
 <details class="nav-group" data-group="2"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4v2"/></svg>客户与财务</summary><div class="submenu"><button type="button" class="tab" data-t="client" aria-controls="p-client">客户管理</button><button type="button" class="tab" data-t="leads" aria-controls="p-leads">咨询线索</button><button type="button" class="tab" data-t="billing" aria-controls="p-billing">账单收款</button><button type="button" class="tab" data-t="plans" aria-controls="p-plans">套餐设置</button></div></details>
-<details class="nav-group" data-group="3"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details></nav></aside>
+<details class="nav-group" data-group="3"><summary><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="m9 3 6 0 1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/></svg>系统设置</summary><div class="submenu"><button type="button" class="tab" data-t="llm" aria-controls="p-llm">设置 LLM</button><button type="button" class="tab" data-t="providers" aria-controls="p-providers">供应商账号</button><button type="button" class="tab" data-t="mcp" aria-controls="p-mcp">MCP 管理</button><button type="button" class="tab" data-t="team" aria-controls="p-team">团队与安全</button></div></details><details class="nav-group" data-group="4"><summary>个人设置</summary><div class="submenu"><button type="button" class="tab" data-t="account" aria-controls="p-account">我的账号</button></div></details></nav></aside>
 <main id="workspace" class="workspace" tabindex="-1">
 <div class="page-heading"><div><div class="breadcrumb" id="breadcrumb">站点运营 / 站点总览</div><h2 id="pageTitle" tabindex="-1">站点总览</h2></div><span id="editorGlobalState" role="status"></span></div>
+<div id="siteWorkspace" class="formrow" hidden><div class="field"><label for="workspaceSite">当前站点</label><select id="workspaceSite"></select></div><button type="button" class="ghost" id="workspaceOverview">所有站点</button></div>
 <div id="globalMsg" class="msg hidden" role="alert" tabindex="-1"></div>
 
 <div id="p-sites">
@@ -2627,6 +2637,7 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 
 <div id="p-plans" class="hidden">
 <table><thead><tr><th>套餐</th><th>价格</th><th>规格</th><th>操作</th></tr></thead><tbody id="planRows"></tbody></table>
+<p id="planReadOnly" class="hint" hidden>当前角色可查看套餐；修改需要套餐管理权限。</p>
 <form id="pf"><div class="formrow">
 <div class="field"><label>套餐 ID</label><input name="id" placeholder="starter" required></div>
 <div class="field"><label>名称</label><input name="name" placeholder="Starter" required></div>
@@ -2848,12 +2859,12 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 
 <div id="p-share" class="hidden">
 <div class="formrow">
-<div class="field"><label>站点</label><select id="sSlug"></select></div>
-<div class="field"><label>有效天数</label><input id="sDays" type="number" value="14" min="1" max="365"></div>
+<div class="field"><label for="sSlug">站点</label><select id="sSlug"></select></div>
+<div class="field"><label for="sDays">有效天数</label><input id="sDays" required step="1" type="number" value="14" min="1" max="365"></div>
 <div class="field" style="flex:0 0 auto"><label>&nbsp;</label><button id="sCreate">生成预览链接</button></div>
 </div>
 <div id="sList" style="margin-top:16px"></div>
-<div class="msg" id="sMsg"></div>
+<div class="msg" id="sMsg" role="status"></div>
 </div>
 
 <div id="p-domain" class="hidden">
@@ -2932,6 +2943,18 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <form id="clientLedgerForm" class="hidden"><h3 data-client-text="record"></h3><p id="clientLedgerTarget" data-user-content></p><label for="lgType" data-client-text="type"></label><select id="lgType"><option value="topup" data-client-text="income"></option><option value="cost" data-client-text="cost"></option></select><label for="lgAmt" data-client-text="amount"></label><input id="lgAmt" type="number" min="0.01" max="100000000" step="0.01" required><label for="lgCat" data-client-text="category"></label><input id="lgCat" maxlength="120" required><label for="lgNote" data-client-text="notes"></label><input id="lgNote" maxlength="500"><div class="domain-form-actions"><button id="clientLedgerSave" type="submit" data-client-text="record"></button><button id="clientLedgerCancel" type="button" class="ghost" data-client-text="cancel"></button></div><div id="clientLedgerMsg" class="msg" role="status"></div></form>
 </div>
 
+<div id="p-account" class="hidden"><div id="accountMsg" class="msg" role="status"></div><div id="tmMe" style="margin-top:14px"></div>
+<div class="callout" style="margin-top:12px"><b style="color:var(--fg)">修改密码</b>
+  <div class="formrow" style="margin-top:10px">
+    <div class="field" style="flex:0 0 190px"><label for="pwOld">旧密码</label><input id="pwOld" type="password" autocomplete="current-password"></div>
+    <div class="field" style="flex:0 0 190px"><label for="pwNew">新密码（至少 10 位）</label><input id="pwNew" type="password" autocomplete="new-password"></div>
+    <div class="field" style="flex:0 0 auto"><label>&nbsp;</label>
+      <button id="pwSave" type="button" onclick="changePw()">保存</button></div>
+    <div class="msg" id="pwMsg"></div>
+  </div></div>
+<div id="tmRecovery"></div>
+</div>
+
 <div id="p-team" class="hidden">
 <div class="site-toolbar"><div class="search-field"><label for="tmSearch">搜索账号</label><input id="tmSearch" type="search" oninput="renderTeam()"></div><button type="button" onclick="editTeam()">新建账号</button><button type="button" class="ghost" onclick="loadTeam()">刷新</button></div>
 <div id="tmList"></div>
@@ -2943,16 +2966,6 @@ button.danger{color:#ff9c96;border-color:#8b3e39}.hint{font-size:13px;color:var(
 <div class="msg" id="tmMsg"></div>
 <details><summary>账号安全</summary><div class="callout">仅管理员可管理账号；修改会记录在操作日志中。</div>
 <div id="tmSec" style="margin-top:14px"></div>
-<div id="tmMe" style="margin-top:14px"></div>
-<div class="callout" style="margin-top:12px"><b style="color:var(--fg)">修改密码</b>
-  <div class="formrow" style="margin-top:10px">
-    <div class="field" style="flex:0 0 190px"><label>旧密码</label><input id="pwOld" type="password" autocomplete="current-password"></div>
-    <div class="field" style="flex:0 0 190px"><label>新密码（至少 10 位）</label><input id="pwNew" type="password" autocomplete="new-password"></div>
-    <div class="field" style="flex:0 0 auto"><label>&nbsp;</label>
-      <button class="ghost" onclick="changePw()">保存</button></div>
-    <div class="msg" id="pwMsg"></div>
-  </div></div>
-<div id="tmRecovery"></div>
 </details><details><summary>权限与操作日志</summary><div style="font-size:12px;color:var(--dim);margin:18px 0 6px">写入权限（每行一条路径前缀，留空=全禁，管理员固定全开）</div>
 <div id="tmRoles"></div>
 <div style="font-size:12px;color:var(--dim);margin:18px 0 6px">操作日志</div>
@@ -2992,7 +3005,7 @@ let ROLE='ops';
 function applyRole(){
   const hidden = ROLE==='finance'
     ? ['automation','ai','styles','prompts','layout','design','media','share','dns','maint','team','llm','mcp','providers']
-    : (ROLE==='admin' ? [] : ['team','llm','mcp','providers']);
+    : (ROLE==='admin' ? [] : ['team','llm','mcp','providers','maint']);
   document.querySelectorAll('.tab').forEach(el=>{
     el.style.display = hidden.includes(el.dataset.t) ? 'none' : '';
   });
@@ -3001,14 +3014,18 @@ function applyRole(){
 function badge(s){const m={active:['ok','运行中'],provisioning:['warn','开通中'],failed:['bad','失败'],stopped:['bad','已停止'],unknown:['warn','状态未知']};
  const [c,t]=m[s]||['warn',s];return `<span class="dot ${c}"></span>${t}`}
 let CURRENT_TAB='sites', NAV_READY=false;
-function navigateTo(key, updateHistory=true){
+function navigateTo(key, updateHistory=true, site=null){
  const t=[...document.querySelectorAll('.tab')].find(x=>x.dataset.t===key);
  if(!t || t.style.display==='none') return false;
+ if(site!==null&&typeof Workspace!=='undefined'&&!Workspace.canSelect(site))return false;
  if(key!==CURRENT_TAB&&typeof AdminUI!=='undefined'&&!AdminUI.canLeave())return false;
  if(CURRENT_TAB==='styles'&&key!=='styles'&&typeof styleCanLeave==='function'&&!styleCanLeave())return false;
+ if(typeof ACCOUNT_BUSY!=='undefined'&&ACCOUNT_BUSY){showGlobalError('正在更新账号安全设置，请稍候。');return false;}
  if(EDITOR_BUSY){ showGlobalError('正在保存或发布，请稍候再切换页面。'); return false; }
  if(CURRENT_TAB==='layout' && !commitJson())return false;
  $('#globalMsg').classList.add('hidden');
+ if(CURRENT_TAB==='account'&&key!=='account')clearAccount();
+ if(site!==null&&typeof SiteContext!=='undefined'){SiteContext.save({slug:site},false);if(key==='ai')$('#aiMode').value='existing';}
  CURRENT_TAB=key;
  document.querySelectorAll('.tab').forEach(x=>{x.classList.toggle('on',x===t);if(x===t)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
  document.querySelectorAll('.tab').forEach(x=>$('#p-'+x.dataset.t).classList.toggle('hidden',x!==t));
@@ -3017,9 +3034,11 @@ function navigateTo(key, updateHistory=true){
  $('#breadcrumb').textContent=(t.closest('details').dataset.label||t.closest('details').querySelector('summary').textContent)+' / '+(t.dataset.label||t.textContent);
  $('#navToggle').textContent='导航菜单 · '+(t.dataset.label||t.textContent);
  $('#navGroups').classList.remove('expanded');$('#navToggle').setAttribute('aria-expanded','false');
- if(updateHistory && location.hash!=='#'+key) history.pushState(null,'','#'+key);
+ const route=typeof Workspace!=='undefined'?Workspace.route(key):'#'+key;
+ if(updateHistory&&location.hash!==route)history.pushState(null,'',route);
+ if(typeof Workspace!=='undefined')Workspace.render();
  try{sessionStorage.setItem('kf-console-tab',key);}catch(_){}
- const initializers={styles:()=>styleLoad(),providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
+ const initializers={account:()=>initAccount(),styles:()=>styleLoad(),providers:()=>loadProviders(),automation:()=>loadAutomation(),llm:()=>aiLoadConfig(),mcp:()=>loadMCP(),ai:()=>initAI(),prompts:()=>initPrompts(),design:()=>initDesign(),layout:()=>{const slug=window.aiEditorTarget;window.aiEditorTarget=null;return initLayout(slug);},media:()=>initMedia(),share:()=>initShare(),domain:()=>initDomain(),leads:()=>initLeads(),maint:()=>initMaint(),client:()=>initClient(),team:()=>initTeam(),dns:()=>initDns()};
  Promise.resolve().then(()=>initializers[key]?.()).catch(e=>showGlobalError(e.message));
  if(updateHistory){$('#pageTitle').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
  return true;
@@ -3028,7 +3047,7 @@ function syncNavigation(){
  document.querySelectorAll('.nav-group').forEach(g=>g.hidden=![...g.querySelectorAll('.tab')].some(t=>t.style.display!=='none'));
  if(!NAV_READY){
   NAV_READY=true;let saved='';try{saved=sessionStorage.getItem('kf-console-tab')||'';}catch(_){}
-  const key=location.hash.slice(1)||saved||'sites';if(!navigateTo(key,false))navigateTo('sites',false);
+  const route=Workspace.parse();const key=route.key||saved||'sites';if(!navigateTo(key,false,route.site)){navigateTo('sites',false);history.replaceState(null,'','#sites');if(route.site)showGlobalError(AdminUI.text('站点不可用或已归档，请从站点总览选择。','Site unavailable or archived. Select an active site from the overview.'));}
  }else if(document.querySelector('.tab.on')?.style.display==='none')navigateTo('sites');
 }
 function showGlobalError(message){const e=$('#globalMsg');e.textContent=message;e.classList.remove('hidden');}
@@ -3036,7 +3055,7 @@ document.querySelectorAll('.tab').forEach(t=>{t.dataset.label=t.textContent;t.on
 document.querySelectorAll('.nav-group').forEach(g=>g.dataset.label=g.querySelector('summary').textContent);
 $('#navToggle').onclick=()=>{const open=$('#navGroups').classList.toggle('expanded');$('#navToggle').setAttribute('aria-expanded',String(open));};
 $('.sidebar').addEventListener('keydown',e=>{if(e.key==='Escape'){$('#navGroups').classList.remove('expanded');$('#navToggle').setAttribute('aria-expanded','false');$('#navToggle').focus();}});
-window.addEventListener('popstate',()=>{if(NAV_READY && !navigateTo(location.hash.slice(1)||'sites',false))history.replaceState(null,'','#'+CURRENT_TAB);});
+window.addEventListener('popstate',()=>{if(!NAV_READY)return;const route=Workspace.parse();if(!navigateTo(route.key||'sites',false,route.site))history.replaceState(null,'',Workspace.route(CURRENT_TAB));});
 function setStableHtml(element, html){
  if(element._renderedHtml===html)return;
  element._renderedHtml=html;element.innerHTML=html;
@@ -3054,7 +3073,7 @@ function renderSites(){
   const status=$('#siteStatus').value;
   s=s.filter(x=>(!status||x.state===status)&&(!query||[x.slug,x.company,x.domain].some(v=>String(v||'').toLocaleLowerCase().includes(query))));
   const html=s.length? s.map(x=>`<tr>
-  <td class="mono">${esc(x.slug)}${x.archived?'<div class="pill">已归档</div>':''}</td>
+  <td class="mono">${x.archived?esc(x.slug):`<button type="button" class="ghost" data-open-site="${esc(x.slug)}">${esc(x.slug)}</button>`}${x.archived?'<div class="pill">已归档</div>':''}</td>
   <td><b data-user-content>${esc(x.company)}</b><div class="mono" style="color:var(--dim)">${esc(x.domain)}</div></td>
   <td class="sm-hide" style="font-size:12.5px;color:var(--dim)">${esc(x.owner)||'—'}</td>
   <td class="sm-hide">${esc(x.plan)||'-'}</td>
@@ -3075,6 +3094,7 @@ function renderSites(){
   :(STATE.sites||[]).length?'<tr><td colspan="8" class="empty-results"><p>没有匹配的站点</p><button class="ghost" onclick="clearSiteFilters()">清除筛选</button></td></tr>'
   :'<tr><td colspan="8" class="empty-results">暂无站点</td></tr>';
   setStableHtml($('#rows'),html);
+ $('#rows').querySelectorAll('[data-open-site]').forEach(b=>b.onclick=()=>navigateTo(ROLE==='finance'?'client':'layout',true,b.dataset.openSite));
 }
 
 async function load(force=false){
@@ -3093,8 +3113,10 @@ async function load(force=false){
  const planHtml=(STATE.plans||[]).map(p=>`<tr><td><b>${esc(p.name)}</b>
   <div class="mono" style="color:var(--dim);font-size:11.5px">${esc(p.id)}</div></td>
   <td class="mono">${money(p.price)} <span style="color:var(--dim)">/ ${esc(p.period)}</span></td>
-  <td>${esc(p.specs)}</td><td><a href="#" onclick="editPlan('${esc(p.id)}');return false">编辑</a></td></tr>`).join('');
+  <td>${esc(p.specs)}</td><td>${STATE.can_manage_plans?`<button type="button" class="ghost" data-plan-edit="${esc(p.id)}">编辑</button>`:'—'}</td></tr>`).join('');
  setStableHtml($('#planRows'),planHtml);
+ $('#pf').hidden=!STATE.can_manage_plans;$('#planReadOnly').hidden=!!STATE.can_manage_plans;
+ $('#planRows').onclick=e=>{const b=e.target.closest('[data-plan-edit]');if(b)editPlan(b.dataset.planEdit);};
  $('#foot').textContent='最后刷新 '+new Date().toLocaleTimeString();
 }
 
@@ -3128,22 +3150,17 @@ async function toggleSuspend(slug,status){
 async function issue(slug){
  const r=await fetch('/api/invoice/issue',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug})});
  const d=await r.json(); if(!r.ok)alert(d.error||'失败'); load();}
-function editPlan(id){const p=STATE.plans.find(x=>x.id===id);const f=$('#pf');
- f.id.value=p.id;f.name.value=p.name;f.price.value=p.price;f.period.value=p.period;f.specs.value=p.specs;
- $('#pmsg').textContent='编辑中：'+p.name;}
-$('#pf').addEventListener('submit',async e=>{e.preventDefault();
- const fd=Object.fromEntries(new FormData(e.target));fd.price=Number(fd.price);
- const r=await fetch('/api/plan/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fd)});
- const d=await r.json();$('#pmsg').className='msg '+(r.ok?'ok':'bad');
- $('#pmsg').textContent=r.ok?'已保存':(d.error||'失败');load();});
-
-
-
-
-
-
-
-
+function editPlan(id){
+ if(!STATE.can_manage_plans)return;
+ const p=STATE.plans.find(x=>x.id===id);if(!p)return;const f=$('#pf');
+ for(const key of ['id','name','price','period','specs'])f.elements.namedItem(key).value=p[key]??'';
+ AdminUI.message('#pmsg',['编辑中：'+p.name,'Editing: '+p.name]);f.elements.namedItem('name').focus();
+}
+$('#pf').addEventListener('submit',async e=>{
+ e.preventDefault();if(!STATE.can_manage_plans)return;const button=e.target.querySelector('button');if(button.disabled)return;button.disabled=true;
+ try{const fd=Object.fromEntries(new FormData(e.target));fd.price=Number(fd.price);await aiRequest('/api/plan/save',fd);AdminUI.message('#pmsg',['已保存','Saved']);await load();}
+ catch(err){AdminUI.message('#pmsg',[err.message,err.message],true);}finally{button.disabled=false;}
+});
 
 // ---------------- 团队 ----------------
 let TEAM_ROWS=[],TEAM_EDIT=null,TEAM_MODAL=null;
@@ -3155,7 +3172,8 @@ async function loadTeam(){
 }
 function renderTeam(){
  const q=$('#tmSearch').value.toLowerCase(),rows=TEAM_ROWS.filter(x=>[x.user,x.name,x.role].join(' ').toLowerCase().includes(q));
- AdminUI.table('tmList',rows,[teamText('用户名','Username'),teamText('显示名','Name'),teamText('角色','Role'),teamText('状态','Status'),'MFA',teamText('操作','Actions')],x=>`<tr><td data-user-content>${esc(x.user)}</td><td data-user-content>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${x.active?teamText('启用','Active'):teamText('已停用','Disabled')}${x.locked?' · '+teamText('已锁定','Locked'):''}</td><td>${x.mfa?teamText('已开启','Enabled'):teamText('未开启','Not enabled')}</td><td><div class="domain-row-actions"><button type="button" data-team="detail" data-user="${esc(x.user)}">${teamText('详情','Details')}</button><button type="button" data-team="edit" data-user="${esc(x.user)}">${teamText('编辑','Edit')}</button><button type="button" data-team="delete" data-user="${esc(x.user)}" ${x.user===STATE.me?'disabled':''}>${teamText('删除','Delete')}</button></div></td></tr>`);
+ AdminUI.sorters.set('tmList',[x=>x.user,x=>x.name,x=>x.role,x=>x.active,x=>x.mfa]);
+ AdminUI.table('tmList',rows,[teamText('用户名','Username'),teamText('显示名','Name'),teamText('角色','Role'),teamText('状态','Status'),'MFA',teamText('操作','Actions')],x=>`<tr><td data-user-content>${esc(x.user)}</td><td data-user-content>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${x.active?teamText('启用','Active'):teamText('已停用','Disabled')}${x.locked?' · '+teamText('已锁定','Locked'):''}</td><td>${x.mfa?teamText('已开启','Enabled'):teamText('未开启','Not enabled')}</td><td><div class="domain-row-actions"><button type="button" class="ghost" data-team="detail" data-user="${esc(x.user)}">${teamText('详情','Details')}</button><button type="button" class="ghost" data-team="edit" data-user="${esc(x.user)}">${teamText('编辑','Edit')}</button><button type="button" class="ghost" data-team="delete" data-user="${esc(x.user)}" ${x.user===STATE.me?'disabled':''}>${teamText('删除','Delete')}</button></div></td></tr>`);
  $('#tmList').onclick=e=>{const b=e.target.closest('[data-team]');if(!b||b.disabled)return;const x=TEAM_ROWS.find(r=>r.user===b.dataset.user);if(b.dataset.team==='edit')editTeam(x);else if(b.dataset.team==='detail')teamDetail(x);else userAct(x.user,'delete');};
 }
 function editTeam(x=null){
@@ -3176,13 +3194,14 @@ async function saveTeam(e){
  try{const body={action:TEAM_EDIT?'update':'add',user:$('#tmUser').value,name:$('#tmName').value,role:$('#tmRole').value,active:$('#tmActive').checked,...(TEAM_EDIT?{version:TEAM_EDIT.version}:{})};const d=await aiRequest('/api/users',body);TEAM_MODAL.close(true);await loadTeam();if(d.password)teamPassword(d.password);}
  catch(err){aiMessage('#tmEditMsg',err.message,true);}finally{button.disabled=false;}
 }
+let ACCOUNT_BUSY=false,ACCOUNT_EPOCH=0;
+function accountBusy(value){ACCOUNT_BUSY=value;$('#p-account').setAttribute('aria-busy',String(value));$('#p-account').querySelectorAll('button').forEach(b=>b.disabled=value);}
+function clearAccount(){ACCOUNT_EPOCH++;$('#tmMe').replaceChildren();$('#tmRecovery').replaceChildren();$('#pwOld').value=$('#pwNew').value='';aiMessage('#accountMsg','');aiMessage('#pwMsg','');}
+async function initAccount(){clearAccount();try{await loadMfa();}catch(e){aiMessage('#accountMsg',e.message,true);}}
 async function changePw(){
-  const r=await fetch('/api/password',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({old:$('#pwOld').value,new:$('#pwNew').value})});
-  const d=await r.json();
-  $('#pwMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#pwMsg').textContent=r.ok?('密码已修改'+(d.killed?('，已踢掉 '+d.killed+' 个其他会话'):'')):('失败：'+(d.error||''));
-  if(r.ok){ $('#pwOld').value=''; $('#pwNew').value=''; }
+ if(ACCOUNT_BUSY)return;accountBusy(true);aiMessage('#pwMsg','');
+ try{await aiRequest('/api/password',{old:$('#pwOld').value,new:$('#pwNew').value});$('#pwOld').value=$('#pwNew').value='';aiMessage('#pwMsg','密码已修改');}
+ catch(e){aiMessage('#pwMsg',e.message,true);}finally{accountBusy(false);}
 }
 async function loadSecurity(){
   const r=await fetch('/api/security'); const d=await r.json();
@@ -3216,12 +3235,13 @@ async function loadSecurity(){
     </div>` + (rows||'');
 }
 async function loadMfa(){
-  const r=await fetch('/api/mfa'); const d=await r.json();
+  const epoch=++ACCOUNT_EPOCH;const d=await aiRequest('/api/mfa');
+  if(epoch!==ACCOUNT_EPOCH||CURRENT_TAB!=='account')return;
   const box=$('#tmMe');
   if(d.enabled){
     box.innerHTML=`<div class="callout"><b style="color:var(--ok)">两步验证已开启</b>（${esc(d.user)}）
       <div class="formrow" style="margin-top:10px">
-        <div class="field" style="flex:0 0 160px"><label>验证码</label><input id="mfaCode" placeholder="6 位数字"></div>
+        <div class="field" style="flex:0 0 160px"><label for="mfaCode">验证码</label><input id="mfaCode" placeholder="6 位数字" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></div>
         <div class="field" style="flex:0 0 auto"><label>&nbsp;</label>
           <button class="ghost" onclick="mfaAct('regen')">重新生成恢复码</button>
           <button class="ghost" onclick="mfaAct('disable')">关闭两步验证</button></div>
@@ -3236,31 +3256,27 @@ async function loadMfa(){
       <img src="${esc(d.qr_data||'')}" alt="两步验证绑定二维码" style="display:block;width:256px;max-width:100%;height:auto;margin-top:12px;image-rendering:pixelated">
       <div class="hint" style="margin-top:8px;overflow-wrap:anywhere">${esc(uri)}</div>
       <div class="formrow" style="margin-top:10px">
-        <div class="field" style="flex:0 0 160px"><label>验证码</label><input id="mfaCode" placeholder="6 位数字"></div>
+        <div class="field" style="flex:0 0 160px"><label for="mfaCode">验证码</label><input id="mfaCode" placeholder="6 位数字" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></div>
         <div class="field" style="flex:0 0 auto"><label>&nbsp;</label>
           <button onclick="mfaAct('enable')">开启两步验证</button></div>
       </div></div>`;
   }
 }
 async function mfaAct(act){
-  const r=await fetch('/api/mfa',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:act,code:$('#mfaCode').value})});
-  const d=await r.json();
-  if(!r.ok){ $('#tmMsg').className='msg bad'; $('#tmMsg').textContent='失败：'+(d.error||''); return; }
-  $('#tmMsg').className='msg ok';
-  if((act==='enable'||act==='regen') && d.recovery){
-    $('#tmMsg').textContent='已开启两步验证';
-    $('#tmRecovery').innerHTML=`<div class="callout" style="border-left-color:var(--warn)">
-      <b style="color:var(--warn)">恢复码（只显示这一次）</b>
-      <div style="margin:8px 0;font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:1.9">
-        ${d.recovery.map(c=>esc(c)).join('　')}</div>
-      <div style="font-size:12px;color:var(--dim)">手机丢失或换机时，用任一码代替验证码登录，每码只能用一次。请打印或存进密码管理器。</div>
-      <button class="ghost" style="margin-top:8px" onclick="copyShare('${d.recovery.join(' ')}')">复制全部恢复码</button>
-    </div>`;
-  } else {
-    $('#tmMsg').textContent = act==='enable'?'已开启两步验证':(act==='regen'?'已生成新恢复码':'已关闭');
+ if(ACCOUNT_BUSY)return;accountBusy(true);aiMessage('#accountMsg','');
+ try{
+  const d=await aiRequest('/api/mfa',{action:act,code:$('#mfaCode').value});
+  $('#tmRecovery').replaceChildren();
+  if(d.recovery){
+   const box=document.createElement('div');box.className='callout';const title=document.createElement('h3');title.textContent=AdminUI.text('恢复码（只显示这一次）','Recovery codes (shown once)');
+   const codes=document.createElement('p');codes.dataset.userContent='';codes.textContent=d.recovery.join('  ');codes.style.overflowWrap='anywhere';
+   const hint=document.createElement('p');hint.textContent=AdminUI.text('离开此页后清除，请保存到密码管理器。','Cleared when you leave this page. Save in a password manager.');
+   const copy=document.createElement('button');copy.type='button';copy.textContent=AdminUI.text('复制全部恢复码','Copy recovery codes');copy.onclick=async()=>{try{await navigator.clipboard.writeText(codes.textContent);aiMessage('#accountMsg',AdminUI.text('恢复码已复制','Recovery codes copied'));}catch(e){aiMessage('#accountMsg',AdminUI.text('复制失败，请手动选择恢复码。','Copy failed. Select and copy the recovery codes manually.'),true);}};
+   box.append(title,codes,hint,copy);$('#tmRecovery').append(box);
   }
-  loadMfa();
+  aiMessage('#accountMsg',AdminUI.text(act==='disable'?'两步验证已关闭':'两步验证已更新',act==='disable'?'Two-step verification disabled':'Two-step verification updated'));
+  await loadMfa();
+ }catch(e){aiMessage('#accountMsg',e.message,true);}finally{if($('#mfaCode'))$('#mfaCode').value='';accountBusy(false);}
 }
 async function userAct(user,act){
  const x=TEAM_ROWS.find(x=>x.user===user);if(!x)return;
@@ -3268,7 +3284,7 @@ async function userAct(user,act){
  try{const d=await aiRequest('/api/users',{action:act,user,version:x.version,confirmed:true});$('#adminDetailDialog')?.close();await loadTeam();loadSecurity();if(d.password)teamPassword(d.password);else aiMessage('#tmMsg',teamText('已更新','Updated'));}
  catch(e){aiMessage('#tmMsg',e.message,true);}
 }
-function initTeam(){ loadMfa(); if(STATE.role==='admin'){ loadTeam(); loadSecurity(); loadRoles(); loadAudit(); } }
+function initTeam(){ if(STATE.role==='admin'){ loadTeam(); loadSecurity(); loadRoles(); loadAudit(); } }
 
 
 // ---------------- 维护 ----------------
@@ -3279,7 +3295,7 @@ function renderUpdates(d){
   if(!r.checked_at){ body.innerHTML='<div style="color:var(--dim);font-size:13px">还没有检查记录，点上面的「立即检查」。</div>'; return; }
   const imgs=(r.images||[]).map(i=>`<div class="dom-row"><div class="h">
       <span class="name">${esc(i.ref.split('/').pop())}</span>
-      <span style="color:${i.changed?'var(--warn)':'var(--ok)'}">${i.changed?'有更新':'最新'}</span>
+      <span style="color:${i.ok===false?'var(--bad)':i.changed?'var(--warn)':'var(--ok)'}">${i.ok===false?'检查失败':i.changed?'有更新':'最新'}</span>
       ${i.changed?`<span class="hint" style="margin:0">${esc(i.before)} → ${esc(i.after)}</span>`:''}
     </div></div>`).join('');
   const sites=(r.sites||[]).map(s=>`<div class="dom-row"><div class="h">
@@ -3291,23 +3307,21 @@ function renderUpdates(d){
     <div style="font-size:12px;color:var(--dim);margin:12px 0 6px">站点</div>${sites||'<div style="color:var(--dim);font-size:13px">无</div>'}`;
 }
 async function pollUpdates(){
-  const r=await fetch('/api/updates'); const d=await r.json();
-  renderUpdates(d);
-  if(d.running){ $('#mtStatus').className='msg'; $('#mtStatus').textContent = d.mode==='apply'?'重建中…':'检查中…'; }
-  else { clearInterval(MT_POLL); MT_POLL=null; $('#mtStatus').className='msg ok'; $('#mtStatus').textContent='完成'; }
+ try{const d=await aiRequest('/api/updates');renderUpdates(d);
+ if(d.running){aiMessage('#mtStatus',d.mode==='apply'?'重建中…':'检查中…');}
+ else {clearInterval(MT_POLL);MT_POLL=null;const failed=d.error||((d.report?.images||[]).some(x=>x.ok===false)||(d.report?.apply_results||[]).some(x=>!x.ok||x.http!==200)?'维护记录存在失败项，请检查站点状态。':'');aiMessage('#mtStatus',failed||((d.report||{}).checked_at?'完成':'尚未检查'),!!failed);}
+ }catch(e){clearInterval(MT_POLL);MT_POLL=null;aiMessage('#mtStatus',e.message,true);}
 }
 async function triggerUpdate(act){
-  $('#mtStatus').className='msg'; $('#mtStatus').textContent = act==='apply'?'重建中…':'检查中（要拉镜像，可能要几分钟）…';
-  const r=await fetch('/api/updates',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:act})});
-  const d=await r.json();
-  if(!r.ok){ $('#mtStatus').className='msg bad'; $('#mtStatus').textContent=d.error||'失败'; return; }
-  if(!MT_POLL) MT_POLL=setInterval(pollUpdates, 3000);
+ $('#mtCheck').disabled=$('#mtApply').disabled=true;
+ aiMessage('#mtStatus',act==='apply'?'重建中…':'检查中（要拉镜像，可能要几分钟）…');
+ try{await aiRequest('/api/updates',{action:act});if(!MT_POLL)MT_POLL=setInterval(pollUpdates,3000);await pollUpdates();}
+ catch(e){aiMessage('#mtStatus',e.message,true);}finally{$('#mtCheck').disabled=$('#mtApply').disabled=false;}
 }
 
 // ---------------- SMTP ----------------
 async function loadSmtp(){
-  const r=await fetch('/api/smtp'); const d=await r.json(); const s=d.smtp||{};
+  const d=await aiRequest('/api/smtp'); const s=d.smtp||{};
   $('#smProvider').value=s.provider||'resend';
   $('#smKey').value='';
   $('#smHost').value=s.host||''; $('#smPort').value=s.port||587;
@@ -3323,7 +3337,7 @@ async function saveSmtp(){
   const d=await r.json();
   $('#smMsg').className='msg '+(r.ok?'ok':'bad');
   $('#smMsg').textContent=r.ok?'已保存':('失败：'+(d.error||''));
-  if(r.ok) loadSmtp();
+  if(r.ok) loadSmtp().catch(e=>aiMessage('#smMsg',e.message,true));
 }
 async function runDigest(){
   $('#smMsg').className='msg';
@@ -3380,7 +3394,7 @@ async function loadAudit(){
 }
 
 function initMaint(){
-  loadSmtp();
+  loadSmtp().catch(e=>aiMessage('#smMsg',e.message,true));
   if(!$('#mtCheck').onclick){
     $('#mtCheck').onclick=()=>triggerUpdate('check');
     $('#mtApply').onclick=()=>{
@@ -3395,57 +3409,46 @@ function initMaint(){
 async function initDomain(){ return loadDomainRegistry(); }
 
 // ---------------- 分享 ----------------
+let SHARE_EPOCH=0,SHARE_BUSY=false;
+const shareText=(zh,en)=>AdminUI.text(zh,en);
+function shareControls(){ $('#sCreate').disabled=SHARE_BUSY||!$('#sSlug').value; }
 async function loadShares(slug){
-  if(!slug){$('#sList').innerHTML='<p class="hint">没有可选站点</p>';return;}
-  const r=await fetch('/api/shares/'+encodeURIComponent(slug));
-  const d=await r.json();
-  const box=$('#sList');
+ const epoch=++SHARE_EPOCH,box=$('#sList');
+ const current=()=>epoch===SHARE_EPOCH&&slug===$('#sSlug').value;
+ shareControls();box.removeAttribute('aria-busy');
+ if(!slug){box.textContent=shareText('没有可选站点','No sites available');return;}
+ box.textContent=shareText('读取中…','Loading…');box.setAttribute('aria-busy','true');
+ try{
+  const d=await aiRequest('/api/shares/'+encodeURIComponent(slug));if(!current())return;
   const items=d.items||[];
-  if(!items.length){
-    box.innerHTML='<div style="text-align:center;padding:26px 12px">'
-      +'<div style="color:var(--dim);font-size:13px;margin-bottom:10px">还没有分享链接，生成一条发给客户审阅</div>'
-      +'<button onclick="document.querySelector(\'#sCreate\').click()">生成预览链接</button></div>';
-    return; }
-  box.innerHTML=items.map(s=>{
-    const full=location.origin+s.url;
-    return `<div class="share-row">
-      <span class="${s.alive?'u':'u dead'}">${esc(full)}</span>
-      <span style="color:var(--dim)">${s.alive?('有效至 '+esc(s.expires)):'已失效'}</span>
-      ${s.alive?`<button onclick="copyShare('${full}')">复制</button>`:''}
-      <button onclick="revokeShare('${s.token}')">作废</button>
-    </div>`;
-  }).join('');
+  if(!items.length){box.textContent=shareText('还没有分享链接，生成一条发给客户审阅','No sharing links yet. Create one for customer review.');return;}
+  box.innerHTML=items.map(s=>`<div class="share-row"><span class="${s.alive?'u':'u dead'}" data-user-content>${esc(location.origin+s.url)}</span><span>${s.alive?esc(shareText('有效至 ','Expires ')+s.expires):shareText('已失效','Expired or revoked')}</span>${s.alive?`<button type="button" class="ghost" data-share-copy="${esc(location.origin+s.url)}">${shareText('复制','Copy')}</button><button type="button" class="ghost" data-share-revoke="${esc(s.token)}">${shareText('作废','Revoke')}</button>`:''}</div>`).join('');
+  box.querySelectorAll('[data-share-copy]').forEach(button=>button.onclick=async()=>{try{await navigator.clipboard.writeText(button.dataset.shareCopy);if(current())AdminUI.message('#sMsg',['链接已复制','Link copied']);}catch(e){if(current())AdminUI.message('#sMsg',['复制失败，请长按选择','Copy failed. Select the link manually.'],true);}});
+  box.querySelectorAll('[data-share-revoke]').forEach(button=>button.onclick=()=>revokeShare(button.dataset.shareRevoke,slug,epoch));
+ }catch(e){if(current()){box.textContent=shareText('分享链接加载失败。','Could not load sharing links.');const retry=document.createElement('button');retry.type='button';retry.className='ghost';retry.textContent=shareText('重试','Retry');retry.onclick=()=>{AdminUI.message('#sMsg',['','']);loadShares(slug);};box.append(retry);AdminUI.message('#sMsg',[e.message,e.message],true);}}
+ finally{if(current())box.removeAttribute('aria-busy');}
 }
-function copyShare(u){
-  navigator.clipboard.writeText(u).then(()=>{
-    $('#sMsg').className='msg ok'; $('#sMsg').textContent='链接已复制';
-  }).catch(()=>{ $('#sMsg').className='msg bad'; $('#sMsg').textContent='复制失败，请长按选择'; });
-}
-async function revokeShare(token){
-  if(!confirm('作废这个链接？客户将无法再打开。')) return;
-  const r=await fetch('/api/shares/revoke',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({token:token})});
-  const d=await r.json();
-  $('#sMsg').className='msg '+(r.ok?'ok':'bad');
-  $('#sMsg').textContent=r.ok?'已作废':('失败：'+(d.error||''));
-  loadShares($('#sSlug').value);
+async function revokeShare(token,slug,epoch){
+ if(SHARE_BUSY||slug!==$('#sSlug').value||epoch!==SHARE_EPOCH)return;
+ if(!confirm(shareText('作废这个链接？客户将无法再打开。','Revoke this link? The customer will lose access.')))return;
+ SHARE_BUSY=true;shareControls();$('#sList').querySelectorAll('button').forEach(b=>b.disabled=true);
+ try{await aiRequest('/api/shares/revoke',{token,slug});if(slug===$('#sSlug').value&&epoch===SHARE_EPOCH){AdminUI.message('#sMsg',['已作废','Link revoked']);await loadShares(slug);}}
+ catch(e){if(slug===$('#sSlug').value&&epoch===SHARE_EPOCH)AdminUI.message('#sMsg',[e.message,e.message],true);}
+ finally{SHARE_BUSY=false;shareControls();$('#sList').querySelectorAll('button').forEach(b=>b.disabled=false);}
 }
 function initShare(){
-  const sel=$('#sSlug');
-  SiteContext.fill(sel);
-  if(!sel.dataset.initialized){
-    sel.dataset.initialized='1';
-    sel.onchange=()=>loadShares(sel.value);
-    $('#sCreate').onclick=async()=>{
-      const r=await fetch('/api/shares',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({slug:sel.value,days:Number($('#sDays').value)||14})});
-      const d=await r.json();
-      $('#sMsg').className='msg '+(r.ok?'ok':'bad');
-      $('#sMsg').textContent=r.ok?('已生成，有效期至 '+d.expires):('失败：'+(d.error||''));
-      loadShares(sel.value);
-    };
-  }
-  loadShares(sel.value);
+ const sel=$('#sSlug');SiteContext.fill(sel);AdminUI.message('#sMsg',['','']);
+ if(!sel.dataset.initialized){
+  sel.dataset.initialized='1';sel.onchange=()=>{AdminUI.message('#sMsg',['','']);loadShares(sel.value);};
+  $('#sCreate').onclick=async()=>{
+   if(SHARE_BUSY||!sel.value||!$('#sDays').reportValidity())return;
+   const slug=sel.value,epoch=SHARE_EPOCH;SHARE_BUSY=true;shareControls();
+   try{const d=await aiRequest('/api/shares',{slug,days:Number($('#sDays').value)});if(slug===sel.value&&epoch===SHARE_EPOCH){AdminUI.message('#sMsg',['已生成，有效期至 '+d.expires,'Created; expires '+d.expires]);await loadShares(slug);}}
+   catch(e){if(slug===sel.value&&epoch===SHARE_EPOCH)AdminUI.message('#sMsg',[e.message,e.message],true);}
+   finally{SHARE_BUSY=false;shareControls();}
+  };
+ }
+ loadShares(sel.value);
 }
 
 function humanSize(n){ return n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB'; }
@@ -4783,6 +4786,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "can_pay": can_write(self.user_role, "/api/invoice/pay"),
                                     "can_adjust_invoice": can_write(self.user_role, "/api/invoice/adjust"),
                                     "can_renew": can_write(self.user_role, "/api/renew"),
+                                    "can_manage_plans": can_write(self.user_role, "/api/plan/save"),
                                     "can_manage_dns": can_write(self.user_role, "/api/dns/record") and can_write(self.user_role, "/api/automation/prepare"),
                                     "plans": plans(), "settings": pub,
                                     "industries": sorted(INDUSTRIES.items()),
@@ -4974,7 +4978,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/updates":
             return self._send(200, {"report": read_updates(),
                                     "running": _update_state["running"],
-                                    "mode": _update_state["mode"]})
+                                    "mode": _update_state["mode"],
+                                    "error": _update_state["error"]})
 
         m = re.match(r"^/api/access/([a-z0-9-]+)$", path)
         if m:
@@ -5190,9 +5195,15 @@ class Handler(BaseHTTPRequestHandler):
             act = str(body.get("action", "check"))
             if act not in ("check", "apply"):
                 return self._send(400, {"error": "未知操作"})
-            if _update_state["running"]:
-                return self._send(409, {"error": "已有更新任务在运行"})
-            threading.Thread(target=run_update, args=(act,), daemon=True).start()
+            with _update_lock:
+                if _update_state["running"]:
+                    return self._send(409, {"error": "已有更新任务在运行"})
+                _update_state.update(running=True, mode=act, error="")
+                try:
+                    threading.Thread(target=run_update, args=(act,), daemon=True).start()
+                except Exception:
+                    _update_state.update(running=False, error="维护任务无法启动，请重试。")
+                    return self._send(500, {"error": _update_state["error"]})
             return self._send(202, {"ok": True, "action": act})
         if path == "/api/portals":
             return self._portal_create(body)
@@ -5727,6 +5738,8 @@ class Handler(BaseHTTPRequestHandler):
             data = shares()
             if token not in data:
                 return self._send(404, {"error": "链接不存在"})
+            if "slug" in body and body["slug"] != data[token].get("slug"):
+                return self._send(409, {"error": "Share site changed; reload before revoking"})
             data[token]["active"] = False
             _write(SHARES_F, data)
         return self._send(200, {"ok": True})
@@ -5840,6 +5853,8 @@ class Handler(BaseHTTPRequestHandler):
             data = portals()
             if token not in data:
                 return self._send(404, {"error": "链接不存在"})
+            if "slug" in body and body["slug"] != data[token].get("slug"):
+                return self._send(409, {"error": "Share site changed; reload before revoking"})
             data[token]["active"] = False
             _write(PORTAL_F, data)
         return self._send(200, {"ok": True})

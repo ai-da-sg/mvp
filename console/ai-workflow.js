@@ -84,12 +84,16 @@ document.addEventListener('DOMContentLoaded',()=>{
  const dialog=document.createElement('dialog');dialog.id='aiAssistDialog';dialog.className='domain-dialog';dialog.setAttribute('aria-labelledby','aiAssistTitle');
  dialog.innerHTML='<h3 id="aiAssistTitle"></h3><label for="aiAssistProfile" id="aiAssistProfileLabel"></label><select id="aiAssistProfile"></select><p id="aiAssistNotice" class="hint"></p><button type="button" id="aiAssistGenerate"></button><label for="aiAssistResult" id="aiAssistResultLabel"></label><textarea id="aiAssistResult" rows="10" style="width:100%;box-sizing:border-box" data-user-content></textarea><div class="domain-form-actions"><button type="button" id="aiAssistReplace"></button><button type="button" id="aiAssistAppend"></button><button type="button" class="ghost" id="aiAssistClose"></button></div><p id="aiAssistMsg" role="status" class="msg"></p>';document.body.append(dialog);
  let target=null,snapshot='',contextStamp='',busy=false,epoch=0;
- const ids=['aiBrief','promptServices','promptFacts','styleSummary','styleGuidance','promptEditBody','promptEditDescription','workflowBrief','auto-brief','auto-body'];
+ const ids=['aiBrief','promptServices','promptFacts','styleSummary','styleGuidance','promptEditBody','promptEditDescription','workflowBrief','auto-brief','auto-body','auto-subject'];
  function context(el){
   const scope=el.id.startsWith('promptEdit')?'prompts':el.id.startsWith('auto-')||el.id==='workflowBrief'?'automation':'build';
   const data={field:el.id,language:scope==='build'?label('aiLanguage'):document.documentElement.lang};
   const map=scope==='prompts'?{name:'promptEditName',category:'promptEditCategory',description:'promptEditDescription'}:scope==='automation'?{site:'autoSite',purpose:'autoPurpose',operation:'autoTool'}:{company:'aiCompany',site:'aiSite',industry:'aiIndustry',requirements:'aiBrief',facts:'promptFacts',category:'aiPromptCategory',style:'aiStyleTemplate',template:'aiPromptTemplate',audience:'promptAudience',services:'promptServices',goal:'promptGoal',tone:'promptTone'};
   for(const [k,id] of Object.entries(map))data[k]=label(id);
+  if(scope==='automation'){
+   if(el.id==='workflowBrief'){data.purpose='Website delivery';data.operation='Generate, review and deliver website';data.requirements=value('workflowBrief');}
+   else{data.requirements=value('auto-brief');data.name=value('auto-subject');data.description=value('auto-body');}
+  }
   if(scope==='prompts')data.modules=JSON.stringify(PROMPT_EDIT_MODULES.map(id=>PROMPTS?.modules.find(m=>m.id===id)?.name||id));
   if(scope==='build'){if(value('aiMode')==='existing'){data.company=label('aiSite');delete data.industry;}else data.site=value('aiDomain');data.modules=JSON.stringify(PROMPT_MODULES.map(id=>PROMPTS?.modules.find(m=>m.id===id)?.name||id));}
   return {scope,context:data};

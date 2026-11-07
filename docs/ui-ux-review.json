@@ -1,0 +1,353 @@
+{
+  "objective": "对网站进行 UI/UX 全面检查，建设具有 Cloudflare 式清晰层级、完整功能与便捷操作的网站建站项目",
+  "baseline_revision": "83c8057eb7f230ff804236be50aab6b8cdd24f85",
+  "phase": "UI/UX repairs implemented and locally verified; release gates tracked in CI and deployment records",
+  "reference_principles": [
+    {
+      "principle": "统一导航，按用户任务组织入口",
+      "source": "https://developers.cloudflare.com/changelog/post/2026-10-12-unified-dashboard-navigation/"
+    },
+    {
+      "principle": "清楚区分账户、站点与个人设置",
+      "source": "https://developers.cloudflare.com/fundamentals/concepts/accounts-and-zones/"
+    },
+    {
+      "principle": "高效表格、移动端操作和就近帮助",
+      "source": "https://developers.cloudflare.com/changelog/post/2026-05-20-new-dns-records-ux/"
+    }
+  ],
+  "automated_baseline": {
+    "pages": 20,
+    "scans": 60,
+    "variants": [
+      "1440px light",
+      "1440px dark",
+      "375px light"
+    ],
+    "role": "admin",
+    "language": "en",
+    "horizontal_overflow": false,
+    "javascript_errors": [],
+    "axe_rules": {
+      "label-content-name-mismatch": 3,
+      "target-size": 3
+    },
+    "limits": "Initial page states in disposable app HTTP fixture. Does not prove every dialog, failure state, role or external provider operation is complete."
+  },
+  "runtime_role_findings": [
+    {
+      "teamDisplay": "none",
+      "teamNavigation": false,
+      "mfaEndpoint": 200,
+      "updatesEndpoint": 403,
+      "smtpEndpoint": 403,
+      "maintenance": {
+        "text": "Done",
+        "class": "msg ok"
+      },
+      "role": "ops-test"
+    },
+    {
+      "teamDisplay": "none",
+      "teamNavigation": false,
+      "mfaEndpoint": 200,
+      "updatesEndpoint": 403,
+      "smtpEndpoint": 403,
+      "role": "finance-test"
+    }
+  ],
+  "flow_review": {
+    "head": "83c8057",
+    "method": "Read-only source and assertion audit; no application code modified and no test execution claimed. Status verified_code_path means directly supported by implementation; races still need deterministic runtime reproduction. Forbidden security report never opened.",
+    "findings": [
+      {
+        "id": "FLOW-01",
+        "priority": "P1",
+        "status": "verified_code_path",
+        "title": "Non-admin users cannot reach their own password or MFA settings",
+        "evidence": [
+          "console/kf_console.py:2994 (finance and ops hide team)",
+          "console/kf_console.py:3004 (hidden navigation is rejected, including direct #team)",
+          "console/kf_console.py:2944 (personal security and password controls are inside team)",
+          "console/kf_console.py:233 (password/MFA self-service is authorized for every login)"
+        ],
+        "impact": "Ops and finance cannot change their password, enroll MFA or regenerate recovery codes using the console. This also blocks completing step-up protected DNS/domain actions when MFA has not yet been enrolled.",
+        "recommendation": "Expose a personal account/security destination for every role; keep user administration and role/audit controls admin-only.",
+        "coverage": "tests/ui/real-api.test.cjs:38 exercises role API denial and :48 pre-enrolled MFA login, but neither exercises ops/finance self-service enrollment or password changes."
+      },
+      {
+        "id": "FLOW-02",
+        "priority": "P1",
+        "status": "verified_code_path",
+        "title": "Operations users see maintenance controls but forbidden reads render as successful completion",
+        "evidence": [
+          "console/kf_console.py:2996 (ops does not hide maint)",
+          "console/kf_console.py:262 (GET /api/smtp and /api/updates denied to ops)",
+          "console/kf_console.py:3293 (pollUpdates parses error JSON without r.ok)",
+          "console/kf_console.py:3297 (missing running becomes green Completed)",
+          "console/kf_console.py:3310 (SMTP error JSON becomes default blank configuration)"
+        ],
+        "impact": "An ordinary ops visit to Maintenance presents an empty configuration, no-checks state and Completed despite both reads being forbidden. Buttons then fail on mutation rather than explaining permissions.",
+        "recommendation": "Gate destination/actions using explicit capabilities and fail reads visibly before rendering data; Completed must require a successful terminal operation state.",
+        "coverage": "tests/ui/readability.test.cjs:21 uses admin for all-page sweeps; tests/ui/real-api.test.cjs:38 does not navigate Maintenance as ops. No test of maintenance 403/500/offline state found."
+      },
+      {
+        "id": "FLOW-03",
+        "priority": "P1",
+        "status": "verified_code_path_race_not_runtime_reproduced",
+        "title": "Preview shares can display one site’s links under another site’s selection",
+        "evidence": [
+          "console/kf_console.py:3398 (loadShares has no request epoch or selected-slug check)",
+          "console/kf_console.py:3402 (every completed request renders to sList)",
+          "console/kf_console.py:3417 (rendered rows include revoke actions)",
+          "console/kf_console.py:3438 (site changes start independent loadShares requests)"
+        ],
+        "impact": "If A responds after B when switching sites, A links and revoke buttons are shown while the selector says B. Revocation uses the displayed token, so operators may revoke the wrong customer review link.",
+        "recommendation": "Clear or mark old data loading, cancel/ignore stale responses using the requested site, and bind visible target identity to each mutating action.",
+        "coverage": "No share creation/revocation/cross-site latency E2E journey found in tests/ui. security.test.cjs:25 visits a seeded shared preview for content safety only."
+      },
+      {
+        "id": "FLOW-04",
+        "priority": "P2",
+        "status": "verified_code_path",
+        "title": "Preview sharing treats authorization/server errors as an empty list",
+        "evidence": [
+          "console/kf_console.py:3398 (loadShares does not check r.ok)",
+          "console/kf_console.py:3403 (d.items defaults to [])",
+          "console/kf_console.py:3406 (error result becomes create-first-link onboarding)",
+          "console/kf_console.py:3439 (create lacks pending guard and empty-site guard)"
+        ],
+        "impact": "Expired sessions or HTTP failures claim that there are no review links and invite another write; repeated Create clicks are not disabled while a request is pending.",
+        "recommendation": "Use a shared loading/error/empty state with retry and login recovery; disable creation without an eligible site and while submitting.",
+        "coverage": "No failed-share read or repeated-create tests found; overall page layout and English scans do not validate the semantics."
+      },
+      {
+        "id": "FLOW-05",
+        "priority": "P2",
+        "status": "verified_code_path",
+        "title": "Plan editing is presented to roles that cannot save plans",
+        "evidence": [
+          "console/kf_console.py:2993 (plans remains visible for all three roles)",
+          "console/kf_console.py:3107 (plan rows always show Edit)",
+          "console/kf_console.py:3134 (form always POSTs /api/plan/save)",
+          "console/kf_console.py:208 (default ops/finance writes exclude /api/plan/save)"
+        ],
+        "impact": "Finance and ops can enter changes into a usable-looking plan editor only to be rejected on save. The screen does not distinguish read-only catalog access from management.",
+        "recommendation": "Return plan-management capability and render catalog read-only for unauthorized roles, with a clear explanation.",
+        "coverage": "No plan-save role journey found in tests/ui; the per-role test verifies users/audit/spec endpoints only."
+      },
+      {
+        "id": "FLOW-06",
+        "priority": "P2",
+        "status": "verified_design_gap",
+        "title": "Site identity is local to pages and is not part of routes or the overview handoff",
+        "evidence": [
+          "console/kf_console.py:3017 (breadcrumb contains group/page only)",
+          "console/kf_console.py:3020 (route hash contains page only)",
+          "console/admin-ui.js:49 (site selection stored in sessionStorage)",
+          "console/kf_console.py:3067 (overview actions have no Open site workspace / edit / DNS handoff)"
+        ],
+        "impact": "A copied #layout or #dns URL resolves using the receiver’s prior site context, and overview inspection does not establish the next task’s site. This is a product coherence gap for a Cloudflare-style per-site console, not a demonstrated data leak.",
+        "recommendation": "Add explicit account versus site navigation and a persistent site header; deep-link to route plus site and add contextual overview-to-editor/DNS/operations actions.",
+        "coverage": "tests/ui/admin-experience.test.cjs:34 covers one selected demo site propagating from Leads to Clients. Missing two-site deep links, refresh/back-forward and overview-to-site journeys."
+      }
+    ],
+    "coverage_by_navigation_page": {
+      "sites": "Search/filter/archive and responsive sweep; missing overview-to-site operational journey and zero-site first-run onboarding.",
+      "automation": "Mock prepared action execution plus real operations-inbox routing; no real provider end-to-end operational workflow proof.",
+      "domain": "Real local credential/metadata CRUD and safeguards; no registrar-to-DNS-to-HTTPS end-to-end proof.",
+      "dns": "Real local zone CRUD with review and MFA rejection; upstream authority/query are fixture functions.",
+      "maint": "Layout/English sweep; no operational update success/failure, pending, role denial or SMTP journey.",
+      "ai": "Existing-site staged generation and stale prompt review; new-site first-step validation only in builder-workflow.",
+      "styles": "Catalog/filter/edit/import/build linkage tests exist.",
+      "prompts": "CRUD/version/conflict tests exist.",
+      "layout": "Draft CRUD/save/reload/preview/deletion/recovery tests exist; actual WordPress transport substituted.",
+      "design": "Saved recipe CRUD/apply review/dirty safeguards exist.",
+      "media": "CRUD/upload/metadata/use guard tests exist.",
+      "share": "Layout/localization and seeded share security read; missing create-review-revoke-expire journey.",
+      "client": "CRUD/ledger/persistence/conflicts/retained finance tests exist.",
+      "leads": "Follow-up/filter/pagination/partial-source failure tests exist with fixture WordPress enquiry source.",
+      "billing": "Invoice edit/pay/idempotency/filter tests exist; renewal test asserts button presence, not completed renewal.",
+      "plans": "Layout/localization only; missing create/edit/persistence/role rejection UX.",
+      "llm": "Configuration in broad mocked console test and local writing protocol fixture; no paid upstream provider verification.",
+      "providers": "Local configuration CRUD and mocked probe result; no external account lifecycle proof.",
+      "mcp": "Configuration CRUD; remote discovery only opt-in E2E_REMOTE_MCP=1.",
+      "team": "Admin CRUD/conflict/secret display and MFA login tests; missing non-admin personal-security journey."
+    },
+    "validation_limits": [
+      {
+        "evidence": "tests/e2e_browser_fixture.py:92; tests/test_ai.py:208",
+        "limit": "Real HTTP handler tests substitute WordPress publication transport; they do not demonstrate a deployed site publication/recovery journey."
+      },
+      {
+        "evidence": "tests/e2e_browser_fixture.py:49",
+        "limit": "DNS authority and observation are fixture functions; public propagation is unverified."
+      },
+      {
+        "evidence": "tests/ui/production-smoke.test.cjs:13",
+        "limit": "Production smoke reads login and public sites/auth boundaries only; it does not log in to validate authenticated operator UX."
+      },
+      {
+        "evidence": "tests/ui/package.json:5; tests/ui/readability.test.cjs:21",
+        "limit": "Tests are standalone Node Playwright scripts, and the broad responsive sweep uses admin. File presence is not a passing execution result; this audit did not run them."
+      }
+    ]
+  },
+  "experience_priorities": [
+    {
+      "id": "UX-NAV",
+      "priority": "P1",
+      "finding": "功能按模块排列，账户级与站点级操作混合；缺少可分享的站点上下文深链接",
+      "direction": "建立明确的账户工作区和站点工作区，统一站点切换、面包屑和返回行为，保留未保存内容保护",
+      "evidence": [
+        "console/kf_console.py:2598",
+        "console/kf_console.py:3003",
+        "console/admin-ui.js"
+      ]
+    },
+    {
+      "id": "UX-DISCOVERY",
+      "priority": "P2",
+      "finding": "20 个页面仅靠折叠菜单查找，没有功能搜索",
+      "direction": "添加按角色过滤的功能搜索，支持中英文名称和键盘操作",
+      "evidence": [
+        "console/kf_console.py:2598"
+      ]
+    },
+    {
+      "id": "UX-TABLE",
+      "priority": "P2",
+      "finding": "共享列表有分页和搜索，但缺少可访问的列排序及可选页容量",
+      "direction": "统一表格排序、筛选反馈、分页和空/错误状态；避免把数据加载失败显示成无数据",
+      "evidence": [
+        "console/admin-ui.js:18"
+      ]
+    },
+    {
+      "id": "UX-ACTIONS",
+      "priority": "P2",
+      "finding": "团队列表多项行操作均为高强调按钮，模板页操作入口密集",
+      "direction": "明确页面主操作，降低行操作视觉强调，将次要和危险动作归入有明确标签的操作区",
+      "evidence": [
+        "/tmp/kf-cloudflare-ux/images/team-1440.png",
+        "/tmp/kf-cloudflare-ux/images/styles-1440.png"
+      ]
+    },
+    {
+      "id": "UX-A11Y",
+      "priority": "P2",
+      "finding": "模板加载状态可访问名称与可见文本不一致；团队两个折叠标题未满足目标尺寸要求",
+      "direction": "修正加载状态语义及折叠控件点击区域，复测键盘、浅深色与手机视图",
+      "evidence": [
+        "/tmp/kf-cloudflare-ux/baseline.json"
+      ]
+    }
+  ],
+  "delivery_sequence": [
+    "完成弹窗、空/错误状态、跨站点切换和角色路径的复现审查",
+    "修复已确认的个人安全入口、维护错误反馈、分享状态与权限问题",
+    "统一账户/站点导航、功能搜索和主次操作层级",
+    "补齐共享表格和跨页面建站交付流程",
+    "完整 E2E、可访问性、双语响应式回归，再经 CI/预生产部署"
+  ],
+  "acceptance": [
+    "当前20个页面及新增个人设置入口都具备可发现、按角色授权的完整路径",
+    "站点上下文明确、跨页面一致、可深链接，切换时保护未保存内容",
+    "错误、空、加载和成功状态真实且可恢复，不出现假成功",
+    "现有建站、编辑、预览、发布、恢复、DNS、邮件、客户财务与安全能力保留并通过相应回归",
+    "视觉和操作组件统一，键盘/触屏可用，中英文和浅深主题一致",
+    "已确认的问题修复后有针对性证据；发布包、CI、预生产及生产验证通过"
+  ],
+  "artifacts": {
+    "baseline": "/tmp/kf-cloudflare-ux/baseline.json",
+    "coverage": "/tmp/kf-cloudflare-ux/coverage.json",
+    "roles": "/tmp/kf-cloudflare-ux/role-findings.json",
+    "screenshots": "/tmp/kf-cloudflare-ux/images",
+    "final_audit": "/tmp/kf-cloudflare-ux/final-audit.json",
+    "full_ui": "/tmp/kf-cloudflare-ux/full-ui-final.log",
+    "full_python": "/tmp/kf-cloudflare-ux/full-python.log"
+  },
+  "local_resolutions": [
+    {
+      "finding": "FLOW-01",
+      "status": "implemented and locally verified; release gates tracked separately",
+      "change": "Personal account page available to admin/ops/finance; real self-service MFA/recovery/password flows; admin team controls stay restricted; secrets clear on navigation.",
+      "test": "tests/ui/account-security.test.cjs"
+    },
+    {
+      "finding": "FLOW-02",
+      "status": "implemented and locally verified; release gates tracked separately",
+      "change": "Maintenance navigation follows admin read access. Failed HTTP reads, failed workers, timeout and failed image/rebuild results are reported as errors; concurrent update starts are guarded.",
+      "tests": [
+        "tests/ui/account-security.test.cjs",
+        "tests/test_ai.py:test_maintenance_reports_worker_failures_without_false_success"
+      ]
+    },
+    {
+      "finding": "FLOW-03 / FLOW-04",
+      "status": "implemented and locally verified; release gates tracked separately",
+      "change": "Share reads use epoch/site guards, explicit loading/error/retry, validity and mutation guards. Revocation includes server-checked site identity.",
+      "test": "tests/ui/shares.test.cjs"
+    },
+    {
+      "finding": "FLOW-05",
+      "status": "implemented and locally verified; release gates tracked separately",
+      "change": "Server returns plan-management capability; unauthorized roles see a read-only catalog. Fixed form.id collision and added save failure/pending handling.",
+      "test": "tests/ui/account-security.test.cjs"
+    },
+    {
+      "finding": "FLOW-06 / UX-NAV / UX-DISCOVERY",
+      "status": "implemented and locally verified; release gates tracked separately",
+      "change": "Explicit site workspace with one selector, account/site breadcrumbs, site-bearing routes, back/forward and overview handoff. AI site choice stays in its first step. Cross-site changes reject unsaved editor drafts. Bilingual role-filtered feature search supports keyboard controls.",
+      "test": "tests/ui/workspace.test.cjs",
+      "evidence": [
+        "/tmp/kf-cloudflare-ux/workspace.log",
+        "/tmp/kf-cloudflare-ux/workspace-shares.log",
+        "/tmp/kf-cloudflare-ux/workspace-writing.log"
+      ],
+      "limits": "Full suite, final a11y sweep, CI/preproduction and production deployment remain pending."
+    },
+    {
+      "finding": "UX-TABLE / UX-ACTIONS",
+      "status": "implemented and locally verified; release gates tracked separately",
+      "change": "Shared lists support stable typed sorting, aria-sort and keyboard focus, 10/20/50/100 rows per page, mobile sort controls and secondary row actions. Newly saved prompt/design records remain discoverable under current sort/page size.",
+      "tests": [
+        "tests/ui/table-controls.test.cjs",
+        "tests/ui/billing.test.cjs"
+      ],
+      "evidence": [
+        "/tmp/kf-cloudflare-ux/table-controls.log",
+        "/tmp/kf-cloudflare-ux/billing-renewal.log"
+      ]
+    },
+    {
+      "finding": "UX-A11Y",
+      "status": "implemented and locally verified; release gates tracked separately",
+      "change": "Team summary targets enlarged. Template loading/error accessible names include visible labels; preview-ready names describe templates.",
+      "evidence": [
+        "/tmp/kf-cloudflare-ux/post-repair/baseline.json",
+        "/tmp/kf-cloudflare-ux/post-repair-targeted/baseline.json"
+      ],
+      "limits": "63 full scans had only the original style loading name mismatch; later targeted 6 scans pass after correction. Final mobile table controls need their running 21-page sweep."
+    }
+  ],
+  "validation_update": {
+    "python": "164 tests passed",
+    "ui": "Complete npm browser regression chain passed, including new account/share/workspace/table journeys",
+    "accessibility": {
+      "pages": 21,
+      "variants": 3,
+      "latest_applicable_scans": 63,
+      "violations": 0,
+      "overflow": 0,
+      "javascript_errors": 0,
+      "method": "Full sweep plus targeted styles/team follow-up and final full mobile follow-up after fixes; initial states only, supplemented by dialog/role/error browser tests."
+    },
+    "renewal": "Real HTTP browser renewal, persisted invoice and updated expiry passed",
+    "release_gates": [
+      "CI and exact-artifact preproduction",
+      "Deployment to both runtimes with hashes and protected tenant data checks",
+      "Authenticated console and public-site production checks"
+    ]
+  }
+}

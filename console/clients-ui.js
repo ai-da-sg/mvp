@@ -23,3 +23,7 @@ $('#clientList').onclick=$('#clBoard').onclick=clientAction;$('#clNew').onclick=
 $('#clientLedgerForm').onsubmit=async e=>{e.preventDefault();const slug=CLIENT_LEDGER;if(!slug)return;$('#clientLedgerSave').disabled=true;try{await aiRequest('/api/ledger',{slug,type:$('#lgType').value,amount:Number($('#lgAmt').value),category:$('#lgCat').value,note:$('#lgNote').value});CLIENT_LEDGER_DIALOG.close(true);await loadClients();await viewClient(slug);AdminUI.message('#clMsg',CLIENT_TEXT.recorded);}catch(err){aiMessage('#clientLedgerMsg',err.message,true);}finally{$('#clientLedgerSave').disabled=false;}};$('#clientLedgerCancel').onclick=()=>CLIENT_LEDGER_DIALOG.close();
 function initClient(){const previous=SiteContext.read().slug;SiteContext.fill($('#clSlug'));const selected=$('#clSlug').value;$('#clSlug').insertAdjacentHTML('afterbegin',`<option value="" data-client-text="all">${clientText('all')}</option>`);$('#clSlug').value=previous?selected:'';return loadClients();}
 new MutationObserver(translateClients).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});translateClients();
+
+AdminUI.sorters.set('clientList',[x=>x.client.company,x=>x.client.contact,x=>x.client.service_end,x=>Number(x.balance)]);
+AdminUI.sorters.set('clBoard',[x=>x.company,x=>x.domain,x=>x.domain_expires,x=>x.service_expires]);
+AdminUI.sorters.set('clientLedgerList',[x=>x.ts,x=>x.type,x=>x.category,x=>Number(x.amount),x=>x.note]);

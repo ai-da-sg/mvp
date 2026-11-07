@@ -63,3 +63,5 @@ $('#ldSlug').onchange=()=>{if($('#ldSlug').value)SiteContext.save({slug:$('#ldSl
 $('#ldRefresh').onclick=()=>loadLeads(true,true);$('#ldMore').onclick=()=>loadLeads(false);
 function initLeads(){const context=SiteContext.read(),changed=JSON.stringify(context)!==LEAD_CONTEXT;if(!LEAD_READY||changed){leadSites();if([...$('#ldSlug').options].some(o=>o.value===context.slug&&o.value))$('#ldSlug').value=context.slug;else if(context.slug==='')$('#ldSlug').value=$('#ldSlug').options[1]?.value||'';if($('#ldSlug').value)SiteContext.save({slug:$('#ldSlug').value});LEAD_READY=true;LEAD_CONTEXT=JSON.stringify(SiteContext.read());}else leadSites();loadLeads();}
 new MutationObserver(leadTranslate).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});leadTranslate();
+
+AdminUI.sorters.set('ldList',[x=>x.title,x=>x.company,x=>x.followup.status,x=>x.date]);
