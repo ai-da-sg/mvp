@@ -10,6 +10,8 @@ import time
 import threading
 import hashlib
 import uuid
+import subprocess
+from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from kf_ai import AIError, atomic_json
@@ -104,6 +106,16 @@ def request(url, token, method, path, body=None, headers=None):
         raise AIError('GEOInflow is unavailable; retry after checking the service') from None
     finally:
         conn.close()
+
+
+def tracking_wp(site, *args, stdin=None, timeout=60):
+    """Use the managed installer identity, as SSO does; retain protected MU directories."""
+    from kf_sections import REG
+    site = Path(site).resolve()
+    return subprocess.run(['docker', 'run', '--rm', '-i', '--env-file', str(site/'wp.env'),
+        '--network', 'kf-'+site.name+'_default', '-v', str(site/'html')+':/var/www/html',
+        '--user', '0:0', REG, 'wp', '--allow-root', *args], input=stdin,
+        capture_output=True, text=True, timeout=timeout)
 
 
 class InflowStore(DomainVault):
@@ -271,8 +283,7 @@ class InflowStore(DomainVault):
         return found['id']
 
     def tracking(self, slug, domain, site, public_origin, revision, enabled, runner=None):
-        from kf_sections import wp
-        runner = runner or wp
+        runner = runner or tracking_wp
         b = self.binding(slug, domain, require=enabled)
         if not b: raise AIError('Site is not connected')
         public_origin = origin(public_origin)
@@ -280,7 +291,7 @@ class InflowStore(DomainVault):
         value = {'website_id': b['website_id'], 'origin': public_origin, 'domain': domain} if enabled else {}
         encoded = base64.b64encode(json.dumps(value).encode()).decode()
         plugin = base64.b64encode(TRACKING_PLUGIN.encode()).decode()
-        code = '<?php $v=json_decode(base64_decode("' + encoded + '"),true);$code=base64_decode("' + plugin + '");$dir=WPMU_PLUGIN_DIR;if(!is_dir($dir)&&!wp_mkdir_p($dir))WP_CLI::error("Plugin directory unavailable");$file=$dir."/kf-inflow.php";$temp=$file.".tmp";if(file_put_contents($temp,$code,LOCK_EX)===false||!rename($temp,$file)||file_get_contents($file)!==$code)WP_CLI::error("Plugin installation failed");update_option("kf_inflow",$v,false);if(get_option("kf_inflow")!==$v)WP_CLI::error("Verification failed");echo "ok";'
+        code = '<?php $v=json_decode(base64_decode("' + encoded + '"),true);$code=base64_decode("' + plugin + '");$dir="/var/www/html/wp-content/mu-plugins";$file=$dir."/kf-inflow.php";if(WPMU_PLUGIN_DIR!==$dir)WP_CLI::error("Unsupported plugin directory");foreach(["/var/www/html/wp-content",$dir,$file] as $p){if(is_link($p))WP_CLI::error("Refusing plugin symlink");}if(!is_dir($dir)&&!wp_mkdir_p($dir))WP_CLI::error("Plugin directory unavailable");$temp=tempnam($dir,".kf-inflow-");if(!$temp||file_put_contents($temp,$code,LOCK_EX)===false||!chmod($temp,0644)||!rename($temp,$file)||file_get_contents($file)!==$code)WP_CLI::error("Plugin installation failed");update_option("kf_inflow",$v,false);if(get_option("kf_inflow")!==$v)WP_CLI::error("Verification failed");echo "ok";'
         # Keep configuration changes serialized with WordPress installation.
         with self.locked():
             d = self.read(); self.check(d, revision)
