@@ -1,0 +1,34 @@
+name: GEOInflow image
+on:
+  push:
+    branches: [main, feature/geoinflow]
+    paths: ['.github/workflows/geoinflow-image.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Fetch pinned upstream
+        run: |
+          git init source
+          git -C source remote add origin https://github.com/yaojingang/GEOInflow.git
+          git -C source fetch --depth 1 origin 13c32ecc6eb76b9e6d68a0a92d973ea859e8700b
+          git -C source checkout --detach FETCH_HEAD
+          test "$(git -C source rev-parse HEAD)" = 13c32ecc6eb76b9e6d68a0a92d973ea859e8700b
+      - name: Build upstream production image
+        run: docker build --build-arg LIEKAN_REVISION=13c32ecc6eb76b9e6d68a0a92d973ea859e8700b --build-arg SKIP_BUILD_GEO=1 -f source/Dockerfile.liekan -t mvp-geoinflow:13c32ec source
+      - name: Export verified image bytes
+        run: |
+          mkdir artifact
+          docker save mvp-geoinflow:13c32ec | gzip > artifact/geoinflow-image.tar.gz
+          cd artifact
+          sha256sum geoinflow-image.tar.gz > geoinflow-image.tar.gz.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: geoinflow-image-13c32ec
+          path: artifact/
+          compression-level: 0
+          retention-days: 7
