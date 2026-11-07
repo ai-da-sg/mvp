@@ -33,7 +33,7 @@ def prompt_language(item):
 
 
 CATEGORIES = {'goal': '目标与转化', 'structure': '页面结构', 'style': '视觉方向',
-              'copy': '内容表达', 'quality': '质量约束'}
+              'copy': '内容表达', 'quality': '质量约束', 'geo': 'GEO'}
 SOURCES = [
     {'name': 'Vercel v0：产品界面、使用场景、约束与偏好', 'url': 'https://vercel.com/blog/how-to-prompt-v0'},
     {'name': 'Lovable：先规划、按组件组织、使用真实内容', 'url': 'https://docs.lovable.dev/prompting/prompting-one'},
@@ -139,6 +139,41 @@ class PromptStore:
             for kind in ('modules','templates'):
                 data[kind]=[{k:v for k,v in item.items() if k!='history'} for item in data[kind] if item['enabled']]
         return data
+
+    def geo_modules(self):
+        """Seed once without changing existing prompts, translations or history."""
+        with self.locked():
+            data = read_json(self.path, defaults())
+            if not data.get('geo_seed_version'):
+                seeds = [
+                    ('questions', 'GEO 用户问题', 'GEO customer questions', 'goal',
+                     '根据行业、市场、语言和实际服务生成用户会提出的问题。覆盖品牌、品类、比较、场景和购买意图。问题保持中立，不把希望得到的答案写进问题，不暗示未核验的业务事实。',
+                     'Generate neutral customer questions for the selected industry, market, language and actual services. Cover brand, category, comparison, scenario and purchase intent. Do not inject desired answers or unverified business claims into questions.'),
+                    ('evidence', 'GEO 事实与证据', 'GEO facts and evidence', 'quality',
+                     '仅使用已核验、已批准且未过期的事实。来源必须支持具体陈述；缺失信息应省略或交给运营核验，不得补造资质、效果、价格、评价和排名。中英文共享事实身份，分别自然表达。引用并不自动证明事实正确。',
+                     'Use only verified, approved and current facts. Sources must support specific claims. Omit missing information or flag it for operator review. Never fabricate qualifications, outcomes, prices, reviews or rankings. Languages share fact identities with independent natural phrasing. Citation does not automatically prove truth.'),
+                    ('content', 'GEO 页面优化', 'GEO page improvements', 'copy',
+                     '先直接回答目标问题，再说明适用条件、服务边界、事实依据和实际下一步。每段表达一个重点，避免关键词堆砌、重复营销和无法证实的比较。尊重现有页面和品牌表达，不承诺被 AI 引用或提升排名。',
+                     'Answer target questions directly, then explain applicability, service boundaries, supporting evidence and a practical next step. Keep paragraphs focused. Avoid keyword stuffing, repetitive marketing and unsupported comparisons. Respect the existing page and brand voice. Never promise AI citations or ranking improvements.'),
+                ]
+                existing = {m['id'] for m in data['modules']}
+                additions = []
+                for key, zh, en, category, body_zh, body_en in seeds:
+                    for lang, name, body in [('zh', zh, body_zh), ('en', en, body_en)]:
+                        ident = 'geo-' + key + '-' + lang
+                        if ident not in existing:
+                            additions.append(dict(id=ident, name=name, category='geo', description=name,
+                                language=lang, sector='general', body=body, enabled=True, version=1,
+                                updated_at=int(time.time()), history=[]))
+                if len(data['modules']) + len(additions) > 100:
+                    raise AIError('提示词库空间不足，无法添加 GEO 模块')
+                data['modules'].extend(additions)
+                data['geo_seed_version'] = 1
+                data['revision'] += 1
+                atomic_json(self.path, data)
+            return {'revision': data['revision'], 'modules': [
+                {k:v for k,v in m.items() if k != 'history'} for m in data['modules']
+                if m['category'] == 'geo' and m['enabled']]}
 
     def writing_request(self, body):
         """Resolve the editable prompt's selected modules at a known library revision."""

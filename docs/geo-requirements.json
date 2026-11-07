@@ -1,0 +1,54 @@
+{
+  "objective": "GEO workspace beside AI builder, serving existing managed sites",
+  "workflow": [
+    "site_and_market",
+    "facts_and_evidence",
+    "questions",
+    "diagnostics_and_baseline",
+    "content_review",
+    "publish_and_retest"
+  ],
+  "reuse": [
+    "SiteContext",
+    "AdminUI",
+    "industry taxonomy",
+    "configured LLM adapters",
+    "safe public fetch",
+    "WordPress page drafts",
+    "publication journal and rollback"
+  ],
+  "requirements": [
+    "Site-isolated persistent facts, questions, observations, audits and content proposals with optimistic concurrency",
+    "Chinese and English interface and separately generated content sharing approved fact identities",
+    "Fact evidence URLs, verification dates, expiry and explicit approval",
+    "Versioned questions by intent, market and language",
+    "Read-only public website diagnostics with SSRF protection and explicit limits",
+    "Import real observations with raw answers, citations, platform, mode, environment and timestamp; failures are not absence",
+    "Separate manual consumer observations, grounded API probes, official reports and simulations",
+    "Metrics grouped by comparable sampling conditions with raw evidence export; no invented visibility or causal growth claims",
+    "Configured real LLM creates question suggestions and evidence-grounded page proposals; no implicit search claim",
+    "Review proposals before transferring to the existing page draft and publication workflow",
+    "Responsive step interface with accessible forms, empty/error/busy states and unsaved-change protection",
+    "Backend authorization, validation, concurrency and isolation tests plus browser end-to-end coverage",
+    "Verify release packaging includes the GEO module and deployed runtime works"
+  ],
+  "scope_notes": [
+    "Initial visibility acquisition supports evidence import; official report APIs and search connectors must be verified before automatic acquisition is enabled",
+    "Technical diagnostics do not claim to prove index inclusion or verified bot access",
+    "Demonstration sites may test functionality but are not evidence of real business growth"
+  ],
+  "implementation": {
+    "route": "/#geo?site=<slug>",
+    "storage": "sites/<slug>/.geo/workspace.json",
+    "prompt_management": "Existing prompt library, GEO category; three modules per language with versions and snapshots",
+    "observation_acquisition": "Operator entry or JSON batch import; real search, grounded API and simulation remain separate",
+    "diagnostics": "Pinned public IP HTTP fetch, HTML, robots, sitemap and response indexing headers; WAF/verified bots and index inclusion require external verification",
+    "publishing": "Reviewed proposal appends a sanitized section to existing page draft; existing preview, publication journal and restore remain authoritative"
+  },
+  "verification_commands": [
+    "python -m unittest discover -s tests -v",
+    "python tools/kf_check.py",
+    "npm test --prefix tests/ui",
+    "KF_E2E_REAL_AI_BASE=<configured-base> KF_E2E_REAL_AI_PROFILE=<real-profile> npm run test:geo:live --prefix tests/ui"
+  ]
+}

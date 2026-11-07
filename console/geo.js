@@ -1,0 +1,135 @@
+/* GEO uses the shared site workspace; model assistance never fabricates search observations. */
+const GEO={data:null,config:null,step:0,busy:false,dirty:false,epoch:0,suggestions:[],editingFact:null,editingQuestion:null,selectedProposal:null};
+const GEO_STEPS=[['品牌资料','Brand profile'],['事实与证据','Facts & evidence'],['目标问题','Target questions'],['诊断与观测','Audit & observations'],['内容优化','Content improvements'],['复测与报告','Retest & reports']];
+const geoText=(zh,en)=>AdminUI.text(zh,en);
+function geoField(id,zh,en,value='',type='text',extra=''){
+ const label=esc(geoText(zh,en));
+ return `<div class="field"><label for="${id}">${label}</label>${type==='textarea'?`<textarea id="${id}" rows="4" ${extra} data-user-content>${esc(value)}</textarea>`:`<input id="${id}" type="${type}" value="${esc(value)}" ${extra} data-user-content>`}</div>`;
+}
+function geoSelect(id,zh,en,options,value=''){
+ return `<div class="field"><label for="${id}">${esc(geoText(zh,en))}</label><select id="${id}">${options.map(([key,label])=>`<option value="${esc(key)}" ${key===value?'selected':''} data-user-content>${esc(label)}</option>`).join('')}</select></div>`;
+}
+const geoLanguage=id=>geoSelect(id,'内容语言','Content language',[['zh','中文'],['en','English']],GEO.data.workspace.profile.language);
+const geoButton=(action,zh,en,extra='')=>`<button type="button" class="ghost" data-geo-action="${action}" ${extra}>${esc(geoText(zh,en))}</button>`;
+const geoSubmit=(zh,en)=>`<button type="submit">${esc(geoText(zh,en))}</button>`;
+const geoValue=id=>document.getElementById(id)?.value||'';
+function geoMessage(zh,en,bad=false){AdminUI.message('#geoMsg',[zh,en],bad);}
+function geoCanLeave(){
+ if(GEO.busy){showGlobalError(geoText('GEO 正在处理，请稍候。','GEO is processing. Please wait.'));return false;}
+ if(GEO.dirty&&!confirm(geoText('放弃未保存的 GEO 修改？','Discard unsaved GEO changes?')))return false;
+ GEO.dirty=false;return true;
+}
+async function initGEO(){
+ if(GEO.busy)return;
+ const selector=document.createElement('select');SiteContext.fill(selector);
+ const slug=selector.value,epoch=++GEO.epoch;
+ $('#geoRoot').innerHTML=`<p role="status">${geoText('读取中…','Loading…')}</p>`;
+ if(!slug){$('#geoRoot').innerHTML=`<p>${geoText('请先添加或恢复一个站点。','Add or restore a managed site first.')}</p>`;return;}
+ try{
+  const [data,config]=await Promise.all([aiRequest('/api/geo/workspace?slug='+encodeURIComponent(slug)),aiRequest('/api/ai/config')]);
+  if(epoch!==GEO.epoch)return;
+  if(GEO.data?.site.slug!==slug){GEO.step=0;GEO.suggestions=[];GEO.selectedProposal=null;}
+  GEO.data=data;GEO.config=config;GEO.dirty=false;GEO.editingFact=null;GEO.editingQuestion=null;geoRender();Workspace.render();
+ }catch(e){if(epoch===GEO.epoch)$('#geoRoot').innerHTML=`<p role="alert">${esc(e.message)}</p>${geoButton('reload','重试','Retry')}`;}
+}
+function geoRender(){
+ if(!GEO.data)return;
+ const {workspace:w,site,sectors,pages}=GEO.data;
+ const fact=w.facts.find(x=>x.id===GEO.editingFact),q=w.questions.find(x=>x.id===GEO.editingQuestion);
+ const profileOptions=(GEO.config?.profiles||[]).filter(p=>p.protocol!=='mock').map(p=>[p.id,p.name+' / '+p.model]);
+ const model=()=>geoSelect('geoModel','模型','Model',profileOptions,GEO.config?.default_profile);
+ const intents=['brand','category','comparison','scenario','purchase'].map((x,i)=>[x,geoText(['品牌','品类','比较','场景','购买'][i],['Brand','Category','Comparison','Scenario','Purchase'][i])]);
+ let content='';
+ if(GEO.step===0)content=`<form id="geoProfileForm">${geoField('geoBrand','品牌名称','Brand name',w.profile.brand||site.company,'text','required maxlength="200"')}<div class="formrow">${geoField('geoMarket','目标市场','Target market',w.profile.market,'text','required maxlength="60"')}${geoLanguage('geoLanguage')}${geoSelect('geoSector','行业','Industry',Object.entries(sectors).map(([k,v])=>[k,geoText(...v)]),w.profile.sector)}</div>${geoSubmit('保存资料','Save profile')}</form>`;
+ if(GEO.step===1)content=`<p class="hint">${geoText('中英文描述共用一条事实记录；核验并批准后才能用于内容生成。','Chinese and English share one fact record. Verify and approve facts before using them in content.')}</p><div id="geoFactList"></div><details ${fact?'open':''}><summary>${geoText(fact?'编辑事实':'添加事实',fact?'Edit fact':'Add fact')}</summary><form id="geoFactForm"><div class="formrow">${geoField('geoFactZh','中文事实','Chinese fact',fact?.translations.zh||'','textarea','maxlength="3000"')}${geoField('geoFactEn','英文事实','English fact',fact?.translations.en||'','textarea','maxlength="3000"')}</div>${geoField('geoSource','证据网址','Evidence URL',fact?.source_url||'','url','required maxlength="2000"')}<div class="formrow">${geoField('geoVerified','核验日期','Verified on',fact?.verified_on||new Date().toISOString().slice(0,10),'date','required')}${geoField('geoExpires','有效期至（可选）','Expires on (optional)',fact?.expires_on||'','date')}${geoSelect('geoCategory','事实类别','Fact category',['business','service','qualification','price','contact'].map((x,i)=>[x,geoText(['机构','服务','资质','价格','联系信息'][i],['Business','Service','Qualification','Price','Contact'][i])]),fact?.category||'business')}</div><label><input id="geoApproved" type="checkbox" ${fact?.approved?'checked':''}> ${geoText('我已核实该事实和来源，可用于对外内容','I verified this fact and its source for public content')}</label><div class="domain-form-actions">${geoSubmit('保存事实','Save fact')}${geoButton('cancel-edit','取消','Cancel')}</div></form></details>`;
+ if(GEO.step===2)content=`<div id="geoQuestionList"></div><details ${q?'open':''}><summary>${geoText(q?'编辑问题':'添加问题',q?'Edit question':'Add question')}</summary><form id="geoQuestionForm">${geoField('geoQuestion','问题','Question',q?.text||'','textarea','required maxlength="1000"')}<div class="formrow">${geoSelect('geoQuestionLanguage','语言','Language',[['zh','中文'],['en','English']],q?.language||w.profile.language)}${geoField('geoQuestionMarket','市场','Market',q?.market||w.profile.market,'text','required maxlength="60"')}${geoSelect('geoIntent','意图','Intent',intents,q?.intent||'category')}</div><label><input id="geoQuestionActive" type="checkbox" ${q?.active!==false?'checked':''}> ${geoText('纳入内容优化','Include in content improvements')}</label><div class="domain-form-actions">${geoSubmit('保存问题','Save question')}${geoButton('cancel-edit','取消','Cancel')}</div></form></details><details><summary>${geoText('AI 建议问题','AI question suggestions')}</summary><form id="geoQuestionsAIForm"><div class="formrow">${model()}${geoLanguage('geoAILanguage')}</div>${geoField('geoInstructions','补充要求','Additional instructions','','textarea','maxlength="2000"')}<div id="geoPromptChoices"></div><p class="hint">${geoText('将本站点资料发送至所选模型。生成结果需逐条确认。','Site context is sent to the selected model. Review each suggestion before saving.')}</p>${geoSubmit('生成问题建议','Suggest questions')}</form><div id="geoSuggestions"></div></details>`;
+ if(GEO.step===3)content=`<form id="geoAuditForm"><div class="formrow">${geoField('geoAuditURL','检查页面','Page to audit','https://'+site.domain+'/','url','required maxlength="2000"')}${geoSubmit('运行诊断','Run audit')}</div></form><p class="hint">${geoText('公开网页检查不代表搜索引擎已收录或真实爬虫可访问。','Public-page checks do not prove index inclusion or verified crawler access.')}</p><div id="geoAudits"></div><details><summary>${geoText('记录一次搜索观测','Record a search observation')}</summary><form id="geoObservationForm">${geoSelect('geoObservationQuestion','目标问题','Target question',w.questions.map(x=>[x.id,x.text]))}<div class="formrow">${geoField('geoPlatform','平台','Platform','','text','required maxlength="100"')}${geoField('geoBatch','批次（用于基线与复测）','Batch (baseline or retest)','baseline-1','text','required maxlength="100"')}${geoSelect('geoChannel','来源','Source',[['manual_search',geoText('人工实际搜索','Manual search')],['grounded_api',geoText('带搜索依据的 API','Grounded API')],['simulation',geoText('模拟评估（非搜索可见性）','Simulation (not search visibility)')]])}</div><div class="formrow">${geoField('geoMode','搜索模式','Search mode','','text','required maxlength="100"')}${geoField('geoObserved','观测时间','Observed at',new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16),'datetime-local','required')}${geoField('geoObservedModel','模型版本（如已知）','Model version (if known)','','text','maxlength="100"')}</div>${geoField('geoEnvironment','环境（地区、账号状态等）','Environment (region, account state)','','text','required maxlength="500"')}${geoSelect('geoStatus','状态','Status',[['success',geoText('成功','Success')],['failed',geoText('失败','Failed')],['unsupported',geoText('不支持','Unsupported')]])}${geoField('geoAnswer','完整回答','Full answer','','textarea','maxlength="24000"')}${geoField('geoCitations','引用网址（每行一个）','Citation URLs (one per line)','','textarea')}${geoField('geoEvidence','原始记录网址（可选）','Original record URL (optional)','','url','maxlength="2000"')}${geoField('geoError','失败原因（失败时必填）','Failure reason (required for failure)','','text','maxlength="1000"')}<div class="formrow">${geoSelect('geoMention','品牌是否出现','Brand mentioned',[['',geoText('请选择','Select')],['yes',geoText('是','Yes')],['no',geoText('否','No')]])}${geoSelect('geoAccuracy','事实是否准确','Facts accurate',[['',geoText('未核验','Not reviewed')],['yes',geoText('是','Yes')],['no',geoText('否','No')]])}</div>${geoSubmit('保存观测','Save observation')}</form></details><details><summary>${geoText('批量导入 JSON','Import JSON batch')}</summary><form id="geoImportForm">${geoField('geoImport','观测数组（最多 25 条、64 KB）','Observation array (up to 25, 64 KB)','','textarea','required maxlength="60000"')}<details><summary>${geoText('查看导入格式','View import format')}</summary><pre data-user-content>${esc(JSON.stringify({items:[{question_id:w.questions[0]?.id||'question-id',platform:'Platform',channel:'manual_search',batch:'baseline-1',mode:'Search',model:'',environment:'Singapore; signed out; new conversation',observed_at:new Date().toISOString(),status:'success',answer:'Full answer',citations:['https://'+site.domain+'/'],brand_mentioned:true,facts_accurate:null,error:''}]},null,2))}</pre></details>${geoSubmit('导入','Import')}</form></details><div id="geoObservationList"></div>`;
+ if(GEO.step===4)content=`<form id="geoContentAIForm"><div class="formrow">${geoSelect('geoPage','目标页面','Target page',pages.map(p=>[p.slug,p.title]))}${model()}${geoLanguage('geoAILanguage')}</div>${geoField('geoInstructions','优化要求','Improvement instructions','','textarea','maxlength="2000"')}<div id="geoPromptChoices"></div><p class="hint">${geoText('仅使用已批准且有效的事实。结果先保存为建议，审核后追加至现有页面草稿。','Uses approved, current facts. Review the proposal before appending it to the existing page draft.')}</p>${geoSubmit('生成优化建议','Generate proposal')}</form><div id="geoProposalList"></div><div id="geoProposalReview"></div>`;
+ if(GEO.step===5)content=`<p class="hint">${geoText('保持问题版本、平台和环境一致后复测。数据来自人工导入；变化不代表因果增长。','Retest with consistent question versions, platforms and environments. Data is operator-imported; changes do not prove causal growth.')}</p><div class="domain-form-actions">${geoButton('retest','记录复测','Record retest')}${geoButton('export','导出全部证据','Export all evidence')}${geoButton('editor','页面编辑与发布记录','Page editor & publication history')}</div><div id="geoMetrics"></div><div id="geoObservationList"></div>`;
+ $('#geoRoot').innerHTML=`<div class="domain-form-actions">${geoButton('reload','刷新','Refresh')}${geoButton('export','导出','Export')}</div><nav class="domain-form-actions" aria-label="${geoText('GEO 步骤','GEO steps')}">${GEO_STEPS.map((p,i)=>`<button type="button" class="ghost" data-geo-step="${i}" ${i===GEO.step?'aria-current="step"':''}>${i+1}. ${esc(geoText(...p))}</button>`).join('')}</nav><h3 id="geoStepTitle" tabindex="-1">${geoText(...GEO_STEPS[GEO.step])}</h3><div id="geoStepContent">${content}</div><p id="geoMsg" class="msg" role="status"></p><div class="domain-form-actions">${geoButton('back','上一步','Back',GEO.step===0?'disabled':'')}${geoButton('next','下一步','Next',GEO.step===5?'disabled':'')}</div>`;
+ geoLists();geoPromptChoices();
+ $('#geoAILanguage')?.addEventListener('change',geoPromptChoices);
+ $('#geoRoot').querySelectorAll('textarea,input,select').forEach(e=>e.addEventListener('input',()=>GEO.dirty=true));
+ $('#geoRoot').querySelectorAll('form').forEach(f=>f.addEventListener('submit',geoSubmitForm));
+}
+function geoLists(){
+ const {workspace:w}=GEO.data;
+ const edit=(kind,id)=>`${geoButton('edit-'+kind,'编辑','Edit',`data-id="${id}"`)} ${geoButton('delete-'+kind,'删除','Delete',`data-id="${id}"`)}`;
+ const table=(id,items,cols,row)=>{if(document.getElementById(id))AdminUI.table(id,items,cols.map(p=>geoText(...p)),row);};
+ table('geoFactList',w.facts,[['事实','Fact'],['核验','Review'],['操作','Actions']],f=>`<tr><td data-user-content>${esc(f.translations[w.profile.language]||f.translations.en||f.translations.zh)}<p><a href="${esc(f.source_url)}" target="_blank" rel="noopener noreferrer">${geoText('证据来源','Evidence source')}</a></p></td><td>${geoText(f.expires_on&&f.expires_on<new Date().toISOString().slice(0,10)?'已过期':f.approved?'已批准':'待核验',f.expires_on&&f.expires_on<new Date().toISOString().slice(0,10)?'Expired':f.approved?'Approved':'Unreviewed')}<p>${esc(f.verified_on)}${f.expires_on?' → '+esc(f.expires_on):''}</p></td><td>${edit('facts',f.id)}</td></tr>`);
+ table('geoQuestionList',w.questions,[['问题','Question'],['范围','Scope'],['操作','Actions']],q=>`<tr><td data-user-content>${esc(q.text)}</td><td data-user-content>${esc(q.language+' / '+q.market+' · v'+q.version)}${q.active?'':' · '+geoText('停用','Inactive')}</td><td>${edit('questions',q.id)}</td></tr>`);
+ if($('#geoSuggestions'))$('#geoSuggestions').innerHTML=GEO.suggestions.map((q,i)=>`<p data-user-content>${esc(q.text)} ${geoButton('accept-question','保存此问题','Save question',`data-index="${i}"`)}</p>`).join('');
+ const labels={https:['HTTPS','HTTPS'],title:['页面标题','Page title'],description:['页面描述','Description'],h1:['主标题','Main heading'],visible_text:['HTML 文本','HTML text'],meta_noindex:['页面索引指令','Page index directives'],canonical:['规范网址','Canonical URL'],structured_data:['结构化数据需核验','Structured data needs review'],hreflang:['语言关联','Language alternatives'],robots_txt:['robots.txt','robots.txt'],sitemap:['站点地图','Sitemap'],response_index_headers:['响应索引头','Index response headers'],waf_verified_bots:['WAF 与真实爬虫','WAF and verified bots'],search_index:['实际搜索收录','Search index inclusion']};
+ const help={title:['为每页设置具体标题。','Give each page a specific title.'],description:['用页面真实内容编写独立描述。','Write a page-specific description grounded in its content.'],h1:['检查主标题是否清晰且唯一。','Check that the main heading is clear and unique.'],visible_text:['检查重要内容是否直接出现在网页 HTML 中。','Check whether important content appears directly in page HTML.'],meta_noindex:['确认此页面是否应对搜索引擎公开。','Confirm whether this page is intended for search indexing.'],canonical:['核对规范网址与预期公开地址。','Verify the canonical URL against the intended public address.'],structured_data:['核对结构化数据是否与可见内容一致。','Check that structured data matches visible content.'],hreflang:['有多个语言版本时，核对语言网址关联。','If multiple language versions exist, verify their URL associations.'],robots_txt:['检查对应搜索爬虫的规则；robots.txt 不是访问权限证明。','Review search crawler rules; robots.txt is not proof of access.'],sitemap:['确认站点地图可访问且列出正确页面。','Confirm the sitemap is accessible and lists the intended pages.'],response_index_headers:['核对服务器返回的索引限制。','Review indexing restrictions returned by the server.'],waf_verified_bots:['需结合供应商日志核实真实爬虫访问。','Use provider logs to verify actual crawler access.'],search_index:['需从搜索平台或站长报告核实收录。','Verify inclusion using search engines or webmaster reports.']};
+ const states={pass:['通过','Pass'],warning:['待改进','Needs attention'],review:['需人工核验','Review needed'],not_checked:['未检查','Not checked']};
+ if($('#geoAudits'))$('#geoAudits').innerHTML=w.audits.slice(-3).reverse().map(a=>`<details><summary data-user-content>${esc(a.url)} · ${new Date(a.created*1000).toLocaleString()}</summary><ul>${a.checks.map(c=>`<li>${geoText(...labels[c.code])}: ${geoText(...states[c.status])}${c.status!=='pass'&&help[c.code]?`<p class="hint">${geoText(...help[c.code])}</p>`:''}</li>`).join('')}</ul></details>`).join('');
+ table('geoObservationList',[...w.observations].reverse(),[['问题','Question'],['平台 / 批次','Platform / batch'],['状态','Status'],['证据','Evidence']],o=>`<tr><td data-user-content>${esc(o.question.text)}</td><td data-user-content>${esc(o.platform+' / '+o.batch)}</td><td>${geoText(...({success:['成功','Success'],failed:['失败','Failed'],unsupported:['不支持','Unsupported']}[o.status]))}</td><td>${geoButton('evidence','查看','View',`data-id="${o.id}"`)}</td></tr>`);
+ table('geoProposalList',[...w.proposals].reverse(),[['建议','Proposal'],['页面 / 语言','Page / language'],['操作','Actions']],p=>`<tr><td data-user-content>${esc(p.title)}</td><td data-user-content>${esc(p.page+' / '+p.language)}</td><td>${p.status==='draft'?geoText('已转入草稿','Transferred to draft'):geoButton('review','审核','Review',`data-id="${p.id}"`)} ${geoButton('delete-proposals','删除','Delete',`data-id="${p.id}"`)}</td></tr>`);
+ if($('#geoMetrics')){
+  const rate=(n,d)=>d?`${n}/${d} (${Math.round(n/d*100)}%)`:'—';
+  table('geoMetrics',GEO.data.metrics,[['批次 / 平台','Batch / platform'],['采样条件','Sampling conditions'],['成功 / 总数','Success / total'],['提及','Mentions'],['引用本站','Site citations'],['人工事实核验','Manual accuracy review']],g=>`<tr><td data-user-content>${esc(g.batch+' / '+g.platform)}</td><td data-user-content>${esc(g.channel+' / '+g.language+' / '+g.market)}<details><summary>${geoText('详情','Details')}</summary><pre>${esc(JSON.stringify({mode:g.mode,model:g.model,environment:g.environment,question_versions:g.question_versions},null,2))}</pre></details></td><td>${g.success}/${g.total}</td><td>${rate(g.mentions,g.success)}</td><td>${rate(g.citations,g.success)}</td><td>${rate(g.accurate,g.reviewed)}</td></tr>`);
+ }
+}
+function geoPromptChoices(){
+ const node=$('#geoPromptChoices');if(!node)return;
+ const lang=geoValue('geoAILanguage'),task=GEO.step===2?'questions':'content';
+ const modules=GEO.data.prompts.modules.filter(m=>m.language===lang&&['general',GEO.data.workspace.profile.sector].includes(m.sector||'general'));
+ node.innerHTML=`<details><summary>${geoText('提示词模块','Prompt modules')}</summary>${modules.map(m=>`<label style="display:block"><input type="checkbox" value="${esc(m.id)}" ${m.id.includes(task)||m.id.includes('evidence')?'checked':''}> <span data-user-content>${esc(m.name)} · v${m.version}</span></label>`).join('')}${geoButton('prompts','管理提示词库','Manage prompt library')}</details>`;
+}
+async function geoRun(action){
+ if(GEO.busy)return;GEO.busy=true;
+ const controls=[...$('#geoRoot').querySelectorAll('button,input,textarea,select')].map(e=>[e,e.disabled]);controls.forEach(([e])=>e.disabled=true);
+ $('#geoRoot').setAttribute('aria-busy','true');geoMessage('处理中…','Processing…');
+ try{await action();}catch(e){geoMessage(e.message,e.message,true);}finally{GEO.busy=false;controls.forEach(([e,disabled])=>e.disabled=disabled);$('#geoRoot').removeAttribute('aria-busy');}
+}
+async function geoPost(action,body){
+ const result=await aiRequest('/api/geo/'+action,{slug:GEO.data.site.slug,revision:GEO.data.workspace.revision,...body});
+ if(result.workspace){GEO.data.workspace=result.workspace;GEO.data.metrics=result.metrics;GEO.dirty=false;}
+ return result;
+}
+async function geoSubmitForm(event){
+ event.preventDefault();const form=event.target;
+ // Capture form state before disabling controls.
+ const v=id=>geoValue(id),checked=id=>document.getElementById(id)?.checked===true;
+ let action,body;
+ if(form.id==='geoProfileForm'){action='profile';body={profile:{brand:v('geoBrand'),market:v('geoMarket'),language:v('geoLanguage'),sector:v('geoSector')}};}
+ if(form.id==='geoFactForm'){action='facts';body={item:{...(GEO.editingFact?{id:GEO.editingFact}:{}),translations:{zh:v('geoFactZh'),en:v('geoFactEn')},source_url:v('geoSource'),verified_on:v('geoVerified'),expires_on:v('geoExpires'),approved:checked('geoApproved'),category:v('geoCategory')}};}
+ if(form.id==='geoQuestionForm'){action='questions';body={item:{...(GEO.editingQuestion?{id:GEO.editingQuestion}:{}),text:v('geoQuestion'),language:v('geoQuestionLanguage'),market:v('geoQuestionMarket'),intent:v('geoIntent'),active:checked('geoQuestionActive')}};}
+ if(form.id==='geoAuditForm'){action='audit';body={url:v('geoAuditURL')};}
+ if(form.id==='geoObservationForm'){action='observations';body={items:[{question_id:v('geoObservationQuestion'),platform:v('geoPlatform'),batch:v('geoBatch'),channel:v('geoChannel'),mode:v('geoMode'),model:v('geoObservedModel'),environment:v('geoEnvironment'),observed_at:new Date(v('geoObserved')).toISOString(),status:v('geoStatus'),answer:v('geoAnswer'),citations:v('geoCitations').split('\n').map(s=>s.trim()).filter(Boolean),evidence_url:v('geoEvidence'),error:v('geoError'),brand_mentioned:v('geoMention')===''?null:v('geoMention')==='yes',facts_accurate:v('geoAccuracy')===''?null:v('geoAccuracy')==='yes'}]};}
+ if(form.id==='geoImportForm'){action='observations';try{const parsed=JSON.parse(v('geoImport'));body={items:Array.isArray(parsed)?parsed:parsed.items};}catch(_){geoMessage('JSON 格式无效','Invalid JSON',true);return;}}
+ if(['geoQuestionsAIForm','geoContentAIForm'].includes(form.id)){action='assist';body={task:form.id==='geoQuestionsAIForm'?'questions':'content',language:v('geoAILanguage'),profile_id:v('geoModel'),instructions:v('geoInstructions'),page:v('geoPage'),prompt_revision:GEO.data.prompts.revision,module_ids:[...document.querySelectorAll('#geoPromptChoices input:checked')].map(e=>e.value)};if(!body.profile_id){geoMessage('请先配置真实模型','Configure a real LLM first',true);return;}}
+ if(form.id==='geoReviewForm'){action='draft';body={id:GEO.selectedProposal,title:v('geoReviewTitle'),text:v('geoReviewText'),confirmed:checked('geoReviewConfirmed')};}
+ if(!action)return;
+ await geoRun(async()=>{const result=await geoPost(action,body);if(result.questions){GEO.suggestions=result.questions;GEO.dirty=false;geoLists();geoMessage('建议已生成，请逐条保存','Suggestions ready. Save the questions you want.');return;}GEO.editingFact=GEO.editingQuestion=null;geoRender();geoMessage('已保存','Saved');if(action==='draft')geoMessage('已加入页面草稿，请在页面编辑中预览和发布','Added to page draft. Preview and publish in the page editor.');});
+}
+$('#geoRoot').addEventListener('click',async event=>{
+ const step=event.target.closest('[data-geo-step]');if(step){if(geoCanLeave()){GEO.step=Number(step.dataset.geoStep);geoRender();$('#geoStepTitle').focus();}return;}
+ const button=event.target.closest('[data-geo-action]');if(!button||GEO.busy)return;
+ const action=button.dataset.geoAction,id=button.dataset.id;
+ if(action==='reload'){if(geoCanLeave())await initGEO();return;}
+ if(['next','back','retest','cancel-edit'].includes(action)){if(!geoCanLeave())return;GEO.editingFact=GEO.editingQuestion=null;GEO.step=action==='retest'?3:Math.max(0,Math.min(5,GEO.step+(action==='next'?1:action==='back'?-1:0)));geoRender();$('#geoStepTitle').focus();return;}
+ if(action==='export'){const blob=new Blob([JSON.stringify(GEO.data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='geo-'+GEO.data.site.slug+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);return;}
+ if(action==='prompts'){navigateTo('prompts');return;}
+ if(action==='editor'){if(geoCanLeave())navigateTo('layout',true,GEO.data.site.slug);return;}
+ if(action==='edit-facts'||action==='edit-questions'){if(!geoCanLeave())return;if(action==='edit-facts')GEO.editingFact=id;else GEO.editingQuestion=id;geoRender();return;}
+ if(action.startsWith('delete-')){if(!geoCanLeave()||!confirm(geoText('删除这条记录？已保存的观测和证据快照会保留。','Delete this record? Saved observations and evidence snapshots are retained.')))return;await geoRun(async()=>{await geoPost('delete',{kind:action.slice(7),id});geoRender();geoMessage('已删除','Deleted');});return;}
+ if(action==='accept-question'){if(!geoCanLeave())return;const index=Number(button.dataset.index);await geoRun(async()=>{await geoPost('questions',{item:GEO.suggestions[index]});GEO.suggestions.splice(index,1);geoLists();geoMessage('问题已保存','Question saved');});return;}
+ if(action==='evidence'){const record=GEO.data.workspace.observations.find(o=>o.id===id);AdminUI.detail(geoText('原始观测证据','Original observation evidence'),`<pre style="white-space:pre-wrap;overflow-wrap:anywhere" data-user-content>${esc(JSON.stringify(record,null,2))}</pre>`);return;}
+ if(action==='review'){
+  if(!geoCanLeave())return;geoReview(id);
+ }
+});
+function geoReview(id){
+  const p=GEO.data.workspace.proposals.find(x=>x.id===id);GEO.selectedProposal=id;
+  $('#geoProposalReview').innerHTML=`<form id="geoReviewForm"><h4>${geoText('审核并转入草稿','Review and transfer to draft')}</h4><p data-user-content>${esc(p.rationale)}</p><details><summary>${geoText('使用的事实与证据','Supporting facts and evidence')}</summary><ul>${p.facts.map(f=>`<li data-user-content>${esc(f.text)} · <a href="${esc(f.source_url)}" target="_blank" rel="noopener noreferrer">${geoText('来源','Source')}</a></li>`).join('')}</ul></details>${geoField('geoReviewTitle','区块标题','Section heading',p.title,'text','required maxlength="120"')}${geoField('geoReviewText','正文','Content',p.text,'textarea','required maxlength="18000"')}<label><input id="geoReviewConfirmed" type="checkbox" required> ${geoText('我已核验内容与证据，确认追加至此页面草稿','I verified the content and evidence and approve appending to this page draft')}</label><div class="domain-form-actions">${geoSubmit('转入页面草稿','Transfer to page draft')}${geoButton('editor','打开页面编辑','Open page editor')}</div></form>`;
+  $('#geoReviewForm').addEventListener('submit',geoSubmitForm);$('#geoReviewForm').addEventListener('input',()=>GEO.dirty=true);$('#geoReviewTitle').focus();
+}
+new MutationObserver(()=>{
+ if(!GEO.data||GEO.busy)return;
+ const values=[...$('#geoRoot').querySelectorAll('input,textarea,select')].map(e=>[e.id,e.value,e.checked]);
+ const opened=[...$('#geoRoot').querySelectorAll('details')].map(e=>e.open);const reviewing=!!$('#geoReviewForm');geoRender();if(reviewing&&GEO.selectedProposal)geoReview(GEO.selectedProposal);
+ values.forEach(([id,value,checked])=>{const e=document.getElementById(id);if(e){e.value=value;e.checked=checked;}});
+ $('#geoRoot').querySelectorAll('details').forEach((e,i)=>e.open=opened[i]||false);
+}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+window.addEventListener('beforeunload',e=>{if(GEO.dirty||GEO.busy){e.preventDefault();e.returnValue='';}});
