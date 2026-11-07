@@ -1,5 +1,6 @@
 /* Shared template/module library. Composition is validated on the server before generation. */
 let PROMPTS=null, PROMPT_MODULES=[], PROMPT_EDIT_MODULES=[], PROMPT_EDIT_KIND='templates';
+const promptLanguage=item=>item?.language||'zh';
 const promptVariableIds={audience:'promptAudience',services:'promptServices',goal:'promptGoal',tone:'promptTone',facts:'promptFacts'};
 function promptSelection(){
  if(!$('#aiPromptTemplate').value)return null;
@@ -7,13 +8,14 @@ function promptSelection(){
 }
 function promptInvalidate(){ $('#aiPromptPreview').value='';$('#aiPromptMsg').textContent='资料或模块已变化，可重新预览；生成时会校验最新组合。'; }
 function promptModuleList(target,selected,admin=false){
- const choices=PROMPTS.modules.filter(m=>m.enabled||selected.includes(m.id));
+ const language=admin?$('#promptEditLanguage').value:promptLanguage(PROMPTS.templates.find(t=>t.id===$('#aiPromptTemplate').value));
+ const choices=PROMPTS.modules.filter(m=>(m.enabled||selected.includes(m.id))&&promptLanguage(m)===language);
  const ordered=[...selected.map(id=>choices.find(m=>m.id===id)).filter(Boolean),...choices.filter(m=>!selected.includes(m.id))];
  $(target).innerHTML=ordered.map(m=>{const i=selected.indexOf(m.id);return `<div class="share-row"><label style="flex:1;margin:0"><input type="checkbox" data-prompt-module="${esc(m.id)}" ${i>=0?'checked':''}> ${esc(m.name)} <span class="hint">${esc(PROMPTS.categories[m.category]||m.category)} · v${m.version}${m.enabled?'':' · 已停用'}</span></label>${i>=0?`<button type="button" class="ghost" data-move="${esc(m.id)}" data-dir="-1" aria-label="上移 ${esc(m.name)}" ${i===0?'disabled':''}>↑</button><button type="button" class="ghost" data-move="${esc(m.id)}" data-dir="1" aria-label="下移 ${esc(m.name)}" ${i===selected.length-1?'disabled':''}>↓</button>`:''}</div>`;}).join('');
 }
 function promptRenderOptions(){
  const category=$('#aiPromptCategory').value,old=$('#aiPromptTemplate').value;
- const options=PROMPTS.templates.filter(t=>t.enabled&&(!category||t.category===category));
+ const options=PROMPTS.templates.filter(t=>t.enabled&&(!category||t.category===category)&&(!$('#aiPromptLanguage').value||promptLanguage(t)===$('#aiPromptLanguage').value));
  $('#aiPromptTemplate').innerHTML='<option value="">自由输入（不使用模板）</option>'+options.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} · v${t.version}</option>`).join('');
  if(options.some(t=>t.id===old))$('#aiPromptTemplate').value=old;
  if(old&&!$('#aiPromptTemplate').value)promptChoose();
@@ -45,7 +47,7 @@ function promptChoose(){
  }
  promptInvalidate();
 }
-$('#aiPromptCategory').onchange=()=>{promptRenderOptions();promptChoose();};
+$('#aiPromptLanguage').onchange=$('#aiPromptCategory').onchange=()=>{promptRenderOptions();promptChoose();};
 $('#aiPromptTemplate').onchange=promptChoose;
 for(const id of [...Object.values(promptVariableIds),'aiBrief'])$('#'+id).addEventListener('input',promptInvalidate);
 for(const [target,isEdit] of [['#aiPromptModules',false],['#promptEditModules',true]]){
@@ -80,9 +82,9 @@ const PROMPT_DIALOG=AdminUI.form('promptEditForm','',()=>{});
 function renderPromptLibrary(){
  if(!PROMPTS)return;
  const kind=$('#promptLibraryKind').value,q=$('#promptLibrarySearch').value.toLowerCase(),admin=PROMPTS.can_manage;
- const items=PROMPTS[kind].filter(t=>(t.name+' '+t.category+' '+t.description).toLowerCase().includes(q));
+ const items=PROMPTS[kind].filter(t=>(!$('#promptLibraryLanguage').value||promptLanguage(t)===$('#promptLibraryLanguage').value)&&(t.name+' '+t.category+' '+t.description).toLowerCase().includes(q));
  $('#promptLibraryNew').hidden=!admin;
- AdminUI.table('promptLibraryList',items,['name','category','version','status','actions'].map(promptText),t=>`<tr><td data-user-content><b>${esc(t.name)}</b></td><td>${esc(PROMPTS.categories[t.category]||t.category)}</td><td>v${t.version}</td><td>${promptText(t.enabled?'enabled':'disabled')}</td><td><div class="domain-row-actions"><button type="button" class="ghost" data-view-prompt="${esc(t.id)}">${promptText('view')}</button>${kind==='templates'?`<button type="button" class="ghost" data-use-prompt="${esc(t.id)}" ${t.enabled?'':'disabled'}>${promptText('use')}</button>`:''}${admin?`<button type="button" class="ghost" data-edit-prompt="${esc(t.id)}">${promptText('edit')}</button><button type="button" class="ghost" data-copy-prompt="${esc(t.id)}">${promptText('copy')}</button><button type="button" class="ghost" data-toggle-prompt="${esc(t.id)}">${promptText(t.enabled?'disable':'enable')}</button><button type="button" class="ghost danger" data-delete-prompt="${esc(t.id)}">${promptText('remove')}</button>`:''}</div></td></tr>`);
+ AdminUI.table('promptLibraryList',items,['name','category','version','status','actions'].map(promptText),t=>`<tr><td data-user-content><b>${esc(t.name)}</b> <span class="hint">${promptLanguage(t).toUpperCase()}</span></td><td>${esc(PROMPTS.categories[t.category]||t.category)}</td><td>v${t.version}</td><td>${promptText(t.enabled?'enabled':'disabled')}</td><td><div class="domain-row-actions"><button type="button" class="ghost" data-view-prompt="${esc(t.id)}">${promptText('view')}</button>${kind==='templates'?`<button type="button" class="ghost" data-use-prompt="${esc(t.id)}" ${t.enabled?'':'disabled'}>${promptText('use')}</button>`:''}${admin?`<button type="button" class="ghost" data-edit-prompt="${esc(t.id)}">${promptText('edit')}</button><button type="button" class="ghost" data-copy-prompt="${esc(t.id)}">${promptText('copy')}</button><button type="button" class="ghost" data-toggle-prompt="${esc(t.id)}">${promptText(t.enabled?'disable':'enable')}</button><button type="button" class="ghost danger" data-delete-prompt="${esc(t.id)}">${promptText('remove')}</button>`:''}</div></td></tr>`);
  $('#promptSources').innerHTML=PROMPTS.sources.map(s=>`<p><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a></p>`).join('');
 }
 function viewPrompt(item){
@@ -90,7 +92,7 @@ function viewPrompt(item){
 }
 new MutationObserver(renderPromptLibrary).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
 async function initPrompts(){await loadPromptLibrary();renderPromptLibrary();}
-$('#promptLibraryKind').onchange=$('#promptLibrarySearch').oninput=()=>{AdminUI.pages.set('promptLibraryList',0);renderPromptLibrary();};
+$('#promptLibraryLanguage').onchange=$('#promptLibraryKind').onchange=$('#promptLibrarySearch').oninput=()=>{AdminUI.pages.set('promptLibraryList',0);renderPromptLibrary();};
 $('#promptLibraryRefresh').onclick=async()=>{try{await initPrompts();aiMessage('#promptLibraryMsg','提示词库已刷新');}catch(e){aiMessage('#promptLibraryMsg',e.message,true);}};
 function editPrompt(item=null,copy=false){
  PROMPT_EDIT_KIND=$('#promptLibraryKind').value;
@@ -103,12 +105,14 @@ function editPrompt(item=null,copy=false){
  $('#promptEditEnabled').checked=item?.enabled??true;
  $('#promptCategories').innerHTML=PROMPT_EDIT_KIND==='modules'?Object.entries(PROMPTS.categories).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join(''):'';
  $('#promptEditTemplateFields').hidden=PROMPT_EDIT_KIND!=='templates';
+ $('#promptEditLanguage').value=promptLanguage(item);
  PROMPT_EDIT_MODULES=[...(item?.module_ids||[])];promptModuleList('#promptEditModules',PROMPT_EDIT_MODULES,true);
  $('#promptEditDefaults').value=JSON.stringify(item?.defaults||{},null,2);
  $('#promptEditTitle').textContent=(item&&!copy?'编辑':'新建')+(PROMPT_EDIT_KIND==='templates'?'场景模板':'可复用模块');
  $('#promptEditHistory').innerHTML=copy?'':(item?.history||[]).slice().reverse().map(h=>`<div class="share-row"><span>v${h.version} · ${esc(h.name)}</span><button type="button" class="ghost" data-restore-prompt="${h.version}">恢复为新版本</button></div>`).join('');
  PROMPT_DIALOG.open();
 }
+$('#promptEditLanguage').onchange=()=>{PROMPT_EDIT_MODULES=PROMPT_EDIT_MODULES.filter(id=>promptLanguage(PROMPTS.modules.find(m=>m.id===id))===$('#promptEditLanguage').value);promptModuleList('#promptEditModules',PROMPT_EDIT_MODULES,true);};
 $('#promptLibraryNew').onclick=()=>editPrompt();$('#promptEditCancel').onclick=()=>PROMPT_DIALOG.close();
 $('#promptLibraryList').onclick=async e=>{
  const b=e.target.closest('button');if(!b)return;
@@ -116,7 +120,7 @@ $('#promptLibraryList').onclick=async e=>{
  const item=PROMPTS[$('#promptLibraryKind').value].find(t=>t.id===id);if(!item)return;
  if(b.dataset.viewPrompt){viewPrompt(item);return;}
  if(b.dataset.deletePrompt){if(!confirm(promptText('deleteConfirm')+'\n'+item.name))return;b.disabled=true;try{PROMPTS=await aiRequest('/api/ai/prompts',{kind:$('#promptLibraryKind').value,id,action:'delete',revision:PROMPTS.revision});renderPromptLibrary();promptRenderOptions();AdminUI.message('#promptLibraryMsg',PROMPT_UI.deleted);}catch(err){aiMessage('#promptLibraryMsg',err.message,true);}finally{b.disabled=false;}return;}
- if(b.dataset.usePrompt){navigateTo('ai');$('#aiPromptCategory').value='';promptRenderOptions();$('#aiPromptTemplate').value=id;promptChoose();return;}
+ if(b.dataset.usePrompt){navigateTo('ai');$('#aiPromptCategory').value='';$('#aiPromptLanguage').value=promptLanguage(item);promptRenderOptions();$('#aiPromptTemplate').value=id;promptChoose();return;}
  if(b.dataset.editPrompt||b.dataset.copyPrompt){editPrompt(item,!!b.dataset.copyPrompt);return;}
  if(!confirm((item.enabled?'停用':'启用')+'「'+item.name+'」？已创建任务保留原版本。'))return;
  b.disabled=true;
@@ -126,9 +130,9 @@ $('#promptLibraryList').onclick=async e=>{
 $('#promptEditForm').onsubmit=async e=>{
  e.preventDefault();const button=e.submitter;button.disabled=true;
  try{
-  const body={action:'save',kind:PROMPT_EDIT_KIND,revision:Number($('#promptEditForm').dataset.revision),id:$('#promptEditId').value,name:$('#promptEditName').value,category:$('#promptEditCategory').value,description:$('#promptEditDescription').value,body:$('#promptEditBody').value,enabled:$('#promptEditEnabled').checked};
+  const body={action:'save',language:$('#promptEditLanguage').value,kind:PROMPT_EDIT_KIND,revision:Number($('#promptEditForm').dataset.revision),id:$('#promptEditId').value,name:$('#promptEditName').value,category:$('#promptEditCategory').value,description:$('#promptEditDescription').value,body:$('#promptEditBody').value,enabled:$('#promptEditEnabled').checked};
   if(PROMPT_EDIT_KIND==='templates'){body.module_ids=PROMPT_EDIT_MODULES;body.defaults=JSON.parse($('#promptEditDefaults').value||'{}');}
-  PROMPTS=await aiRequest('/api/ai/prompts',body);if(!$('#promptEditId').readOnly){$('#promptLibrarySearch').value='';AdminUI.reveal('promptLibraryList',PROMPTS[PROMPT_EDIT_KIND],t=>t.id===body.id);}renderPromptLibrary();promptRenderOptions();PROMPT_DIALOG.close(true);aiMessage('#promptLibraryMsg','新版本已保存；已创建任务的提示词不受影响。');
+  PROMPTS=await aiRequest('/api/ai/prompts',body);if(!$('#promptEditId').readOnly){$('#promptLibrarySearch').value='';$('#promptLibraryLanguage').value=body.language;AdminUI.reveal('promptLibraryList',PROMPTS[PROMPT_EDIT_KIND],t=>t.id===body.id);}renderPromptLibrary();promptRenderOptions();PROMPT_DIALOG.close(true);aiMessage('#promptLibraryMsg','新版本已保存；已创建任务的提示词不受影响。');
  }catch(err){aiMessage('#promptEditMsg',err.message,true);}finally{button.disabled=false;}
 };
 $('#promptEditHistory').onclick=async e=>{

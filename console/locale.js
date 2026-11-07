@@ -1,5 +1,11 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+提示词语言|Prompt language
+全部语言|All languages
+英文|English
+提示词语言必须是中文或英文|Prompt language must be Chinese or English
+模板与引用模块必须使用相同语言|The template and its modules must use the same language
+被模板引用的模块不能更改语言，请创建独立语言版本|A referenced module cannot change language. Create a separate language version.
 默认变量必须是合法 JSON 对象|Default variables must be a valid JSON object
 可复用模块不能包含其他模块|Reusable modules cannot contain other modules
 模板引用了不存在的模块|The template references a missing module
@@ -633,7 +639,7 @@ KampongFlow 控制台|KampongFlow Console
 浅色|Light
 跟随系统|System
 语言|Language
-中文|中文
+中文|Chinese
 一次性交付：域名 · 建站 · 邮箱 · 托管|Domains · Websites · Email · Hosting
 退出|Sign out
 跳转到主要内容|Skip to main content

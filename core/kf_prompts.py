@@ -11,6 +11,13 @@ from kf_ai import AIError, atomic_json, read_json, text
 
 VARIABLES = {'audience': '目标客户', 'services': '主营服务/产品', 'goal': '主要转化目标',
              'tone': '品牌语气', 'facts': '已核实信息与联系方式'}
+VARIABLES_EN = {'audience': 'Target audience', 'services': 'Services / products', 'goal': 'Primary conversion goal',
+                'tone': 'Brand voice', 'facts': 'Verified facts and contact details'}
+
+def prompt_language(item):
+    return item.get('language', 'zh')
+
+
 CATEGORIES = {'goal': '目标与转化', 'structure': '页面结构', 'style': '视觉方向',
               'copy': '内容表达', 'quality': '质量约束'}
 SOURCES = [
@@ -180,7 +187,9 @@ class PromptStore:
                 item={'id':item_id,'name':text(body.get('name',''),'名称',80,True),
                       'category':text(body.get('category',''),'分类',40,True),
                       'description':text(body.get('description',''),'用途说明',300),
+                      'language':body.get('language', prompt_language(old or {})),
                       'body':validate_body(body.get('body','')), 'enabled':body.get('enabled',True) is True}
+                if item['language'] not in ('zh', 'en'):raise AIError('提示词语言必须是中文或英文')
                 if kind=='templates':
                     item['module_ids']=checked_ids(body.get('module_ids',[]),'模块')
                     if item['enabled'] and not item['module_ids']:raise AIError('启用模板至少需要一个模块')
@@ -193,6 +202,11 @@ class PromptStore:
                 modules={m['id']:m for m in data['modules']}
                 if any(mid not in modules or (item['enabled'] and not modules[mid]['enabled']) for mid in item['module_ids']):
                     raise AIError('模板引用了不存在或已停用的模块，请先调整组合')
+                if any(prompt_language(modules[mid]) != prompt_language(item) for mid in item['module_ids']):
+                    raise AIError('模板与引用模块必须使用相同语言')
+            elif old and prompt_language(item) != prompt_language(old):
+                if any(item_id in t['module_ids'] for t in data['templates']):
+                    raise AIError('被模板引用的模块不能更改语言，请创建独立语言版本')
             elif not item['enabled']:
                 refs=[t['name'] for t in data['templates'] if t['enabled'] and item_id in t['module_ids']]
                 if refs:raise AIError('模块被启用模板引用，请先调整或停用模板：'+'、'.join(refs))
@@ -219,14 +233,18 @@ class PromptStore:
         if not mids:raise AIError('至少选择一个模块')
         by_id={m['id']:m for m in data['modules'] if m['enabled']}
         if any(mid not in by_id for mid in mids):raise AIError('所选模块不存在或已停用')
+        if any(prompt_language(by_id[mid]) != prompt_language(template) for mid in mids):
+            raise AIError('模板与引用模块必须使用相同语言')
+        english=prompt_language(template)=='en'
+        labels=VARIABLES_EN if english else VARIABLES
         supplied=selection.get('variables',{})
         if not isinstance(supplied,dict) or set(supplied)-set(VARIABLES):raise AIError('业务变量不合法')
         values=dict(template['defaults'])
         values.update({k:text(v,VARIABLES[k],1500) for k,v in supplied.items()})
         for key in ('audience','services','goal'):
             if not values.get(key):raise AIError('请填写'+VARIABLES[key])
-        values['tone']=values.get('tone') or '清晰、具体、可信'
-        if not values.get('facts'):values['facts']='未提供；不得编造'
+        values['tone']=values.get('tone') or ('Clear, specific and credible' if english else '清晰、具体、可信')
+        if not values.get('facts'):values['facts']='Not provided; do not invent facts' if english else '未提供；不得编造'
         parts=[template]+[by_id[mid] for mid in mids]
         def render(item):
             needed=set(PLACEHOLDER.findall(item['body']))
@@ -234,9 +252,9 @@ class PromptStore:
             return PLACEHOLDER.sub(lambda m:values[m.group(1)],item['body'])
         instructions='\n\n'.join('【'+item['name']+'】\n'+render(item) for item in parts)
         if len(instructions)>20000:raise AIError('组合后的提示词过长，请减少模块或业务资料')
-        context='\n'.join(VARIABLES[k]+'：'+v for k,v in values.items())
-        if brief:context+='\n补充要求：'+text(brief,'补充要求',6000)
+        context='\n'.join(labels[k]+': '+v for k,v in values.items())
+        if brief:context+=('\nAdditional requirements: ' if english else '\n补充要求：')+text(brief,'补充要求',6000)
         return {'revision':data['revision'],'template':{'id':template['id'],'name':template['name'],'version':template['version']},
                 'modules':[{'id':mid,'name':by_id[mid]['name'],'version':by_id[mid]['version']} for mid in mids],
                 'variables':values,'instructions':instructions,'brief':context,
-                'preview':instructions+'\n\n【业务资料】\n'+context}
+                'preview':instructions+('\n\n[Business context]\n' if english else '\n\n【业务资料】\n')+context}

@@ -46,6 +46,26 @@ class PromptTests(unittest.TestCase):
         self.store.change({'kind':'modules','revision':2,'id':'custom','action':'toggle'})
         self.assertNotIn('custom',[m['id'] for m in self.store.public()['modules']])
 
+    def test_language_editions_and_english_composition(self):
+        module=self.store.change({'kind':'modules','revision':1,'id':'english-copy','name':'English copy','category':'copy','language':'en','body':'Write for {{audience}}. Facts: {{facts}}.'})
+        template=self.store.change({'kind':'templates','revision':2,'id':'english-site','name':'English site','category':'Business','language':'en','body':'Explain {{services}} for {{audience}}. Support {{goal}}.','module_ids':[module['id']]})
+        result=self.store.compose({'revision':3,'template_id':template['id'],'variables':{'audience':'Teams','services':'Consulting','goal':'Enquiries'}})
+        self.assertIn('Not provided; do not invent facts',result['preview'])
+        self.assertIn('Business context',result['preview'])
+        self.assertNotRegex(result['preview'],r'[㐀-鿿]')
+        with self.assertRaises(ai.AIError):
+            self.store.compose({'revision':3,'template_id':template['id'],'module_ids':['copy']})
+        with self.assertRaises(ai.AIError):
+            self.store.change(dict(template,kind='templates',revision=3,module_ids=['copy']))
+        with self.assertRaises(ai.AIError):
+            self.store.change(dict(module,kind='modules',revision=3,language='zh'))
+        with self.assertRaises(ai.AIError):
+            self.store.change(dict(module,kind='modules',revision=3,language='fr'))
+        edited=self.store.change(dict(module,kind='modules',revision=3,body='Use {{facts}} only.'))
+        self.assertEqual(edited['language'],'en')
+        restored=self.store.change({'kind':'modules','id':module['id'],'action':'restore','version':1,'revision':4})
+        self.assertEqual(restored['language'],'en')
+
     def test_guidance_reaches_provider_with_output_constraints(self):
         from unittest.mock import patch
         pages=[{'slug':'home','title':'Home'}]
