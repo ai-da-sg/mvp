@@ -4655,6 +4655,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/ai/assist":
                 if self.user_role not in ("admin", "ops") or (body.get("scope") == "prompts" and self.user_role != "admin"):
                     return self._send(403, {"error": "Permission denied"})
+                if body.get("scope") == "prompts" and "prompt" in body:
+                    body = kf_prompts.PromptStore(BASE).writing_request(body)
                 profile, key = ai_store().resolve(body.get("profile_id"))
                 return self._send(200, {"text": kf_ai.assist(profile, key, body)})
             if path == "/api/ai/styles/preview":

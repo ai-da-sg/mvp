@@ -116,6 +116,38 @@ class PromptStore:
                 data[kind]=[{k:v for k,v in item.items() if k!='history'} for item in data[kind] if item['enabled']]
         return data
 
+    def writing_request(self, body):
+        """Resolve the editable prompt's selected modules at a known library revision."""
+        request = copy.deepcopy(body)
+        meta, context = request.get('prompt'), request.get('context', {})
+        if not isinstance(meta, dict) or not isinstance(context, dict):
+            raise AIError('Invalid prompt writing context')
+        kind = meta.get('kind')
+        if kind not in ('modules', 'templates'):
+            raise AIError('请选择模板或模块')
+        library = self.read()
+        if type(meta.get('revision')) is not int or meta['revision'] != library['revision']:
+            raise PromptConflict('提示词库已更新，请刷新后重试；本次修改未写入')
+        ids = checked_ids(meta.get('module_ids', []), '模块')
+        if kind == 'modules' and ids:
+            raise AIError('可复用模块不能包含其他模块')
+        modules = {m['id']: m for m in library['modules']}
+        if any(mid not in modules for mid in ids):
+            raise AIError('模板引用了不存在的模块')
+        try:
+            values = json.loads(context.get('defaults', '{}'))
+        except (ValueError, TypeError):
+            raise AIError('默认变量必须是合法 JSON 对象')
+        if not isinstance(values, dict) or set(values) - set(VARIABLES):
+            raise AIError('默认变量不合法')
+        values = {k: text(v, VARIABLES[k], 1500) for k, v in values.items()}
+        context.update(prompt_kind=kind, defaults=json.dumps(values, ensure_ascii=False),
+                       variables=json.dumps(VARIABLES, ensure_ascii=False),
+                       modules=json.dumps([{k: modules[mid][k] for k in
+                           ('id', 'name', 'category', 'body', 'version', 'enabled')} for mid in ids], ensure_ascii=False))
+        request['context'] = context
+        return request
+
     def change(self, body):
         with self.locked():
             data=read_json(self.path,defaults())

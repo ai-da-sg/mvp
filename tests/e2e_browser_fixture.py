@@ -10,6 +10,17 @@ fixture.setUp()
 m = fixture.m
 writing_server = None
 try:
+    if os.environ.get('KF_E2E_REAL_AI_BASE'):
+        # Explicit opt-in only: use the existing configured upstream in a disposable app.
+        source = Path(os.environ['KF_E2E_REAL_AI_BASE']).resolve() / 'console'
+        config = json.loads((source/'ai-config.json').read_text())
+        secrets = json.loads((source/'ai-secrets.json').read_text())
+        profile_id = os.environ.get('KF_E2E_REAL_AI_PROFILE') or config['default_profile']
+        profile = next((p for p in config['profiles'] if p['id']==profile_id), None)
+        if profile is None:
+            raise RuntimeError('Select an existing real profile for the live test')
+        m.ai_store().configure(dict(profile, api_key=secrets.get(profile_id, '')))
+        m.ai_store().configure(dict(action='default', id=profile_id))
     if os.environ.get('KF_E2E_WRITING') == '1':
         # A local model protocol fixture: real HTTP through the application and
         # model adapter, deterministic text rather than a paid upstream model.

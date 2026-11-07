@@ -934,6 +934,34 @@ class ConsoleTests(unittest.TestCase):
         with opener.open(urllib.request.Request(url, data=data), timeout=10) as response:
             self.assertIn('两步验证码不正确', response.read().decode())
 
+    def test_prompt_writing_context_revision_and_variable_guards(self):
+        cfg = dict(id='writing', name='Writing', protocol='openai_chat', model='test', base_url='https://example.test/v1', api_key='private-key')
+        self.assertEqual(self.request('/api/ai/config', cfg)[0], 200)
+        library = self.request('/api/ai/prompts')[1]
+        template = library['templates'][0]
+        body = dict(scope='prompts', profile_id='writing', text='Serve {{audience}} with {{services}}.', limit=2400,
+                    prompt=dict(kind='templates', revision=library['revision'], module_ids=template['module_ids']),
+                    context=dict(field='promptEditBody', name=template['name'], category=template['category'], defaults='{"audience":"Teams"}', language='en', instruction='Make acceptance criteria explicit.'))
+        valid = 'Guide {{audience}} through {{services}} with verifiable acceptance criteria.'
+        with patch.object(self.m.kf_ai, 'complete', return_value=valid) as complete:
+            self.assertEqual(self.request('/api/ai/assist', body)[1]['text'], valid)
+            sent = json.loads(complete.call_args.args[3])['context']
+            modules = json.loads(sent['modules'])
+            self.assertEqual(modules[0]['body'], next(m['body'] for m in library['modules'] if m['id']==template['module_ids'][0]))
+            self.assertEqual(sent['prompt_kind'], 'templates')
+            self.assertEqual(json.loads(sent['defaults'])['audience'], 'Teams')
+            count = complete.call_count
+            self.assertEqual(self.request('/api/ai/assist', dict(body, prompt=dict(body['prompt'], revision=0)))[0], 409)
+            self.assertEqual(self.request('/api/ai/assist', dict(body, context=dict(body['context'], defaults='not json')))[0], 400)
+            self.assertEqual(complete.call_count, count)
+            complete.return_value = 'Missing original variables'
+            self.assertEqual(self.request('/api/ai/assist', body)[0], 400)
+            complete.return_value = valid + ' {{unsupported}}'
+            self.assertEqual(self.request('/api/ai/assist', body)[0], 400)
+            complete.return_value = 'A concise purpose description.'
+            self.assertEqual(self.request('/api/ai/assist', dict(body, context=dict(body['context'], field='promptEditDescription'), limit=300))[0], 200)
+        self.assertEqual(self.request('/api/ai/prompts')[1]['revision'], library['revision'])
+
     def test_writing_assistance_permissions_context_and_limits(self):
         cfg = dict(id='writing', name='Writing', protocol='openai_chat', model='test', base_url='https://example.test/v1', api_key='private-key')
         self.assertEqual(self.request('/api/ai/config', cfg)[0], 200)

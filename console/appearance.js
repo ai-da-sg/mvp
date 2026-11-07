@@ -163,6 +163,7 @@
  `;document.head.append(css);
  const messages=window.KF_MESSAGES||{},reverse=Object.fromEntries(Object.entries(messages).map(([zh,en])=>[en,zh]));
  const patterns=[
+  [/^生成结果遗漏原有变量，请重新生成：(.+)$/,v=>`Generated text omitted existing variables. Generate again: ${v}`],
   [/^预览 (.+)$/,name=>`Preview ${name}`],
   [/^(工具|资源|提示词)（(\d+)）$/,(label,n)=>`${translate(label)} (${n})`],
   [/^版本 (\d+)$/,n=>`Version ${n}`],

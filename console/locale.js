@@ -1,5 +1,9 @@
 /* UI translations only. User-entered content and website copy are never machine-translated. */
 window.KF_MESSAGES = Object.fromEntries(`
+默认变量必须是合法 JSON 对象|Default variables must be a valid JSON object
+可复用模块不能包含其他模块|Reusable modules cannot contain other modules
+模板引用了不存在的模块|The template references a missing module
+Invalid prompt writing context|Invalid prompt writing context
 搜索功能|Search features
 当前站点|Current site
 所有站点|All sites

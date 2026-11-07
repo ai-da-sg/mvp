@@ -6,7 +6,8 @@
     "test:real": "node real-api.test.cjs",
     "test:live-mcp": "E2E_REMOTE_MCP=1 node real-api.test.cjs",
     "test:showcases": "node showcases.test.cjs",
-    "test:production": "node production-smoke.test.cjs"
+    "test:production": "node production-smoke.test.cjs",
+    "test:prompt-writing-live": "node prompt-writing-live.test.cjs"
   },
   "devDependencies": {
     "playwright": "1.64.1"
