@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),path=require('node:path');
 const {spawn}=require('node:child_process'),{once}=require('node:events'),readline=require('node:readline');
-const {chromium}=require('playwright');const {ConsolePage}=require('./pages/console.cjs');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');const {ConsolePage}=require('./pages/console.cjs');
 (async()=>{const child=spawn(process.env.PYTHON||'python3',['tests/e2e_browser_fixture.py'],{cwd:path.resolve(__dirname,'../..'),env:{...process.env,KF_E2E_INFLOW:'1'},stdio:['pipe','pipe','inherit']});let browser;
 try{const cfg=JSON.parse(await once(readline.createInterface({input:child.stdout}),'line').then(([line])=>line));browser=await chromium.launch();const page=await browser.newPage({viewport:{width:1440,height:1000}}),ui=new ConsolePage(page,cfg.origin);page.setDefaultTimeout(15000);page.on('dialog',d=>d.accept());const errors=[];page.on('pageerror',e=>errors.push(e.message));
 await ui.login('admin',cfg.password);await ui.ready();await ui.navigate('流量与抓取分析');await page.locator('#inflowSetup').waitFor();assert.equal(await page.locator('#workspaceSite').inputValue(),'demo');
